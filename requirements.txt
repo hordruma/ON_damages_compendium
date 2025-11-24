@@ -26,7 +26,9 @@ python-dotenv>=1.0.0
 
 # PDF Report Generation
 reportlab>=4.0.0
-weasyprint>=60.0
+
+# Interactive Charts
+plotly>=5.18.0
 
 # LLM Integration (optional - for expert report analysis)
 openai>=1.0.0

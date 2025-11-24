@@ -471,6 +471,124 @@ if search_button:
 
             st.caption(f"Based on {len(damages_values)} cases with identified damage awards")
 
+        # Inflation-Adjusted Chart
+        if damages_values and len(results) > 0:
+            st.divider()
+            st.subheader("📊 Inflation-Adjusted Award Comparison")
+
+            # Prepare chart data
+            chart_data = []
+            for case, emb_sim, combined_score in results[:15]:  # Top 15 for readability
+                damage_val = extract_damages_value(case)
+                year = case.get('year')
+                case_name = case.get('case_name', 'Unknown')
+                citation = case.get('citation', case.get('summary_text', '')[:50])
+
+                if damage_val and year:
+                    adjusted_val = adjust_for_inflation(damage_val, year, DEFAULT_REFERENCE_YEAR)
+                    if adjusted_val:
+                        chart_data.append({
+                            'case_name': case_name,
+                            'year': year,
+                            'original_award': damage_val,
+                            'adjusted_award': adjusted_val,
+                            'citation': citation,
+                            'match_score': combined_score * 100
+                        })
+
+            if chart_data:
+                # Create interactive Plotly chart
+                fig = go.Figure()
+
+                # Add original awards as bars
+                fig.add_trace(go.Bar(
+                    name=f'Original Award',
+                    x=[f"{d['case_name'][:20]}... ({d['year']})" for d in chart_data],
+                    y=[d['original_award'] for d in chart_data],
+                    marker_color='lightblue',
+                    hovertemplate='<b>%{x}</b><br>' +
+                                  'Original Award: $%{y:,.0f}<br>' +
+                                  '<extra></extra>'
+                ))
+
+                # Add inflation-adjusted awards as bars
+                fig.add_trace(go.Bar(
+                    name=f'Inflation-Adjusted ({DEFAULT_REFERENCE_YEAR}$)',
+                    x=[f"{d['case_name'][:20]}... ({d['year']})" for d in chart_data],
+                    y=[d['adjusted_award'] for d in chart_data],
+                    marker_color='darkblue',
+                    customdata=[[d['case_name'], d['citation'], d['match_score'], d['year'],
+                                d['original_award'], d['adjusted_award']] for d in chart_data],
+                    hovertemplate='<b>%{customdata[0]}</b><br>' +
+                                  'Year: %{customdata[3]}<br>' +
+                                  'Original: $%{customdata[4]:,.0f}<br>' +
+                                  f'Adjusted ({DEFAULT_REFERENCE_YEAR}$): $%{{customdata[5]:,.0f}}<br>' +
+                                  'Match Score: %{customdata[2]:.1f}%<br>' +
+                                  'Citation: %{customdata[1]}<br>' +
+                                  '<extra></extra>'
+                ))
+
+                # Update layout
+                fig.update_layout(
+                    barmode='group',
+                    title=f'Damage Awards: Original vs Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR}',
+                    xaxis_title='Case (Year)',
+                    yaxis_title='Award Amount ($)',
+                    yaxis=dict(tickformat='$,.0f'),
+                    hovermode='closest',
+                    height=500,
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                        xanchor="right",
+                        x=1
+                    ),
+                    xaxis={'categoryorder': 'total descending'}
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Summary statistics
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    median_original = np.median([d['original_award'] for d in chart_data])
+                    median_adjusted = np.median([d['adjusted_award'] for d in chart_data])
+                    st.metric(
+                        "Median (Original)",
+                        f"${median_original:,.0f}",
+                        help="Median of original award amounts"
+                    )
+
+                with col2:
+                    st.metric(
+                        f"Median ({DEFAULT_REFERENCE_YEAR}$)",
+                        f"${median_adjusted:,.0f}",
+                        delta=f"+${median_adjusted - median_original:,.0f}",
+                        help=f"Median adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
+                    )
+
+                with col3:
+                    avg_inflation = np.mean([
+                        ((d['adjusted_award'] - d['original_award']) / d['original_award']) * 100
+                        for d in chart_data
+                    ])
+                    st.metric(
+                        "Avg. Inflation Impact",
+                        f"+{avg_inflation:.1f}%",
+                        help="Average percentage increase due to inflation"
+                    )
+
+                st.caption(
+                    f"💡 **Note:** Awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
+                    "Canadian Consumer Price Index (Statistics Canada). "
+                    "Hover over bars for detailed case information."
+                )
+
+            else:
+                st.info("Inflation adjustment requires case year information. Some cases may not have dates.")
+
         st.divider()
 
         # Display results

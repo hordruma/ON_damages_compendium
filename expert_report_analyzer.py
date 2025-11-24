@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 import json
 import os
 from pathlib import Path
+from anatomical_mappings import enhance_region_detection, ANATOMICAL_MAPPINGS
 
 # Optional LLM imports
 try:
@@ -168,7 +169,7 @@ IMPORTANT:
     def _analyze_with_regex(self, report_text: str) -> Dict:
         """
         Fallback regex-based analysis when LLM is not available
-        Less accurate but doesn't require API keys
+        Now enhanced with anatomical structure mapping
         """
         text_lower = report_text.lower()
 
@@ -181,6 +182,11 @@ IMPORTANT:
                 if term.lower() in text_lower:
                     detected_regions.append(region_id)
                     break
+
+        # Enhanced detection using anatomical structure mapping
+        # This catches terms like "tibia", "femur", "humerus", etc.
+        anatomical_regions = enhance_region_detection(report_text, detected_regions)
+        detected_regions.extend(anatomical_regions)
 
         # Remove duplicates
         detected_regions = list(set(detected_regions))
