@@ -10,6 +10,8 @@ A professional legal tool for searching comparable personal injury awards in Ont
 - **AI-Powered Search**: Embedding-based similarity matching for finding comparable cases
 - **Damage Award Analysis**: Automatic calculation of median, min, and max damage ranges
 - **Gender & Age Filters**: Adjust search based on plaintiff demographics
+- **🆕 Expert Report Analysis**: Upload medical/expert reports for automatic injury extraction
+- **🆕 PDF Report Generation**: Download professional formatted reports with search results
 
 ## Installation
 
@@ -38,19 +40,26 @@ streamlit run streamlit_app.py
 
 ```
 ON_damages_compendium/
-├── 01_extract_and_embed.ipynb   # Data extraction and embedding generation
-├── streamlit_app.py              # Main Streamlit application
-├── region_map.json               # Clinical anatomy region mappings
+├── 01_extract_and_embed.ipynb    # Data extraction and embedding generation
+├── streamlit_app.py               # Main Streamlit application
+├── expert_report_analyzer.py     # Expert report PDF analysis
+├── pdf_report_generator.py       # PDF report generation
+├── region_map.json                # Clinical anatomy region mappings
+├── .env.example                   # API key configuration template
 ├── assets/
-│   ├── body_front.svg            # Front body diagram
-│   └── body_back.svg             # Back body diagram
+│   ├── body_front.svg             # Front body diagram
+│   └── body_back.svg              # Back body diagram
 ├── data/
 │   └── damages_with_embeddings.json  # Processed case data (generated)
-├── requirements.txt              # Python dependencies
-└── README.md                     # This file
+├── requirements.txt               # Python dependencies
+├── README.md                      # This file
+├── EXPERT_REPORT_GUIDE.md         # Guide for expert report analysis
+└── [Additional documentation...]
 ```
 
 ## Usage
+
+### Basic Workflow
 
 1. **Prepare Data**: Place `2024damagescompendium.pdf` in the project root
 2. **Extract Cases**: Run the Jupyter notebook to generate embeddings
@@ -61,6 +70,40 @@ ON_damages_compendium/
    - Describe the injury in detail
    - Click "Find Comparable Cases"
    - Review matched cases and damage ranges
+
+### 🆕 Expert Report Analysis (Optional)
+
+Upload a medical/expert report PDF to automatically extract injuries:
+
+1. **Configure API Key** (optional, for AI analysis):
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your OpenAI or Anthropic API key
+   ```
+
+2. **Upload Report**:
+   - Expand "Upload Expert/Medical Report" section
+   - Choose PDF file (IME, medical report, expert opinion, etc.)
+   - Click "Analyze Expert Report"
+   - Review extracted information
+   - Edit auto-populated fields if needed
+
+3. **Run Search** as normal
+
+See [EXPERT_REPORT_GUIDE.md](EXPERT_REPORT_GUIDE.md) for detailed instructions.
+
+### 🆕 PDF Report Generation
+
+Download professional formatted reports with your search results:
+
+1. **Run a search** and review results
+2. **Click "Generate PDF Report"**
+3. **Choose number of cases** to include
+4. **Download PDF** - Includes:
+   - Search parameters
+   - Damage award statistics
+   - Top comparable cases with details
+   - Legal disclaimer
 
 ## Technology Stack
 

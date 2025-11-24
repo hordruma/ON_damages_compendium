@@ -10,6 +10,13 @@ from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import re
+import tempfile
+import os
+from datetime import datetime
+
+# Import custom modules
+from expert_report_analyzer import analyze_expert_report
+from pdf_report_generator import generate_damages_report
 
 # Page configuration
 st.set_page_config(
@@ -289,13 +296,106 @@ with st.sidebar:
     else:
         st.info("No regions selected - will search all cases")
 
+# Initialize session state
+if 'search_results' not in st.session_state:
+    st.session_state.search_results = None
+if 'analysis_data' not in st.session_state:
+    st.session_state.analysis_data = None
+
 # Main content area
+st.divider()
+
+# Expert Report Upload Section
+with st.expander("📄 Upload Expert/Medical Report (Optional)", expanded=False):
+    st.markdown("""
+    Upload a medical or expert report PDF, and the system will automatically extract injuries,
+    limitations, and other relevant information to populate the search fields.
+    """)
+
+    col_upload1, col_upload2 = st.columns([2, 1])
+
+    with col_upload1:
+        uploaded_file = st.file_uploader(
+            "Choose a PDF file",
+            type=['pdf'],
+            help="Upload medical report, IME, expert opinion, or similar document"
+        )
+
+    with col_upload2:
+        use_llm = st.checkbox(
+            "Use AI Analysis",
+            value=True,
+            help="Use LLM for more accurate extraction (requires API key in .env file)"
+        )
+
+    if uploaded_file is not None:
+        if st.button("🔍 Analyze Expert Report", type="secondary"):
+            with st.spinner("Analyzing expert report..."):
+                # Save uploaded file temporarily
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                    tmp_path = tmp_file.name
+
+                try:
+                    # Analyze the report
+                    analysis = analyze_expert_report(
+                        tmp_path,
+                        use_llm=use_llm
+                    )
+
+                    st.session_state.analysis_data = analysis
+
+                    st.success("✅ Expert report analyzed successfully!")
+
+                    # Display extracted information
+                    st.subheader("Extracted Information")
+
+                    if analysis.get('injured_regions'):
+                        st.write("**Detected Regions:**")
+                        for region_id in analysis['injured_regions']:
+                            if region_id in region_map:
+                                st.write(f"• {region_map[region_id]['label']}")
+
+                    if analysis.get('injury_description'):
+                        st.write("**Injury Description:**")
+                        st.write(analysis['injury_description'][:500])
+
+                    if analysis.get('limitations'):
+                        st.write("**Functional Limitations:**")
+                        for limitation in analysis['limitations'][:5]:
+                            st.write(f"• {limitation}")
+
+                    if analysis.get('chronicity'):
+                        st.write(f"**Chronicity:** {analysis['chronicity']}")
+
+                    if analysis.get('severity'):
+                        st.write(f"**Severity:** {analysis['severity']}")
+
+                    st.info("💡 Scroll down to review and edit the auto-populated fields before searching.")
+
+                except Exception as e:
+                    st.error(f"❌ Error analyzing report: {str(e)}")
+                    st.info("Try using the manual input fields below instead.")
+                finally:
+                    # Clean up temp file
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+
+st.divider()
+
 col1, col2 = st.columns([3, 2])
 
 with col1:
     st.subheader("Injury Description")
+
+    # Pre-populate if analysis exists
+    default_injury_text = ""
+    if st.session_state.analysis_data:
+        default_injury_text = st.session_state.analysis_data.get('injury_description', '')
+
     injury_text = st.text_area(
         "Describe the injury in detail:",
+        value=default_injury_text,
         height=150,
         placeholder="Example: C5-C6 disc herniation with chronic radicular pain radiating to right upper extremity. Failed conservative management. MRI shows central disc protrusion with nerve root impingement. Ongoing neurological deficits including weakness and paresthesias...",
         help="Include: mechanism, anatomical structures, severity, chronicity, functional impact"
@@ -326,6 +426,16 @@ if search_button:
                 gender=gender if gender != "Not Specified" else None,
                 age=age
             )
+
+        # Store results in session state for PDF generation
+        st.session_state.search_results = {
+            'results': results,
+            'injury_text': injury_text,
+            'selected_regions': selected_regions,
+            'gender': gender,
+            'age': age,
+            'timestamp': datetime.now()
+        }
 
         st.divider()
         st.header("Search Results")
@@ -397,6 +507,87 @@ if search_button:
 
                     if case.get("region_score", 0) > 0:
                         st.metric("Region Match", f"{case['region_score']*100:.0f}%")
+
+# Display results from session state (if available)
+if st.session_state.search_results:
+    st.divider()
+
+    # PDF Download Section
+    st.subheader("📥 Download Report")
+
+    col_dl1, col_dl2, col_dl3 = st.columns([1, 1, 2])
+
+    with col_dl1:
+        num_cases = st.number_input(
+            "Cases in report:",
+            min_value=1,
+            max_value=50,
+            value=10,
+            help="Number of top cases to include in PDF"
+        )
+
+    with col_dl2:
+        if st.button("📄 Generate PDF Report", type="secondary"):
+            with st.spinner("Generating PDF report..."):
+                try:
+                    # Get search results from session state
+                    search_data = st.session_state.search_results
+                    results = search_data['results']
+
+                    # Extract damages values
+                    damages_values = []
+                    for case, emb_sim, combined_score in results:
+                        damage_val = extract_damages_value(case)
+                        if damage_val:
+                            damages_values.append(damage_val)
+
+                    # Create region labels map
+                    region_labels = {
+                        rid: region_map[rid]["label"]
+                        for rid in search_data['selected_regions']
+                        if rid in region_map
+                    }
+
+                    # Generate PDF
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    pdf_filename = f"damages_report_{timestamp}.pdf"
+
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        pdf_path = os.path.join(tmpdir, pdf_filename)
+
+                        generate_damages_report(
+                            output_path=pdf_path,
+                            selected_regions=search_data['selected_regions'],
+                            region_labels=region_labels,
+                            injury_description=search_data['injury_text'],
+                            results=results,
+                            damages_values=damages_values,
+                            gender=search_data['gender'] if search_data['gender'] != "Not Specified" else None,
+                            age=search_data['age'],
+                            max_cases=num_cases
+                        )
+
+                        # Read the generated PDF
+                        with open(pdf_path, 'rb') as pdf_file:
+                            pdf_data = pdf_file.read()
+
+                        st.success("✅ PDF report generated successfully!")
+
+                        # Offer download
+                        st.download_button(
+                            label="💾 Download PDF Report",
+                            data=pdf_data,
+                            file_name=pdf_filename,
+                            mime="application/pdf",
+                            type="primary"
+                        )
+
+                except Exception as e:
+                    st.error(f"❌ Error generating PDF: {str(e)}")
+                    st.info("Please ensure all dependencies are installed: pip install reportlab")
+
+    with col_dl3:
+        st.caption("Generate a professional PDF report with search parameters, damage analysis, and comparable cases.")
 
 # Footer
 st.divider()
