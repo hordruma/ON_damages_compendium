@@ -297,21 +297,3 @@ def enhance_region_detection(text: str, existing_regions: list = None) -> list:
             detected_regions.update(mapped_regions)
 
     return list(detected_regions)
-
-
-# Example usage
-if __name__ == "__main__":
-    # Test cases
-    test_cases = [
-        ("comminuted tibial fracture", "The patient sustained a comminuted left tibial fracture in the MVA"),
-        ("rotator cuff tear", "MRI reveals a full-thickness right rotator cuff tear"),
-        ("C5-C6 disc herniation", "Cervical spine imaging shows C5-C6 disc herniation with cord compression"),
-        ("ACL tear", "Examination reveals bilateral ACL tears"),
-    ]
-
-    for term, context in test_cases:
-        regions = map_anatomical_term_to_regions(term, context)
-        print(f"Term: '{term}'")
-        print(f"Context: {context}")
-        print(f"Mapped regions: {regions}")
-        print()

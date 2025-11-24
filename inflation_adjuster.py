@@ -4,7 +4,7 @@ Adjusts historical damage awards to current dollars using Bank of Canada CPI dat
 """
 
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import csv
 from pathlib import Path
 import re
@@ -117,9 +117,9 @@ def download_boc_cpi_data(
     try:
         print(f"Downloading CPI data from Bank of Canada...")
 
-        # Set headers to avoid 403 errors
+        # Set headers with honest application identifier
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'User-Agent': 'Ontario-Damages-Compendium/1.0 (+https://github.com/yourrepo/ON_damages_compendium)',
             'Accept': 'text/csv,application/csv,text/plain,*/*'
         }
 
@@ -184,7 +184,7 @@ def get_cpi_data(auto_download: bool = False) -> Dict[int, float]:
     return _cpi_cache
 
 
-def reload_cpi_data(download_fresh: bool = False):
+def reload_cpi_data(download_fresh: bool = False) -> Dict[int, float]:
     """
     Force reload of CPI data from CSV (useful after updating the file)
 
@@ -203,7 +203,7 @@ def reload_cpi_data(download_fresh: bool = False):
     return get_cpi_data()
 
 
-def update_cpi_data():
+def update_cpi_data() -> Optional[Dict[int, float]]:
     """
     Convenience function to download and update CPI data from Bank of Canada
 
@@ -307,7 +307,7 @@ def format_inflation_info(
     )
 
 
-def get_available_years() -> list:
+def get_available_years() -> List[int]:
     """Get list of years with available CPI data"""
     cpi_data = get_cpi_data()
     return sorted(cpi_data.keys())
@@ -337,49 +337,3 @@ def get_data_source() -> str:
         num_years = len(cpi_data)
         year_range = f"{get_earliest_year()}-{get_latest_year()}"
         return f"Fallback data ({num_years} years: {year_range})"
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    print("=" * 70)
-    print("Bank of Canada CPI Inflation Adjuster")
-    print("=" * 70)
-    print()
-
-    # Show data source
-    print(f"Data source: {get_data_source()}")
-    print()
-
-    # Test inflation adjustment
-    test_cases = [
-        (75000, 2010),
-        (95000, 2015),
-        (125000, 2020),
-        (85000, 2023),
-    ]
-
-    print("Inflation Adjustment Examples")
-    print("-" * 70)
-
-    for amount, year in test_cases:
-        adjusted = adjust_for_inflation(amount, year)
-        if adjusted:
-            info = format_inflation_info(amount, year, adjusted)
-            print(info)
-        else:
-            print(f"${amount:,.0f} ({year}) - No CPI data available")
-
-    print()
-    print(f"CPI data available for years: {get_earliest_year()}-{get_latest_year()}")
-    print(f"Total inflation 2010-2024: {get_inflation_rate(2010, 2024):.1f}%")
-    print(f"Total inflation 2020-2024: {get_inflation_rate(2020, 2024):.1f}%")
-    print()
-
-    # Show some actual CPI values
-    print("Sample CPI Values:")
-    print("-" * 70)
-    sample_years = [2010, 2015, 2020, 2023, 2024]
-    for year in sample_years:
-        cpi = get_cpi_for_year(year)
-        if cpi:
-            print(f"  {year}: {cpi:.1f}")

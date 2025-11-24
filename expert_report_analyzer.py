@@ -8,8 +8,30 @@ import re
 from typing import Dict, List, Optional, Tuple
 import json
 import os
+import logging
 from pathlib import Path
 from anatomical_mappings import enhance_region_detection, ANATOMICAL_MAPPINGS
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# ============================================================================
+# CONFIGURATION CONSTANTS
+# ============================================================================
+
+# LLM settings
+DEFAULT_LLM_MODEL_OPENAI = "gpt-4o-mini"  # Fast and cost-effective
+DEFAULT_LLM_MODEL_ANTHROPIC = "claude-3-haiku-20240307"  # Fast and cost-effective
+MAX_REPORT_CHARS_FOR_LLM = 4000  # Maximum characters to send to LLM (token limit)
+LLM_TEMPERATURE = 0.1  # Low temperature for consistent extraction
+LLM_MAX_TOKENS = 1000  # Maximum tokens in LLM response
+
+# Regex extraction settings
+MAX_LIMITATIONS_EXTRACTED = 10  # Maximum number of limitations to extract
+MAX_REGIONS_DETECTED = 5  # Maximum number of regions to detect
+SUMMARY_CHARS = 500  # Characters for fallback summary
+
+# ============================================================================
 
 # Optional LLM imports
 try:
@@ -88,10 +110,21 @@ class ExpertReportAnalyzer:
             for rid, data in self.region_map.items()
         ])
 
+        # Truncate if needed and warn user
+        if len(report_text) > MAX_REPORT_CHARS_FOR_LLM:
+            logger.warning(
+                f"Report text truncated from {len(report_text)} to {MAX_REPORT_CHARS_FOR_LLM} characters. "
+                f"This may result in missing information from later sections of the report."
+            )
+            print(f"⚠️  Warning: Report text truncated ({len(report_text)} → {MAX_REPORT_CHARS_FOR_LLM} chars)")
+            report_text_truncated = report_text[:MAX_REPORT_CHARS_FOR_LLM]
+        else:
+            report_text_truncated = report_text
+
         prompt = f"""Analyze this medical/expert report and extract structured injury information.
 
 REPORT TEXT:
-{report_text[:4000]}  # Limit to avoid token limits
+{report_text_truncated}
 
 AVAILABLE BODY REGIONS:
 {region_list}
@@ -119,13 +152,13 @@ IMPORTANT:
         try:
             if self.provider == "openai" and OPENAI_AVAILABLE:
                 response = openai.chat.completions.create(
-                    model="gpt-4o-mini",  # Fast and cost-effective
+                    model=DEFAULT_LLM_MODEL_OPENAI,
                     messages=[
                         {"role": "system", "content": "You are a medical report analyzer. Return ONLY valid JSON, no other text."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.1,
-                    max_tokens=1000
+                    temperature=LLM_TEMPERATURE,
+                    max_tokens=LLM_MAX_TOKENS
                 )
 
                 result_text = response.choices[0].message.content.strip()
@@ -140,9 +173,9 @@ IMPORTANT:
 
             elif self.provider == "anthropic" and ANTHROPIC_AVAILABLE:
                 message = self.client.messages.create(
-                    model="claude-3-haiku-20240307",  # Fast and cost-effective
-                    max_tokens=1000,
-                    temperature=0.1,
+                    model=DEFAULT_LLM_MODEL_ANTHROPIC,
+                    max_tokens=LLM_MAX_TOKENS,
+                    temperature=LLM_TEMPERATURE,
                     messages=[
                         {"role": "user", "content": prompt}
                     ]
@@ -229,9 +262,9 @@ IMPORTANT:
             mechanism = "Workplace accident"
 
         return {
-            "injured_regions": detected_regions[:5],  # Limit to top 5
-            "injury_description": report_text[:500],  # First 500 chars as summary
-            "limitations": list(set(limitations))[:10],  # Top 10 unique limitations
+            "injured_regions": detected_regions[:MAX_REGIONS_DETECTED],
+            "injury_description": report_text[:SUMMARY_CHARS],
+            "limitations": list(set(limitations))[:MAX_LIMITATIONS_EXTRACTED],
             "chronicity": chronicity,
             "mechanism": mechanism,
             "severity": severity,
@@ -289,20 +322,3 @@ def analyze_expert_report(
     """
     analyzer = ExpertReportAnalyzer(api_key=api_key, provider=provider)
     return analyzer.analyze_report(pdf_path, use_llm=use_llm)
-
-
-if __name__ == "__main__":
-    # Example usage
-    import sys
-
-    if len(sys.argv) < 2:
-        print("Usage: python expert_report_analyzer.py <pdf_path> [--no-llm]")
-        sys.exit(1)
-
-    pdf_path = sys.argv[1]
-    use_llm = "--no-llm" not in sys.argv
-
-    result = analyze_expert_report(pdf_path, use_llm=use_llm)
-
-    print("\n=== Expert Report Analysis ===\n")
-    print(json.dumps(result, indent=2))

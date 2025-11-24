@@ -1,24 +1,39 @@
 """
 Ontario Damages Compendium - Visual Search Tool
 A professional legal tool for searching comparable personal injury awards
+
+Main application file - handles UI and user interactions only.
+Business logic has been moved to app/ modules for better organization.
 """
 
 import streamlit as st
-import json
 import numpy as np
-from pathlib import Path
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-import re
 import tempfile
 import os
 from datetime import datetime
+from typing import Dict, List
 
-# Import custom modules
+# Import custom modules (refactored into app/ package)
+from app.core.config import *
+from app.core.data_loader import initialize_data
+from app.core.search import search_cases, extract_damages_value
+from app.ui.visualizations import create_inflation_chart, calculate_chart_statistics
+
+# Import other application modules
 from expert_report_analyzer import analyze_expert_report
 from pdf_report_generator import generate_damages_report
+from inflation_adjuster import (
+    DEFAULT_REFERENCE_YEAR,
+    get_data_source,
+    get_cpi_data,
+    BOC_CPI_CSV,
+    reload_cpi_data
+)
 
-# Page configuration
+# =============================================================================
+# PAGE CONFIGURATION
+# =============================================================================
+
 st.set_page_config(
     page_title="Ontario Damages Compendium",
     page_icon="⚖️",
@@ -73,12 +88,6 @@ st.markdown("""
         color: #6366f1;
         font-weight: 600;
     }
-    .body-map-container {
-        display: flex;
-        justify-content: center;
-        gap: 2rem;
-        margin: 2rem 0;
-    }
     .instructions {
         background-color: #eff6ff;
         border-left: 4px solid #3b82f6;
@@ -89,143 +98,26 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Load resources
-@st.cache_resource
-def load_embedding_model():
-    """Load the sentence transformer model"""
-    return SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+# =============================================================================
+# INITIALIZE DATA
+# =============================================================================
 
-@st.cache_data
-def load_cases():
-    """Load case data with embeddings"""
-    data_path = Path("data/damages_with_embeddings.json")
-    if not data_path.exists():
-        st.error(f"❌ Data file not found: {data_path}")
-        st.info("Please run the `01_extract_and_embed.ipynb` notebook first to generate the data.")
-        return None
+model, cases, region_map = initialize_data()
 
-    with open(data_path) as f:
-        return json.load(f)
+# =============================================================================
+# INITIALIZE SESSION STATE
+# =============================================================================
 
-@st.cache_data
-def load_region_map():
-    """Load region mapping"""
-    with open("region_map.json") as f:
-        return json.load(f)
+if 'search_results' not in st.session_state:
+    st.session_state.search_results = None
+if 'analysis_data' not in st.session_state:
+    st.session_state.analysis_data = None
 
-# Initialize
-model = load_embedding_model()
-cases = load_cases()
-region_map = load_region_map()
+# =============================================================================
+# MAIN UI
+# =============================================================================
 
-if cases is None:
-    st.stop()
-
-def normalize_region_name(region_name):
-    """Normalize region names for matching"""
-    # Convert common region names to map keys
-    region_lower = region_name.lower()
-
-    for key, data in region_map.items():
-        if key.replace("_", " ") in region_lower:
-            return key
-        for term in data["compendium_terms"]:
-            if term.lower() in region_lower:
-                return key
-
-    return None
-
-def calculate_region_overlap(case_region, selected_regions):
-    """Calculate overlap score between case region and selected regions"""
-    if not selected_regions:
-        return 0.0
-
-    # Normalize case region
-    case_region_normalized = normalize_region_name(case_region)
-
-    # Check if case region matches any selected regions
-    if case_region_normalized in selected_regions:
-        return 1.0
-
-    # Check compendium terms
-    case_region_lower = case_region.lower()
-    for region_id in selected_regions:
-        region_data = region_map.get(region_id, {})
-        terms = region_data.get("compendium_terms", [])
-
-        for term in terms:
-            if term.lower() in case_region_lower:
-                return 0.7  # Partial match
-
-    return 0.0
-
-def search_cases(injury_text, selected_regions, gender=None, age=None, top_n=15):
-    """
-    Search for similar cases using embeddings and region filtering
-
-    Args:
-        injury_text: Description of the injury
-        selected_regions: List of selected region IDs
-        gender: Male/Female filter (optional)
-        age: Age of plaintiff (optional)
-        top_n: Number of results to return
-    """
-    # Create query embedding
-    query_text = f"{' '.join([region_map[r]['label'] for r in selected_regions])} {injury_text}"
-    query_vec = model.encode(query_text).reshape(1, -1)
-
-    # Filter cases by selected regions if any
-    if selected_regions:
-        filtered_cases = []
-        for case in cases:
-            region_score = calculate_region_overlap(case.get("region", ""), selected_regions)
-            if region_score > 0:
-                case_copy = case.copy()
-                case_copy["region_score"] = region_score
-                filtered_cases.append(case_copy)
-
-        if not filtered_cases:
-            # Fallback: use all cases if no region matches
-            filtered_cases = [{**c, "region_score": 0} for c in cases]
-    else:
-        filtered_cases = [{**c, "region_score": 0} for c in cases]
-
-    # Calculate embedding similarity
-    vectors = np.array([c["embedding"] for c in filtered_cases])
-    embedding_sims = cosine_similarity(query_vec, vectors)[0]
-
-    # Combine scores: 70% embedding similarity + 30% region overlap
-    combined_scores = 0.7 * embedding_sims + 0.3 * np.array([c["region_score"] for c in filtered_cases])
-
-    # Rank by combined score
-    ranked = sorted(
-        zip(filtered_cases, embedding_sims, combined_scores),
-        key=lambda x: x[2],
-        reverse=True
-    )
-
-    return ranked[:top_n]
-
-def extract_damages_value(case):
-    """Extract numeric damages value from case"""
-    if case.get("damages"):
-        return case["damages"]
-
-    # Try to extract from raw fields or summary
-    summary = case.get("summary_text", "")
-    dollar_amounts = re.findall(r'\$[\d,]+', summary)
-
-    for amount in dollar_amounts:
-        try:
-            value = float(amount.replace("$", "").replace(",", ""))
-            if 1000 <= value <= 10000000:  # Reasonable range
-                return value
-        except:
-            continue
-
-    return None
-
-# Main UI
+# Header
 st.markdown('<div class="main-header">⚖️ Ontario Damages Compendium</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Visual search tool for comparable personal injury awards in Ontario</div>', unsafe_allow_html=True)
 
@@ -251,7 +143,10 @@ with st.expander("ℹ️ How to Use This Tool", expanded=False):
     </div>
     """, unsafe_allow_html=True)
 
-# Sidebar for controls
+# =============================================================================
+# SIDEBAR - SEARCH PARAMETERS
+# =============================================================================
+
 with st.sidebar:
     st.header("Search Parameters")
 
@@ -265,17 +160,12 @@ with st.sidebar:
     # CPI Data Upload Section
     with st.expander("📊 Update CPI Data (Optional)", expanded=False):
         st.caption("Upload Bank of Canada CPI data to ensure accurate inflation adjustments")
-
-        # Show current data source
-        from inflation_adjuster import get_data_source, get_cpi_data, BOC_CPI_CSV
         st.info(f"**Current:** {get_data_source()}")
 
-        # Download current CPI data
         col1, col2 = st.columns(2)
 
         with col1:
             st.markdown("**Download current data:**")
-            # Generate CSV content from current data
             import io
             cpi_data = get_cpi_data()
             csv_buffer = io.StringIO()
@@ -304,16 +194,11 @@ with st.sidebar:
 
         if cpi_file is not None:
             try:
-                # Save uploaded file to data directory
-                from inflation_adjuster import BOC_CPI_CSV, reload_cpi_data
-
                 BOC_CPI_CSV.parent.mkdir(parents=True, exist_ok=True)
                 with open(BOC_CPI_CSV, 'wb') as f:
                     f.write(cpi_file.getbuffer())
 
-                # Reload data
                 new_data = reload_cpi_data()
-
                 st.success(f"✓ CPI data updated successfully! Now have {len(new_data)} years of data.")
 
             except Exception as e:
@@ -355,16 +240,12 @@ with st.sidebar:
     else:
         st.info("No regions selected - will search all cases")
 
-# Initialize session state
-if 'search_results' not in st.session_state:
-    st.session_state.search_results = None
-if 'analysis_data' not in st.session_state:
-    st.session_state.analysis_data = None
+# =============================================================================
+# MAIN CONTENT - EXPERT REPORT UPLOAD
+# =============================================================================
 
-# Main content area
 st.divider()
 
-# Expert Report Upload Section
 with st.expander("📄 Upload Expert/Medical Report (Optional)", expanded=False):
     st.markdown("""
     Upload a medical or expert report PDF, and the system will automatically extract injuries,
@@ -390,23 +271,16 @@ with st.expander("📄 Upload Expert/Medical Report (Optional)", expanded=False)
     if uploaded_file is not None:
         if st.button("🔍 Analyze Expert Report", type="secondary"):
             with st.spinner("Analyzing expert report..."):
-                # Save uploaded file temporarily
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
                     tmp_file.write(uploaded_file.getvalue())
                     tmp_path = tmp_file.name
 
                 try:
-                    # Analyze the report
-                    analysis = analyze_expert_report(
-                        tmp_path,
-                        use_llm=use_llm
-                    )
-
+                    analysis = analyze_expert_report(tmp_path, use_llm=use_llm)
                     st.session_state.analysis_data = analysis
 
                     st.success("✅ Expert report analyzed successfully!")
 
-                    # Display extracted information
                     st.subheader("Extracted Information")
 
                     if analysis.get('injured_regions'):
@@ -436,9 +310,12 @@ with st.expander("📄 Upload Expert/Medical Report (Optional)", expanded=False)
                     st.error(f"❌ Error analyzing report: {str(e)}")
                     st.info("Try using the manual input fields below instead.")
                 finally:
-                    # Clean up temp file
                     if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
+
+# =============================================================================
+# MAIN CONTENT - SEARCH INPUT
+# =============================================================================
 
 st.divider()
 
@@ -466,14 +343,16 @@ with col2:
     st.subheader("Body Map Reference")
     st.info("Body map visualization coming soon. Use the region selector in the sidebar.")
 
-    # Placeholder for SVG body map
     st.caption("Regions available for selection:")
     st.caption("• Head & Spine (5 regions)")
     st.caption("• Torso (3 regions)")
     st.caption("• Upper Limbs (12 regions)")
     st.caption("• Lower Limbs (12 regions)")
 
-# Search results
+# =============================================================================
+# SEARCH EXECUTION AND RESULTS DISPLAY
+# =============================================================================
+
 if search_button:
     if not injury_text.strip():
         st.warning("⚠️ Please enter an injury description")
@@ -482,11 +361,14 @@ if search_button:
             results = search_cases(
                 injury_text,
                 selected_regions,
+                cases,
+                region_map,
+                model,
                 gender=gender if gender != "Not Specified" else None,
                 age=age
             )
 
-        # Store results in session state for PDF generation
+        # Store results in session state
         st.session_state.search_results = {
             'results': results,
             'injury_text': injury_text,
@@ -506,7 +388,7 @@ if search_button:
             if damage_val:
                 damages_values.append(damage_val)
 
-        # Damage summary
+        # Damage summary metrics
         if damages_values:
             col1, col2, col3 = st.columns(3)
 
@@ -535,122 +417,63 @@ if search_button:
             st.divider()
             st.subheader("📊 Inflation-Adjusted Award Comparison")
 
-            # Prepare chart data
-            chart_data = []
-            for case, emb_sim, combined_score in results[:15]:  # Top 15 for readability
-                damage_val = extract_damages_value(case)
-                year = case.get('year')
-                case_name = case.get('case_name', 'Unknown')
-                citation = case.get('citation', case.get('summary_text', '')[:50])
+            fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
 
-                if damage_val and year:
-                    adjusted_val = adjust_for_inflation(damage_val, year, DEFAULT_REFERENCE_YEAR)
-                    if adjusted_val:
-                        chart_data.append({
-                            'case_name': case_name,
-                            'year': year,
-                            'original_award': damage_val,
-                            'adjusted_award': adjusted_val,
-                            'citation': citation,
-                            'match_score': combined_score * 100
-                        })
-
-            if chart_data:
-                # Create interactive Plotly chart
-                fig = go.Figure()
-
-                # Add original awards as bars
-                fig.add_trace(go.Bar(
-                    name=f'Original Award',
-                    x=[f"{d['case_name'][:20]}... ({d['year']})" for d in chart_data],
-                    y=[d['original_award'] for d in chart_data],
-                    marker_color='lightblue',
-                    hovertemplate='<b>%{x}</b><br>' +
-                                  'Original Award: $%{y:,.0f}<br>' +
-                                  '<extra></extra>'
-                ))
-
-                # Add inflation-adjusted awards as bars
-                fig.add_trace(go.Bar(
-                    name=f'Inflation-Adjusted ({DEFAULT_REFERENCE_YEAR}$)',
-                    x=[f"{d['case_name'][:20]}... ({d['year']})" for d in chart_data],
-                    y=[d['adjusted_award'] for d in chart_data],
-                    marker_color='darkblue',
-                    customdata=[[d['case_name'], d['citation'], d['match_score'], d['year'],
-                                d['original_award'], d['adjusted_award']] for d in chart_data],
-                    hovertemplate='<b>%{customdata[0]}</b><br>' +
-                                  'Year: %{customdata[3]}<br>' +
-                                  'Original: $%{customdata[4]:,.0f}<br>' +
-                                  f'Adjusted ({DEFAULT_REFERENCE_YEAR}$): $%{{customdata[5]:,.0f}}<br>' +
-                                  'Match Score: %{customdata[2]:.1f}%<br>' +
-                                  'Citation: %{customdata[1]}<br>' +
-                                  '<extra></extra>'
-                ))
-
-                # Update layout
-                fig.update_layout(
-                    barmode='group',
-                    title=f'Damage Awards: Original vs Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR}',
-                    xaxis_title='Case (Year)',
-                    yaxis_title='Award Amount ($)',
-                    yaxis=dict(tickformat='$,.0f'),
-                    hovermode='closest',
-                    height=500,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=1.02,
-                        xanchor="right",
-                        x=1
-                    ),
-                    xaxis={'categoryorder': 'total descending'}
-                )
-
+            if fig:
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Summary statistics
-                col1, col2, col3 = st.columns(3)
+                # Calculate and display statistics
+                chart_data = []
+                for case, emb_sim, combined_score in results[:CHART_MAX_CASES]:
+                    damage_val = extract_damages_value(case)
+                    year = case.get('year')
+                    if damage_val and year:
+                        from inflation_adjuster import adjust_for_inflation
+                        adjusted_val = adjust_for_inflation(damage_val, year, DEFAULT_REFERENCE_YEAR)
+                        if adjusted_val:
+                            chart_data.append({
+                                'original_award': damage_val,
+                                'adjusted_award': adjusted_val
+                            })
 
-                with col1:
-                    median_original = np.median([d['original_award'] for d in chart_data])
-                    median_adjusted = np.median([d['adjusted_award'] for d in chart_data])
-                    st.metric(
-                        "Median (Original)",
-                        f"${median_original:,.0f}",
-                        help="Median of original award amounts"
+                if chart_data:
+                    stats = calculate_chart_statistics(chart_data)
+
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        st.metric(
+                            "Median (Original)",
+                            f"${stats['median_original']:,.0f}",
+                            help="Median of original award amounts"
+                        )
+
+                    with col2:
+                        st.metric(
+                            f"Median ({DEFAULT_REFERENCE_YEAR}$)",
+                            f"${stats['median_adjusted']:,.0f}",
+                            delta=f"+${stats['median_adjusted'] - stats['median_original']:,.0f}",
+                            help=f"Median adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
+                        )
+
+                    with col3:
+                        st.metric(
+                            "Avg. Inflation Impact",
+                            f"+{stats['avg_inflation_impact']:.1f}%",
+                            help="Average percentage increase due to inflation"
+                        )
+
+                    st.caption(
+                        f"💡 **Note:** Awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
+                        "Canadian Consumer Price Index (Statistics Canada). "
+                        "Hover over bars for detailed case information."
                     )
-
-                with col2:
-                    st.metric(
-                        f"Median ({DEFAULT_REFERENCE_YEAR}$)",
-                        f"${median_adjusted:,.0f}",
-                        delta=f"+${median_adjusted - median_original:,.0f}",
-                        help=f"Median adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
-                    )
-
-                with col3:
-                    avg_inflation = np.mean([
-                        ((d['adjusted_award'] - d['original_award']) / d['original_award']) * 100
-                        for d in chart_data
-                    ])
-                    st.metric(
-                        "Avg. Inflation Impact",
-                        f"+{avg_inflation:.1f}%",
-                        help="Average percentage increase due to inflation"
-                    )
-
-                st.caption(
-                    f"💡 **Note:** Awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
-                    "Canadian Consumer Price Index (Statistics Canada). "
-                    "Hover over bars for detailed case information."
-                )
-
             else:
                 st.info("Inflation adjustment requires case year information. Some cases may not have dates.")
 
         st.divider()
 
-        # Display results
+        # Display individual cases
         st.subheader(f"Top {len(results)} Comparable Cases")
 
         for idx, (case, emb_sim, combined_score) in enumerate(results, 1):
@@ -658,7 +481,7 @@ if search_button:
                 f"**Case {idx}** - {case.get('case_name', 'Unknown')} | "
                 f"Region: {case.get('region', 'Unknown')} | "
                 f"Match: {combined_score*100:.1f}%",
-                expanded=(idx <= 3)
+                expanded=(idx <= EXPANDED_RESULTS_COUNT)
             ):
                 col1, col2 = st.columns([2, 1])
 
@@ -676,7 +499,7 @@ if search_button:
                         st.markdown(f"**Damages:** ${damage_val:,.0f}")
 
                     st.markdown("**Case Summary:**")
-                    st.text(case.get('summary_text', 'No summary available')[:500] + "...")
+                    st.text(case.get('summary_text', 'No summary available')[:CASE_SUMMARY_MAX_LENGTH] + "...")
 
                 with col2:
                     st.metric("Similarity Score", f"{emb_sim*100:.1f}%")
@@ -685,11 +508,13 @@ if search_button:
                     if case.get("region_score", 0) > 0:
                         st.metric("Region Match", f"{case['region_score']*100:.0f}%")
 
-# Display results from session state (if available)
+# =============================================================================
+# PDF REPORT GENERATION
+# =============================================================================
+
 if st.session_state.search_results:
     st.divider()
 
-    # PDF Download Section
     st.subheader("📥 Download Report")
 
     col_dl1, col_dl2, col_dl3 = st.columns([1, 1, 2])
@@ -707,25 +532,21 @@ if st.session_state.search_results:
         if st.button("📄 Generate PDF Report", type="secondary"):
             with st.spinner("Generating PDF report..."):
                 try:
-                    # Get search results from session state
                     search_data = st.session_state.search_results
                     results = search_data['results']
 
-                    # Extract damages values
                     damages_values = []
                     for case, emb_sim, combined_score in results:
                         damage_val = extract_damages_value(case)
                         if damage_val:
                             damages_values.append(damage_val)
 
-                    # Create region labels map
                     region_labels = {
                         rid: region_map[rid]["label"]
                         for rid in search_data['selected_regions']
                         if rid in region_map
                     }
 
-                    # Generate PDF
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     pdf_filename = f"damages_report_{timestamp}.pdf"
 
@@ -744,13 +565,11 @@ if st.session_state.search_results:
                             max_cases=num_cases
                         )
 
-                        # Read the generated PDF
                         with open(pdf_path, 'rb') as pdf_file:
                             pdf_data = pdf_file.read()
 
                         st.success("✅ PDF report generated successfully!")
 
-                        # Offer download
                         st.download_button(
                             label="💾 Download PDF Report",
                             data=pdf_data,
@@ -766,7 +585,10 @@ if st.session_state.search_results:
     with col_dl3:
         st.caption("Generate a professional PDF report with search parameters, damage analysis, and comparable cases.")
 
-# Footer
+# =============================================================================
+# FOOTER
+# =============================================================================
+
 st.divider()
 st.caption("© 2024 Ontario Damages Compendium Tool | Built for legal professionals | Data source: CCLA Damages Compendium 2024")
 st.caption("⚠️ This tool provides reference information only. Always verify case details and consult primary sources.")
