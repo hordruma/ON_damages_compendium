@@ -262,6 +262,65 @@ with st.sidebar:
 
     st.divider()
 
+    # CPI Data Upload Section
+    with st.expander("📊 Update CPI Data (Optional)", expanded=False):
+        st.caption("Upload Bank of Canada CPI data to ensure accurate inflation adjustments")
+
+        # Show current data source
+        from inflation_adjuster import get_data_source, get_cpi_data, BOC_CPI_CSV
+        st.info(f"**Current:** {get_data_source()}")
+
+        # Download current CPI data
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Download current data:**")
+            # Generate CSV content from current data
+            import io
+            cpi_data = get_cpi_data()
+            csv_buffer = io.StringIO()
+            csv_buffer.write("Year,CPI\n")
+            for year in sorted(cpi_data.keys()):
+                csv_buffer.write(f"{year},{cpi_data[year]:.2f}\n")
+
+            st.download_button(
+                label="📥 Download Current CPI Data",
+                data=csv_buffer.getvalue(),
+                file_name="cpi_data_template.csv",
+                mime="text/csv",
+                help="Download the current CPI data as a CSV template"
+            )
+
+        with col2:
+            st.markdown("**Or get latest from:**")
+            st.markdown("[Bank of Canada](https://www.bankofcanada.ca/valet/observations/group/CPI_MONTHLY/csv)")
+
+        cpi_file = st.file_uploader(
+            "Upload CPI CSV",
+            type=['csv'],
+            help="Bank of Canada CPI monthly data in CSV format",
+            key="cpi_upload"
+        )
+
+        if cpi_file is not None:
+            try:
+                # Save uploaded file to data directory
+                from inflation_adjuster import BOC_CPI_CSV, reload_cpi_data
+
+                BOC_CPI_CSV.parent.mkdir(parents=True, exist_ok=True)
+                with open(BOC_CPI_CSV, 'wb') as f:
+                    f.write(cpi_file.getbuffer())
+
+                # Reload data
+                new_data = reload_cpi_data()
+
+                st.success(f"✓ CPI data updated successfully! Now have {len(new_data)} years of data.")
+
+            except Exception as e:
+                st.error(f"Failed to update CPI data: {e}")
+
+    st.divider()
+
     # Region selection
     st.subheader("Body Regions")
     st.caption("Select one or more injured regions")

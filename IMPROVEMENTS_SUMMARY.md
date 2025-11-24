@@ -136,10 +136,11 @@ Summary:
 ```
 
 ### Data Source
-- **Canadian Consumer Price Index** (Statistics Canada)
-- **Years covered**: 2000-2024
+- **Canadian Consumer Price Index** (Bank of Canada)
+- **Years covered**: 2000-2024+ (updated monthly)
 - **Reference year**: 2024 (configurable)
 - **Formula**: `adjusted = original × (CPI_2024 / CPI_year)`
+- **Auto-update**: Can download latest data from Bank of Canada API
 
 ### Implementation
 
@@ -149,7 +150,7 @@ Summary:
 
 **Key Functions:**
 ```python
-from inflation_adjuster import adjust_for_inflation
+from inflation_adjuster import adjust_for_inflation, download_boc_cpi_data, update_cpi_data
 
 # Adjust award to 2024 dollars
 adjusted = adjust_for_inflation(75000, 2010, 2024)
@@ -158,6 +159,10 @@ adjusted = adjust_for_inflation(75000, 2010, 2024)
 # Get inflation rate
 rate = get_inflation_rate(2010, 2024)
 # Returns: 37.96%
+
+# Update CPI data from Bank of Canada (optional)
+update_cpi_data()
+# Downloads latest CPI data and saves to data/boc_cpi.csv
 ```
 
 ### Example Inflation Adjustments
@@ -340,6 +345,23 @@ streamlit run streamlit_app.py
 # 2. Check if inflation chart appears
 # 3. Hover over bars to see tooltips
 ```
+
+### Update CPI Data (Optional)
+
+The system uses Bank of Canada CPI data for inflation adjustments. To update to the latest data:
+
+```python
+# Option 1: Programmatic update
+from inflation_adjuster import update_cpi_data
+update_cpi_data()
+
+# Option 2: Manual download
+# If the API is unavailable, manually download from:
+# https://www.bankofcanada.ca/valet/observations/group/CPI_MONTHLY/csv
+# Save to: data/boc_cpi.csv
+```
+
+**Note**: The system includes fallback CPI data, so updates are optional but recommended for the most current inflation adjustments.
 
 ---
 

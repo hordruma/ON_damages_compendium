@@ -23,6 +23,7 @@ ipywidgets>=8.0.0
 
 # Utilities
 python-dotenv>=1.0.0
+requests>=2.31.0
 
 # PDF Report Generation
 reportlab>=4.0.0
