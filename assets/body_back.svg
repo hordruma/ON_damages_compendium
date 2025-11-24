@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="300" height="600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 600">
+  <!-- Back view of human body with anatomical regions -->
+
+  <!-- Body outline -->
+  <g id="body_outline" fill="none" stroke="#333" stroke-width="2">
+    <!-- Head (back) -->
+    <ellipse cx="150" cy="40" rx="30" ry="35" fill="#f3f4f6"/>
+    <!-- Neck (back) -->
+    <rect x="135" y="70" width="30" height="30" fill="#f3f4f6"/>
+    <!-- Back torso -->
+    <path d="M 120 100 Q 110 200 115 280 L 185 280 Q 190 200 180 100 Z" fill="#f3f4f6"/>
+    <!-- Left arm (back) -->
+    <path d="M 120 110 L 95 150 L 85 200 L 80 250 L 75 280" stroke-width="12" stroke-linecap="round"/>
+    <!-- Right arm (back) -->
+    <path d="M 180 110 L 205 150 L 215 200 L 220 250 L 225 280" stroke-width="12" stroke-linecap="round"/>
+    <!-- Left leg (back) -->
+    <path d="M 130 280 L 125 380 L 120 480 L 115 580" stroke-width="18" stroke-linecap="round"/>
+    <!-- Right leg (back) -->
+    <path d="M 170 280 L 175 380 L 180 480 L 185 580" stroke-width="18" stroke-linecap="round"/>
+  </g>
+
+  <!-- Clickable regions with transparent fills -->
+
+  <!-- Head region (back) -->
+  <ellipse id="head_back" cx="150" cy="40" rx="32" ry="37"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="head"/>
+
+  <!-- Cervical spine (neck back) -->
+  <rect id="cervical_spine_back" x="133" y="70" width="34" height="32"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="cervical_spine"/>
+
+  <!-- Thoracic spine (upper back) -->
+  <rect id="thoracic_spine" x="135" y="102" width="30" height="90"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="thoracic_spine"/>
+
+  <!-- Lumbar spine (lower back) -->
+  <rect id="lumbar_spine" x="135" y="192" width="30" height="70"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="lumbar_spine"/>
+
+  <!-- Sacroiliac -->
+  <rect id="sacroiliac" x="135" y="262" width="30" height="25"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="sacroiliac"/>
+
+  <!-- Left shoulder (back) -->
+  <ellipse id="shoulder_left_back" cx="108" cy="115" rx="16" ry="20"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="shoulder_left"/>
+
+  <!-- Right shoulder (back) -->
+  <ellipse id="shoulder_right_back" cx="192" cy="115" rx="16" ry="20"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="shoulder_right"/>
+
+  <!-- Left upper arm (back) -->
+  <rect id="arm_left_back" x="83" y="135" width="24" height="45"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="arm_left"
+        transform="rotate(-10 95 157)"/>
+
+  <!-- Right upper arm (back) -->
+  <rect id="arm_right_back" x="193" y="135" width="24" height="45"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="arm_right"
+        transform="rotate(10 205 157)"/>
+
+  <!-- Left elbow (back) -->
+  <ellipse id="elbow_left_back" cx="87" cy="195" rx="12" ry="15"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="elbow_left"/>
+
+  <!-- Right elbow (back) -->
+  <ellipse id="elbow_right_back" cx="213" cy="195" rx="12" ry="15"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="elbow_right"/>
+
+  <!-- Left forearm (back) -->
+  <rect id="forearm_left_back" x="70" y="210" width="22" height="45"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="forearm_left"/>
+
+  <!-- Right forearm (back) -->
+  <rect id="forearm_right_back" x="208" y="210" width="22" height="45"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="forearm_right"/>
+
+  <!-- Left wrist (back) -->
+  <rect id="wrist_left_back" x="70" y="255" width="22" height="15"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="wrist_left"/>
+
+  <!-- Right wrist (back) -->
+  <rect id="wrist_right_back" x="208" y="255" width="22" height="15"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="wrist_right"/>
+
+  <!-- Left hand (back) -->
+  <path id="hand_left_back" d="M 70 270 L 65 285 L 68 290 L 75 290 L 82 285 L 92 270 Z"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="hand_left"/>
+
+  <!-- Right hand (back) -->
+  <path id="hand_right_back" d="M 230 270 L 235 285 L 232 290 L 225 290 L 218 285 L 208 270 Z"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="hand_right"/>
+
+  <!-- Buttocks/Gluteal regions (upper hip back) -->
+  <ellipse id="hip_left_back" cx="125" cy="285" rx="12" ry="18"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="hip_left"/>
+
+  <ellipse id="hip_right_back" cx="175" cy="285" rx="12" ry="18"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="hip_right"/>
+
+  <!-- Left thigh (back - hamstrings) -->
+  <rect id="thigh_left_back" x="115" y="303" width="20" height="85"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="thigh_left"/>
+
+  <!-- Right thigh (back - hamstrings) -->
+  <rect id="thigh_right_back" x="165" y="303" width="20" height="85"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="thigh_right"/>
+
+  <!-- Left knee (back) -->
+  <ellipse id="knee_left_back" cx="125" cy="395" rx="14" ry="18"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="knee_left"/>
+
+  <!-- Right knee (back) -->
+  <ellipse id="knee_right_back" cx="175" cy="395" rx="14" ry="18"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="knee_right"/>
+
+  <!-- Left calf -->
+  <rect id="lower_leg_left_back" x="112" y="413" width="18" height="85"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="lower_leg_left"/>
+
+  <!-- Right calf -->
+  <rect id="lower_leg_right_back" x="170" y="413" width="18" height="85"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="lower_leg_right"/>
+
+  <!-- Left ankle (back) -->
+  <ellipse id="ankle_left_back" cx="121" cy="505" rx="11" ry="13"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="ankle_left"/>
+
+  <!-- Right ankle (back) -->
+  <ellipse id="ankle_right_back" cx="179" cy="505" rx="11" ry="13"
+           fill="rgba(139, 92, 246, 0.2)"
+           stroke="rgba(139, 92, 246, 0.5)"
+           stroke-width="1"
+           class="clickable-region"
+           data-region="ankle_right"/>
+
+  <!-- Left heel/foot (back) -->
+  <path id="foot_left_back" d="M 112 518 L 105 535 L 110 540 L 130 540 L 130 525 Z"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="foot_left"/>
+
+  <!-- Right heel/foot (back) -->
+  <path id="foot_right_back" d="M 188 518 L 195 535 L 190 540 L 170 540 L 170 525 Z"
+        fill="rgba(139, 92, 246, 0.2)"
+        stroke="rgba(139, 92, 246, 0.5)"
+        stroke-width="1"
+        class="clickable-region"
+        data-region="foot_right"/>
+
+  <style>
+    .clickable-region {
+      cursor: pointer;
+      opacity: 0.3;
+      transition: opacity 0.2s, fill 0.2s;
+    }
+    .clickable-region:hover {
+      opacity: 0.7;
+      fill: rgba(139, 92, 246, 0.4);
+    }
+    .clickable-region.selected {
+      opacity: 1;
+      fill: rgba(139, 92, 246, 0.6);
+      stroke: rgb(139, 92, 246);
+      stroke-width: 2;
+    }
+  </style>
+</svg>
