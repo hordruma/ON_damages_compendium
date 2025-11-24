@@ -1,0 +1,36 @@
+# Core dependencies
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# PDF extraction
+camelot-py[cv]>=0.11.0
+pypdf2>=3.0.0
+pdfplumber>=0.10.0
+
+# Machine learning and embeddings
+sentence-transformers>=2.2.0
+scikit-learn>=1.3.0
+torch>=2.0.0
+
+# Progress bars
+tqdm>=4.65.0
+
+# Jupyter support
+jupyter>=1.0.0
+notebook>=7.0.0
+ipywidgets>=8.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# PDF Report Generation
+reportlab>=4.0.0
+
+# Interactive Charts
+plotly>=5.18.0
+
+# LLM Integration (optional - for expert report analysis)
+openai>=1.0.0
+anthropic>=0.18.0

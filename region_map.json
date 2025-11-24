@@ -1,0 +1,390 @@
+{
+  "head": {
+    "label": "Cranial / Facial Structures",
+    "compendium_terms": [
+      "head",
+      "skull",
+      "brain",
+      "facial",
+      "cranial",
+      "concussion",
+      "traumatic brain injury",
+      "TBI",
+      "facial fracture",
+      "orbital",
+      "maxillofacial"
+    ]
+  },
+  "cervical_spine": {
+    "label": "Cervical Spine (C1-C7)",
+    "compendium_terms": [
+      "neck",
+      "cervical",
+      "whiplash",
+      "cervical disc",
+      "facet joint",
+      "nerve root impingement",
+      "radiculopathy",
+      "myofascial pain",
+      "C1", "C2", "C3", "C4", "C5", "C6", "C7",
+      "cervical strain",
+      "cervical sprain"
+    ]
+  },
+  "thoracic_spine": {
+    "label": "Thoracic Spine (T1-T12)",
+    "compendium_terms": [
+      "thoracic",
+      "upper back",
+      "mid back",
+      "thoracic spine",
+      "thoracic disc",
+      "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12",
+      "intercostal"
+    ]
+  },
+  "lumbar_spine": {
+    "label": "Lumbar Spine (L1-S1)",
+    "compendium_terms": [
+      "lumbar",
+      "lower back",
+      "low back",
+      "lumbar disc",
+      "disc herniation",
+      "bulging disc",
+      "L1", "L2", "L3", "L4", "L5",
+      "sacral",
+      "S1",
+      "lumbosacral",
+      "sciatica",
+      "chronic back pain"
+    ]
+  },
+  "sacroiliac": {
+    "label": "Sacroiliac Joint",
+    "compendium_terms": [
+      "sacroiliac",
+      "SI joint",
+      "sacrum",
+      "coccyx",
+      "tailbone"
+    ]
+  },
+  "shoulder_left": {
+    "label": "Left Glenohumeral / AC Complex",
+    "compendium_terms": [
+      "left shoulder",
+      "glenohumeral",
+      "rotator cuff",
+      "AC joint",
+      "acromioclavicular",
+      "clavicle",
+      "scapula",
+      "shoulder impingement",
+      "labral tear",
+      "frozen shoulder",
+      "adhesive capsulitis"
+    ]
+  },
+  "shoulder_right": {
+    "label": "Right Glenohumeral / AC Complex",
+    "compendium_terms": [
+      "right shoulder",
+      "glenohumeral",
+      "rotator cuff",
+      "AC joint",
+      "acromioclavicular",
+      "clavicle",
+      "scapula",
+      "shoulder impingement",
+      "labral tear",
+      "frozen shoulder",
+      "adhesive capsulitis"
+    ]
+  },
+  "arm_left": {
+    "label": "Left Humerus / Brachial Region",
+    "compendium_terms": [
+      "left arm",
+      "left upper arm",
+      "humerus",
+      "brachial",
+      "bicep",
+      "tricep"
+    ]
+  },
+  "arm_right": {
+    "label": "Right Humerus / Brachial Region",
+    "compendium_terms": [
+      "right arm",
+      "right upper arm",
+      "humerus",
+      "brachial",
+      "bicep",
+      "tricep"
+    ]
+  },
+  "elbow_left": {
+    "label": "Left Elbow (Olecranon / Radiocapitellar)",
+    "compendium_terms": [
+      "left elbow",
+      "olecranon",
+      "radiocapitellar",
+      "elbow fracture",
+      "tennis elbow",
+      "lateral epicondylitis"
+    ]
+  },
+  "elbow_right": {
+    "label": "Right Elbow (Olecranon / Radiocapitellar)",
+    "compendium_terms": [
+      "right elbow",
+      "olecranon",
+      "radiocapitellar",
+      "elbow fracture",
+      "tennis elbow",
+      "lateral epicondylitis"
+    ]
+  },
+  "forearm_left": {
+    "label": "Left Forearm (Ulna / Radius)",
+    "compendium_terms": [
+      "left forearm",
+      "ulna",
+      "radius",
+      "forearm fracture"
+    ]
+  },
+  "forearm_right": {
+    "label": "Right Forearm (Ulna / Radius)",
+    "compendium_terms": [
+      "right forearm",
+      "ulna",
+      "radius",
+      "forearm fracture"
+    ]
+  },
+  "wrist_left": {
+    "label": "Left Wrist (Radiocarpal Joint)",
+    "compendium_terms": [
+      "left wrist",
+      "radiocarpal",
+      "carpal",
+      "scaphoid",
+      "wrist fracture",
+      "colles fracture",
+      "TFCC"
+    ]
+  },
+  "wrist_right": {
+    "label": "Right Wrist (Radiocarpal Joint)",
+    "compendium_terms": [
+      "right wrist",
+      "radiocarpal",
+      "carpal",
+      "scaphoid",
+      "wrist fracture",
+      "colles fracture",
+      "TFCC"
+    ]
+  },
+  "hand_left": {
+    "label": "Left Hand (Metacarpals / Digits)",
+    "compendium_terms": [
+      "left hand",
+      "metacarpal",
+      "finger",
+      "thumb",
+      "digit",
+      "PIP",
+      "MCP",
+      "DIP",
+      "hand fracture",
+      "grip loss"
+    ]
+  },
+  "hand_right": {
+    "label": "Right Hand (Metacarpals / Digits)",
+    "compendium_terms": [
+      "right hand",
+      "metacarpal",
+      "finger",
+      "thumb",
+      "digit",
+      "PIP",
+      "MCP",
+      "DIP",
+      "hand fracture",
+      "grip loss"
+    ]
+  },
+  "chest": {
+    "label": "Thoracic Cage / Ribs",
+    "compendium_terms": [
+      "chest",
+      "ribs",
+      "rib fracture",
+      "sternum",
+      "thoracic cage",
+      "costal"
+    ]
+  },
+  "abdomen": {
+    "label": "Abdominal Region",
+    "compendium_terms": [
+      "abdomen",
+      "abdominal",
+      "stomach",
+      "internal organs",
+      "spleen",
+      "liver",
+      "kidney"
+    ]
+  },
+  "pelvis": {
+    "label": "Pelvic Ring",
+    "compendium_terms": [
+      "pelvis",
+      "pelvic",
+      "pelvic fracture",
+      "pubic symphysis",
+      "ilium"
+    ]
+  },
+  "hip_left": {
+    "label": "Left Acetabulofemoral Joint",
+    "compendium_terms": [
+      "left hip",
+      "acetabulum",
+      "femoral head",
+      "hip fracture",
+      "trochanter"
+    ]
+  },
+  "hip_right": {
+    "label": "Right Acetabulofemoral Joint",
+    "compendium_terms": [
+      "right hip",
+      "acetabulum",
+      "femoral head",
+      "hip fracture",
+      "trochanter"
+    ]
+  },
+  "thigh_left": {
+    "label": "Left Femur / Quadriceps Region",
+    "compendium_terms": [
+      "left thigh",
+      "femur",
+      "quadriceps",
+      "hamstring",
+      "femoral shaft"
+    ]
+  },
+  "thigh_right": {
+    "label": "Right Femur / Quadriceps Region",
+    "compendium_terms": [
+      "right thigh",
+      "femur",
+      "quadriceps",
+      "hamstring",
+      "femoral shaft"
+    ]
+  },
+  "knee_left": {
+    "label": "Left Patellofemoral / Tibiofemoral Joint",
+    "compendium_terms": [
+      "left knee",
+      "patella",
+      "patellar",
+      "meniscus",
+      "ACL",
+      "PCL",
+      "MCL",
+      "LCL",
+      "knee ligament",
+      "patellofemoral"
+    ]
+  },
+  "knee_right": {
+    "label": "Right Patellofemoral / Tibiofemoral Joint",
+    "compendium_terms": [
+      "right knee",
+      "patella",
+      "patellar",
+      "meniscus",
+      "ACL",
+      "PCL",
+      "MCL",
+      "LCL",
+      "knee ligament",
+      "patellofemoral"
+    ]
+  },
+  "lower_leg_left": {
+    "label": "Left Tibia / Fibula Region",
+    "compendium_terms": [
+      "left lower leg",
+      "left shin",
+      "tibia",
+      "fibula",
+      "tibial",
+      "fibular",
+      "calf"
+    ]
+  },
+  "lower_leg_right": {
+    "label": "Right Tibia / Fibula Region",
+    "compendium_terms": [
+      "right lower leg",
+      "right shin",
+      "tibia",
+      "fibula",
+      "tibial",
+      "fibular",
+      "calf"
+    ]
+  },
+  "ankle_left": {
+    "label": "Left Talocrural Joint",
+    "compendium_terms": [
+      "left ankle",
+      "talocrural",
+      "talus",
+      "ankle fracture",
+      "malleolus"
+    ]
+  },
+  "ankle_right": {
+    "label": "Right Talocrural Joint",
+    "compendium_terms": [
+      "right ankle",
+      "talocrural",
+      "talus",
+      "ankle fracture",
+      "malleolus"
+    ]
+  },
+  "foot_left": {
+    "label": "Left Foot (Metatarsals / Digits)",
+    "compendium_terms": [
+      "left foot",
+      "metatarsal",
+      "toe",
+      "foot fracture",
+      "calcaneus",
+      "heel"
+    ]
+  },
+  "foot_right": {
+    "label": "Right Foot (Metatarsals / Digits)",
+    "compendium_terms": [
+      "right foot",
+      "metatarsal",
+      "toe",
+      "foot fracture",
+      "calcaneus",
+      "heel"
+    ]
+  }
+}
