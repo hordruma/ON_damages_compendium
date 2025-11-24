@@ -13,6 +13,7 @@ import re
 import tempfile
 import os
 from datetime import datetime
+from typing import Optional, List, Dict, Tuple, Any
 
 # Import custom modules
 from expert_report_analyzer import analyze_expert_report
@@ -125,12 +126,12 @@ st.markdown("""
 
 # Load resources
 @st.cache_resource
-def load_embedding_model():
+def load_embedding_model() -> SentenceTransformer:
     """Load the sentence transformer model"""
     return SentenceTransformer(EMBEDDING_MODEL_NAME)
 
 @st.cache_data
-def load_cases():
+def load_cases() -> Optional[List[Dict[str, Any]]]:
     """Load case data with embeddings"""
     data_path = Path("data/damages_with_embeddings.json")
     if not data_path.exists():
@@ -142,7 +143,7 @@ def load_cases():
         return json.load(f)
 
 @st.cache_data
-def load_region_map():
+def load_region_map() -> Dict[str, Any]:
     """Load region mapping"""
     with open("region_map.json") as f:
         return json.load(f)
@@ -155,7 +156,7 @@ region_map = load_region_map()
 if cases is None:
     st.stop()
 
-def normalize_region_name(region_name):
+def normalize_region_name(region_name: str) -> Optional[str]:
     """
     Normalize region names from case data to standardized region IDs.
 
@@ -193,7 +194,7 @@ def normalize_region_name(region_name):
 
     return None  # No match found
 
-def calculate_region_overlap(case_region, selected_regions):
+def calculate_region_overlap(case_region: str, selected_regions: List[str]) -> float:
     """
     Calculate overlap score between a case's region and user-selected regions.
 
@@ -246,7 +247,13 @@ def calculate_region_overlap(case_region, selected_regions):
 
     return 0.0  # No match
 
-def search_cases(injury_text, selected_regions, gender=None, age=None, top_n=DEFAULT_TOP_N_RESULTS):
+def search_cases(
+    injury_text: str,
+    selected_regions: List[str],
+    gender: Optional[str] = None,
+    age: Optional[int] = None,
+    top_n: int = DEFAULT_TOP_N_RESULTS
+) -> List[Tuple[Dict[str, Any], float, float]]:
     """
     Hybrid search algorithm combining semantic similarity with anatomical region matching.
 
@@ -361,7 +368,7 @@ def search_cases(injury_text, selected_regions, gender=None, age=None, top_n=DEF
 
     return ranked[:top_n]
 
-def extract_damages_value(case):
+def extract_damages_value(case: Dict[str, Any]) -> Optional[float]:
     """Extract numeric damages value from case"""
     if case.get("damages"):
         return case["damages"]

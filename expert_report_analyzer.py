@@ -322,20 +322,3 @@ def analyze_expert_report(
     """
     analyzer = ExpertReportAnalyzer(api_key=api_key, provider=provider)
     return analyzer.analyze_report(pdf_path, use_llm=use_llm)
-
-
-if __name__ == "__main__":
-    # Example usage
-    import sys
-
-    if len(sys.argv) < 2:
-        print("Usage: python expert_report_analyzer.py <pdf_path> [--no-llm]")
-        sys.exit(1)
-
-    pdf_path = sys.argv[1]
-    use_llm = "--no-llm" not in sys.argv
-
-    result = analyze_expert_report(pdf_path, use_llm=use_llm)
-
-    print("\n=== Expert Report Analysis ===\n")
-    print(json.dumps(result, indent=2))
