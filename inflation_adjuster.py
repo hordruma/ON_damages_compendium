@@ -117,9 +117,9 @@ def download_boc_cpi_data(
     try:
         print(f"Downloading CPI data from Bank of Canada...")
 
-        # Set headers to avoid 403 errors
+        # Set headers with honest application identifier
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'User-Agent': 'Ontario-Damages-Compendium/1.0 (+https://github.com/yourrepo/ON_damages_compendium)',
             'Accept': 'text/csv,application/csv,text/plain,*/*'
         }
 
