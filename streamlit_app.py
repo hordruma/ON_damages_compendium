@@ -344,147 +344,22 @@ with st.expander("📄 Upload Expert/Medical Report (Optional)", expanded=False)
 
 st.divider()
 
-col1, col2 = st.columns([3, 2])
+st.subheader("Injury Description")
 
-with col1:
-    st.subheader("Injury Description")
+# Pre-populate if analysis exists
+default_injury_text = ""
+if st.session_state.analysis_data:
+    default_injury_text = st.session_state.analysis_data.get('injury_description', '')
 
-    # Pre-populate if analysis exists
-    default_injury_text = ""
-    if st.session_state.analysis_data:
-        default_injury_text = st.session_state.analysis_data.get('injury_description', '')
+injury_text = st.text_area(
+    "Describe the injury in detail:",
+    value=default_injury_text,
+    height=150,
+    placeholder="Example: C5-C6 disc herniation with chronic radicular pain radiating to right upper extremity. Failed conservative management. MRI shows central disc protrusion with nerve root impingement. Ongoing neurological deficits including weakness and paresthesias...",
+    help="Include: mechanism, anatomical structures, severity, chronicity, functional impact"
+)
 
-    injury_text = st.text_area(
-        "Describe the injury in detail:",
-        value=default_injury_text,
-        height=150,
-        placeholder="Example: C5-C6 disc herniation with chronic radicular pain radiating to right upper extremity. Failed conservative management. MRI shows central disc protrusion with nerve root impingement. Ongoing neurological deficits including weakness and paresthesias...",
-        help="Include: mechanism, anatomical structures, severity, chronicity, functional impact"
-    )
-
-    search_button = st.button("🔍 Find Comparable Cases", type="primary", use_container_width=True)
-
-with col2:
-    st.subheader("Body Map Reference")
-
-    # Display interactive body diagram
-    body_tab1, body_tab2 = st.tabs(["Front View", "Back View"])
-
-    with body_tab1:
-        # Read and display front view SVG
-        svg_path_front = Path(__file__).parent / "assets" / "body_front.svg"
-        if svg_path_front.exists():
-            with open(svg_path_front, 'r') as f:
-                svg_content = f.read()
-
-            # Add CSS styling for interactive regions
-            svg_html = f"""
-            <style>
-                .body-svg {{
-                    width: 100%;
-                    max-width: 300px;
-                    margin: 0 auto;
-                    display: block;
-                }}
-                .clickable-region {{
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }}
-                .clickable-region:hover {{
-                    fill: rgba(59, 130, 246, 0.4) !important;
-                    stroke: rgba(59, 130, 246, 0.8) !important;
-                    stroke-width: 2 !important;
-                }}
-                .region-selected {{
-                    fill: rgba(16, 185, 129, 0.5) !important;
-                    stroke: rgba(16, 185, 129, 1) !important;
-                    stroke-width: 2 !important;
-                }}
-            </style>
-            <div class="body-svg">
-                {svg_content}
-            </div>
-            <script>
-                // Highlight selected regions from sidebar
-                const selectedRegions = {json.dumps(selected_regions)};
-                selectedRegions.forEach(regionId => {{
-                    const element = document.getElementById(regionId);
-                    if (element) {{
-                        element.classList.add('region-selected');
-                    }}
-                }});
-
-                // Add click handlers
-                document.querySelectorAll('.clickable-region').forEach(region => {{
-                    region.addEventListener('click', function() {{
-                        const regionId = this.getAttribute('data-region');
-                        alert('Region: ' + regionId + '\\n\\nPlease use the checkboxes in the sidebar to select regions.');
-                    }});
-                }});
-            </script>
-            """
-            st.markdown(svg_html, unsafe_allow_html=True)
-        else:
-            st.info("Body diagram not found. Use the region selector in the sidebar.")
-
-    with body_tab2:
-        # Read and display back view SVG
-        svg_path_back = Path(__file__).parent / "assets" / "body_back.svg"
-        if svg_path_back.exists():
-            with open(svg_path_back, 'r') as f:
-                svg_content = f.read()
-
-            # Add CSS styling for interactive regions
-            svg_html = f"""
-            <style>
-                .body-svg {{
-                    width: 100%;
-                    max-width: 300px;
-                    margin: 0 auto;
-                    display: block;
-                }}
-                .clickable-region {{
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }}
-                .clickable-region:hover {{
-                    fill: rgba(59, 130, 246, 0.4) !important;
-                    stroke: rgba(59, 130, 246, 0.8) !important;
-                    stroke-width: 2 !important;
-                }}
-                .region-selected {{
-                    fill: rgba(16, 185, 129, 0.5) !important;
-                    stroke: rgba(16, 185, 129, 1) !important;
-                    stroke-width: 2 !important;
-                }}
-            </style>
-            <div class="body-svg">
-                {svg_content}
-            </div>
-            <script>
-                // Highlight selected regions from sidebar
-                const selectedRegions = {json.dumps(selected_regions)};
-                selectedRegions.forEach(regionId => {{
-                    const element = document.getElementById(regionId);
-                    if (element) {{
-                        element.classList.add('region-selected');
-                    }}
-                }});
-
-                // Add click handlers
-                document.querySelectorAll('.clickable-region').forEach(region => {{
-                    region.addEventListener('click', function() {{
-                        const regionId = this.getAttribute('data-region');
-                        alert('Region: ' + regionId + '\\n\\nPlease use the checkboxes in the sidebar to select regions.');
-                    }});
-                }});
-            </script>
-            """
-            st.markdown(svg_html, unsafe_allow_html=True)
-        else:
-            st.info("Body diagram not found. Use the region selector in the sidebar.")
-
-    st.caption("💡 Click regions in sidebar to highlight on the body map")
+search_button = st.button("🔍 Find Comparable Cases", type="primary", use_container_width=True)
 
 # =============================================================================
 # SEARCH EXECUTION AND RESULTS DISPLAY
