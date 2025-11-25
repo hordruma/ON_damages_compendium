@@ -10,7 +10,9 @@ import streamlit as st
 import numpy as np
 import tempfile
 import os
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List
 
 # Import custom modules (refactored into app/ package)
@@ -341,13 +343,125 @@ with col1:
 
 with col2:
     st.subheader("Body Map Reference")
-    st.info("Body map visualization coming soon. Use the region selector in the sidebar.")
 
-    st.caption("Regions available for selection:")
-    st.caption("• Head & Spine (5 regions)")
-    st.caption("• Torso (3 regions)")
-    st.caption("• Upper Limbs (12 regions)")
-    st.caption("• Lower Limbs (12 regions)")
+    # Display interactive body diagram
+    body_tab1, body_tab2 = st.tabs(["Front View", "Back View"])
+
+    with body_tab1:
+        # Read and display front view SVG
+        svg_path_front = Path(__file__).parent / "assets" / "body_front.svg"
+        if svg_path_front.exists():
+            with open(svg_path_front, 'r') as f:
+                svg_content = f.read()
+
+            # Add CSS styling for interactive regions
+            svg_html = f"""
+            <style>
+                .body-svg {{
+                    width: 100%;
+                    max-width: 300px;
+                    margin: 0 auto;
+                    display: block;
+                }}
+                .clickable-region {{
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }}
+                .clickable-region:hover {{
+                    fill: rgba(59, 130, 246, 0.4) !important;
+                    stroke: rgba(59, 130, 246, 0.8) !important;
+                    stroke-width: 2 !important;
+                }}
+                .region-selected {{
+                    fill: rgba(16, 185, 129, 0.5) !important;
+                    stroke: rgba(16, 185, 129, 1) !important;
+                    stroke-width: 2 !important;
+                }}
+            </style>
+            <div class="body-svg">
+                {svg_content}
+            </div>
+            <script>
+                // Highlight selected regions from sidebar
+                const selectedRegions = {json.dumps(selected_regions)};
+                selectedRegions.forEach(regionId => {{
+                    const element = document.getElementById(regionId);
+                    if (element) {{
+                        element.classList.add('region-selected');
+                    }}
+                }});
+
+                // Add click handlers
+                document.querySelectorAll('.clickable-region').forEach(region => {{
+                    region.addEventListener('click', function() {{
+                        const regionId = this.getAttribute('data-region');
+                        alert('Region: ' + regionId + '\\n\\nPlease use the checkboxes in the sidebar to select regions.');
+                    }});
+                }});
+            </script>
+            """
+            st.markdown(svg_html, unsafe_allow_html=True)
+        else:
+            st.info("Body diagram not found. Use the region selector in the sidebar.")
+
+    with body_tab2:
+        # Read and display back view SVG
+        svg_path_back = Path(__file__).parent / "assets" / "body_back.svg"
+        if svg_path_back.exists():
+            with open(svg_path_back, 'r') as f:
+                svg_content = f.read()
+
+            # Add CSS styling for interactive regions
+            svg_html = f"""
+            <style>
+                .body-svg {{
+                    width: 100%;
+                    max-width: 300px;
+                    margin: 0 auto;
+                    display: block;
+                }}
+                .clickable-region {{
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }}
+                .clickable-region:hover {{
+                    fill: rgba(59, 130, 246, 0.4) !important;
+                    stroke: rgba(59, 130, 246, 0.8) !important;
+                    stroke-width: 2 !important;
+                }}
+                .region-selected {{
+                    fill: rgba(16, 185, 129, 0.5) !important;
+                    stroke: rgba(16, 185, 129, 1) !important;
+                    stroke-width: 2 !important;
+                }}
+            </style>
+            <div class="body-svg">
+                {svg_content}
+            </div>
+            <script>
+                // Highlight selected regions from sidebar
+                const selectedRegions = {json.dumps(selected_regions)};
+                selectedRegions.forEach(regionId => {{
+                    const element = document.getElementById(regionId);
+                    if (element) {{
+                        element.classList.add('region-selected');
+                    }}
+                }});
+
+                // Add click handlers
+                document.querySelectorAll('.clickable-region').forEach(region => {{
+                    region.addEventListener('click', function() {{
+                        const regionId = this.getAttribute('data-region');
+                        alert('Region: ' + regionId + '\\n\\nPlease use the checkboxes in the sidebar to select regions.');
+                    }});
+                }});
+            </script>
+            """
+            st.markdown(svg_html, unsafe_allow_html=True)
+        else:
+            st.info("Body diagram not found. Use the region selector in the sidebar.")
+
+    st.caption("💡 Click regions in sidebar to highlight on the body map")
 
 # =============================================================================
 # SEARCH EXECUTION AND RESULTS DISPLAY
