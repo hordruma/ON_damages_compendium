@@ -81,6 +81,7 @@ ANATOMICAL_MAPPINGS = {
     "pectoralis": ["chest"],
 
     # Shoulder (bilateral structures)
+    "shoulder": ["shoulder_left", "shoulder_right"],
     "clavicle": ["shoulder_left", "shoulder_right"],
     "scapula": ["shoulder_left", "shoulder_right"],
     "acromion": ["shoulder_left", "shoulder_right"],
@@ -104,6 +105,7 @@ ANATOMICAL_MAPPINGS = {
     "brachial": ["arm_left", "arm_right"],
 
     # Elbow
+    "elbow": ["elbow_left", "elbow_right"],
     "olecranon": ["elbow_left", "elbow_right"],
     "radial head": ["elbow_left", "elbow_right"],
     "lateral epicondyle": ["elbow_left", "elbow_right"],
@@ -117,6 +119,7 @@ ANATOMICAL_MAPPINGS = {
     "ulnar": ["forearm_left", "forearm_right", "wrist_left", "wrist_right"],
 
     # Wrist
+    "wrist": ["wrist_left", "wrist_right"],
     "carpal": ["wrist_left", "wrist_right"],
     "scaphoid": ["wrist_left", "wrist_right"],
     "lunate": ["wrist_left", "wrist_right"],
@@ -130,6 +133,7 @@ ANATOMICAL_MAPPINGS = {
     "radiocarpal": ["wrist_left", "wrist_right"],
 
     # Hand
+    "hand": ["hand_left", "hand_right"],
     "metacarpal": ["hand_left", "hand_right"],
     "phalanx": ["hand_left", "hand_right"],
     "phalangeal": ["hand_left", "hand_right"],
@@ -143,6 +147,7 @@ ANATOMICAL_MAPPINGS = {
     # Pelvis & Hip
     "pelvis": ["pelvis"],
     "pelvic": ["pelvis"],
+    "hip": ["hip_left", "hip_right"],
     "ilium": ["pelvis", "hip_left", "hip_right"],
     "iliac": ["pelvis", "hip_left", "hip_right"],
     "pubis": ["pelvis"],
@@ -161,6 +166,7 @@ ANATOMICAL_MAPPINGS = {
     "adductor": ["thigh_left", "thigh_right"],
 
     # Knee
+    "knee": ["knee_left", "knee_right"],
     "patella": ["knee_left", "knee_right"],
     "patellar": ["knee_left", "knee_right"],
     "meniscus": ["knee_left", "knee_right"],
@@ -187,6 +193,7 @@ ANATOMICAL_MAPPINGS = {
     "achilles": ["lower_leg_left", "lower_leg_right", "ankle_left", "ankle_right"],
 
     # Ankle
+    "ankle": ["ankle_left", "ankle_right"],
     "talus": ["ankle_left", "ankle_right"],
     "talar": ["ankle_left", "ankle_right"],
     "malleolus": ["ankle_left", "ankle_right"],
@@ -198,6 +205,7 @@ ANATOMICAL_MAPPINGS = {
     "anterior talofibular": ["ankle_left", "ankle_right"],
 
     # Foot
+    "foot": ["foot_left", "foot_right"],
     "calcaneus": ["foot_left", "foot_right"],
     "calcaneal": ["foot_left", "foot_right"],
     "heel": ["foot_left", "foot_right"],
@@ -216,9 +224,9 @@ ANATOMICAL_MAPPINGS = {
     "lateral": [],  # Requires context
 }
 
-# Laterality indicators
-LATERALITY_LEFT = ["left", "l ", "lt", "lft", "sinister"]
-LATERALITY_RIGHT = ["right", "r ", "rt", "rgt", "dextra"]
+# Laterality indicators (removed single letter patterns to avoid false positives)
+LATERALITY_LEFT = ["left", "lt", "lft", "sinister"]
+LATERALITY_RIGHT = ["right", "rt", "rgt", "dextra"]
 LATERALITY_BILATERAL = ["bilateral", "bilat", "b/l", "both"]
 
 
@@ -236,16 +244,34 @@ def map_anatomical_term_to_regions(term: str, context: str = "") -> list:
     term_lower = term.lower().strip()
     context_lower = context.lower()
 
+    # Helper function to check laterality in a narrow window around the term
+    def check_laterality_near_term(context_lower: str, term: str) -> tuple:
+        """Check for laterality indicators near the term (within 30 chars before term)"""
+        term_pos = context_lower.find(term)
+        if term_pos == -1:
+            # Term not in context, check full context (fallback)
+            has_left = any(lat in context_lower for lat in LATERALITY_LEFT)
+            has_right = any(lat in context_lower for lat in LATERALITY_RIGHT)
+            has_bilateral = any(lat in context_lower for lat in LATERALITY_BILATERAL)
+            return has_left, has_right, has_bilateral
+
+        # Check narrow window before the term (30 chars)
+        narrow_start = max(0, term_pos - 30)
+        narrow_context = context_lower[narrow_start:term_pos + len(term) + 10]
+
+        has_left = any(lat in narrow_context for lat in LATERALITY_LEFT)
+        has_right = any(lat in narrow_context for lat in LATERALITY_RIGHT)
+        has_bilateral = any(lat in narrow_context for lat in LATERALITY_BILATERAL)
+
+        return has_left, has_right, has_bilateral
+
     # Direct lookup
     if term_lower in ANATOMICAL_MAPPINGS:
         regions = ANATOMICAL_MAPPINGS[term_lower]
 
         # If bilateral structure, try to determine laterality
         if len(regions) == 2 and "_left" in regions[0]:
-            # Check for left/right indicators in context
-            has_left = any(lat in context_lower for lat in LATERALITY_LEFT)
-            has_right = any(lat in context_lower for lat in LATERALITY_RIGHT)
-            has_bilateral = any(lat in context_lower for lat in LATERALITY_BILATERAL)
+            has_left, has_right, has_bilateral = check_laterality_near_term(context_lower, term_lower)
 
             if has_bilateral or (has_left and has_right):
                 return regions  # Both sides
@@ -261,6 +287,19 @@ def map_anatomical_term_to_regions(term: str, context: str = "") -> list:
     # Partial matching for compound terms
     for key, regions in ANATOMICAL_MAPPINGS.items():
         if key in term_lower or term_lower in key:
+            # Apply laterality detection for bilateral structures
+            if len(regions) == 2 and "_left" in regions[0] and "_right" in regions[1]:
+                has_left, has_right, has_bilateral = check_laterality_near_term(context_lower, key)
+
+                if has_bilateral or (has_left and has_right):
+                    return regions  # Both sides
+                elif has_left:
+                    return [r for r in regions if "_left" in r]
+                elif has_right:
+                    return [r for r in regions if "_right" in r]
+                else:
+                    return regions  # Unknown laterality, return both
+
             return regions
 
     return []
@@ -286,10 +325,10 @@ def enhance_region_detection(text: str, existing_regions: list = None) -> list:
     # Scan for anatomical terms
     for term, regions in ANATOMICAL_MAPPINGS.items():
         if term in text_lower:
-            # Get context window around the term
+            # Get context window around the term (increased to 100 chars for better laterality detection)
             term_index = text_lower.find(term)
-            context_start = max(0, term_index - 50)
-            context_end = min(len(text), term_index + len(term) + 50)
+            context_start = max(0, term_index - 100)
+            context_end = min(len(text), term_index + len(term) + 100)
             context = text[context_start:context_end]
 
             # Map with laterality detection
