@@ -110,14 +110,14 @@ def download_boc_cpi_data(
     Download CPI data directly from Bank of Canada website
 
     NOTE: The Bank of Canada Valet API may block automated requests with 403 errors.
-    If this function fails, manually download CPI data:
+    To manually download CPI data:
 
-    1. Visit: https://www.bankofcanada.ca/rates/price-indexes/cpi/
-    2. Click "Download data" or access the Valet API:
-       - Series V41690973 (Total CPI): https://www.bankofcanada.ca/valet/observations/V41690973/csv
-       - Or CPI Monthly group: https://www.bankofcanada.ca/valet/observations/group/CPI_MONTHLY/csv
-    3. Save the CSV to: data/boc_cpi.csv
-    4. The system will automatically use the local file
+    1. Visit the Bank of Canada Inflation Calculator page:
+       https://www.bankofcanada.ca/rates/related/inflation-calculator/
+    2. Look for the link to download the CPI CSV data on that page
+    3. Download the CSV file
+    4. Save it as: data/boc_cpi.csv
+    5. The system will automatically use the local file
 
     Expected CSV format:
         CANSIM,v41690973
