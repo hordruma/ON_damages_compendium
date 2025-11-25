@@ -34,3 +34,6 @@ plotly>=5.18.0
 # LLM Integration (optional - for expert report analysis)
 openai>=1.0.0
 anthropic>=0.18.0
+
+# MCP Server Support
+mcp>=0.9.0
