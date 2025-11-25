@@ -30,9 +30,7 @@ env/
 .ipynb_checkpoints
 
 # Data files
-*.pdf
-data/damages_with_embeddings.json
-data/damages_raw.csv
+
 
 # Environment variables
 .env
