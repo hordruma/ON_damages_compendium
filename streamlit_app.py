@@ -242,6 +242,29 @@ with st.sidebar:
     else:
         st.info("No regions selected - will search all cases")
 
+    st.divider()
+
+    # Search filters
+    st.subheader("Search Filters")
+
+    num_results = st.slider(
+        "Number of results:",
+        min_value=5,
+        max_value=50,
+        value=15,
+        step=5,
+        help="Maximum number of cases to return"
+    )
+
+    min_similarity = st.slider(
+        "Minimum similarity (%):",
+        min_value=0,
+        max_value=100,
+        value=0,
+        step=5,
+        help="Filter out cases below this similarity threshold"
+    )
+
 # =============================================================================
 # MAIN CONTENT - EXPERT REPORT UPLOAD
 # =============================================================================
@@ -472,6 +495,10 @@ if search_button:
         st.warning("⚠️ Please enter an injury description")
     else:
         with st.spinner("Searching comparable cases..."):
+            # Convert similarity percentage to decimal (0-1 range)
+            min_similarity_threshold = min_similarity / 100.0
+
+            # Get search results
             results = search_cases(
                 injury_text,
                 selected_regions,
@@ -479,8 +506,17 @@ if search_button:
                 region_map,
                 model,
                 gender=gender if gender != "Not Specified" else None,
-                age=age
+                age=age,
+                top_n=num_results
             )
+
+            # Apply similarity filtering
+            if min_similarity_threshold > 0:
+                results = [
+                    (case, emb_sim, combined_score)
+                    for case, emb_sim, combined_score in results
+                    if combined_score >= min_similarity_threshold
+                ]
 
         # Store results in session state
         st.session_state.search_results = {
@@ -489,11 +525,19 @@ if search_button:
             'selected_regions': selected_regions,
             'gender': gender,
             'age': age,
+            'num_results': num_results,
+            'min_similarity': min_similarity,
             'timestamp': datetime.now()
         }
 
         st.divider()
         st.header("Search Results")
+
+        # Display filter info if active
+        if min_similarity_threshold > 0:
+            st.info(f"🔍 Showing {len(results)} cases with similarity ≥ {min_similarity}% (filtered from top {num_results})")
+        else:
+            st.info(f"🔍 Showing top {len(results)} of {num_results} requested cases")
 
         # Extract damages for summary
         damages_values = []

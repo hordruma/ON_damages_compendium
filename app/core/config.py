@@ -34,7 +34,14 @@ MAX_DAMAGE_VALUE = 10_000_000  # Maximum reasonable damage award ($)
 
 # Search results display
 DEFAULT_TOP_N_RESULTS = 15      # Default number of search results to return
+MIN_RESULTS = 5                 # Minimum number of results user can request
+MAX_RESULTS = 50                # Maximum number of results user can request
 EXPANDED_RESULTS_COUNT = 3      # Number of results expanded by default in UI
+
+# Similarity filtering
+DEFAULT_MIN_SIMILARITY = 0.0    # Default minimum similarity threshold (0-1)
+MIN_SIMILARITY_THRESHOLD = 0.0  # Minimum allowed similarity threshold
+MAX_SIMILARITY_THRESHOLD = 1.0  # Maximum allowed similarity threshold
 
 # Chart display
 CHART_MAX_CASES = 15            # Maximum cases to display in charts
