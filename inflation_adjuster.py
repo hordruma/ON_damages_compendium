@@ -102,21 +102,31 @@ def load_boc_cpi_data(csv_path: Path = BOC_CPI_CSV) -> Dict[int, float]:
 
 
 def download_boc_cpi_data(
-    url: str = "https://www.bankofcanada.ca/valet/observations/STATIC_INFLATIONCALC/csv",
+    url: str = "https://www.bankofcanada.ca/valet/observations/V41690973/csv",
     save_path: Path = BOC_CPI_CSV,
     timeout: int = 30
 ) -> Dict[int, float]:
     """
     Download CPI data directly from Bank of Canada website
 
-    NOTE: The Bank of Canada Valet API may require authentication or may block
-    automated requests. If this function fails, you can:
-    1. Manually download the CSV from the Bank of Canada website
-    2. Save it to data/boc_cpi.csv
-    3. The system will use the local file automatically
+    NOTE: The Bank of Canada Valet API may block automated requests with 403 errors.
+    To manually download CPI data:
+
+    1. Visit the Bank of Canada Inflation Calculator page:
+       https://www.bankofcanada.ca/rates/related/inflation-calculator/
+    2. Look for the link to download the CPI CSV data on that page
+    3. Download the CSV file
+    4. Save it as: data/boc_cpi.csv
+    5. The system will automatically use the local file
+
+    Expected CSV format:
+        CANSIM,v41690973
+        2025-10,165.30000000
+        2025-09,164.90000000
+        ...
 
     Args:
-        url: Bank of Canada Valet API URL for CPI data
+        url: Bank of Canada Valet API URL for CPI data (series V41690973)
         save_path: Path to save the downloaded CSV file
         timeout: Request timeout in seconds
 
