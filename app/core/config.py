@@ -68,6 +68,23 @@ EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 DATA_FILE_PATH = "data/damages_with_embeddings.json"
 REGION_MAP_PATH = "region_map.json"
 
+# Gemini parser configuration
+GEMINI_FULL_JSON_PATH = "damages_full.json"  # Gemini-parsed full data
+GEMINI_CHECKPOINT_PATH = "parsing_checkpoint.json"  # Parse checkpoint file
+
+# ============================================================================
+# GEMINI PARSER CONFIGURATION
+# ============================================================================
+
+# Gemini API settings
+GEMINI_MODEL = "gemini-2.0-flash-exp"  # Gemini model for parsing
+GEMINI_TEMPERATURE = 0.1               # Low temperature for consistent extraction
+GEMINI_MAX_OUTPUT_TOKENS = 8192        # Maximum output tokens per request
+
+# Parsing settings
+GEMINI_RATE_LIMIT_DELAY = 0.5          # Delay between API calls (seconds)
+GEMINI_MAX_RETRIES = 3                 # Maximum retries on API failure
+
 # ============================================================================
 # UI STYLING
 # ============================================================================
