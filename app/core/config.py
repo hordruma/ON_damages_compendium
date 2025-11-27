@@ -68,25 +68,22 @@ EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 DATA_FILE_PATH = "data/damages_with_embeddings.json"
 REGION_MAP_PATH = "region_map.json"
 
-# Gemini parser configuration
-GEMINI_FULL_JSON_PATH = "damages_full.json"  # Gemini-parsed full data
-GEMINI_CHECKPOINT_PATH = "parsing_checkpoint.json"  # Parse checkpoint file
+# AI parser paths
+AI_PARSED_JSON_PATH = "damages_full.json"  # AI-parsed full data
+CHECKPOINT_PATH = "parsing_checkpoint.json"  # Parse checkpoint file
 
 # ============================================================================
 # AI PARSER CONFIGURATION
 # ============================================================================
 
-# Azure OpenAI/Claude settings
+# Azure OpenAI settings
 AZURE_ENDPOINT = None  # Set to your Azure endpoint URL
 AZURE_API_KEY = None   # Set to your Azure API key
-AZURE_MODEL = "gpt-4o"  # Your deployment name
+AZURE_MODEL = "gpt-4o"  # Your deployment name (gpt-4o or gpt-5-chat)
 
-# Gemini API settings
-GEMINI_MODEL = "gemini-2.0-flash-exp"  # Gemini model for parsing
-GEMINI_TEMPERATURE = 0.1               # Low temperature for consistent extraction
-GEMINI_MAX_OUTPUT_TOKENS = 8192        # Maximum output tokens per request
-
-# Parsing settings (applies to all parsers)
+# Parsing settings
+PARSER_TEMPERATURE = 0.1               # Low temperature for consistent extraction
+PARSER_MAX_OUTPUT_TOKENS = 8192        # Maximum output tokens per request
 PARSER_RATE_LIMIT_DELAY = 0.5          # Delay between API calls (seconds)
 PARSER_MAX_RETRIES = 3                 # Maximum retries on API failure
 

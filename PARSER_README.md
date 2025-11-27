@@ -1,26 +1,10 @@
 # PDF Parser Integration Guide
 
-This document explains how to parse the Ontario Damages Compendium PDF using AI models to generate enhanced case data for the dashboard.
+This document explains how to parse the Ontario Damages Compendium PDF using Azure OpenAI to generate enhanced case data for the dashboard.
 
-## Supported Parsers
+## Overview
 
-### 1. Azure AI Foundry (Recommended)
-- **Models**: Azure OpenAI (GPT-4o, GPT-4) or Claude via Azure
-- **Cost**: $4-20 for full PDF (655 pages)
-- **Speed**: 30-60 minutes
-- **File**: `damages_parser_azure.py`
-- **Notebook**: `02_azure_parse_and_embed.ipynb`
-
-### 2. Google Gemini
-- **Models**: Gemini 2.0 Flash
-- **Cost**: $0.20-$0.50 for full PDF
-- **Speed**: 30-60 minutes
-- **File**: `damages_parser_gemini.py`
-- **Notebook**: `02_gemini_parse_and_embed.ipynb`
-
-## Features
-
-All parsers provide:
+The Azure parser uses GPT-5 or GPT-4o to intelligently extract structured case data from the PDF, providing:
 
 - **Multi-Plaintiff Support**: Properly handles cases with multiple plaintiffs
 - **Family Law Act Claims**: Extracts FLA claims and amounts
@@ -29,98 +13,93 @@ All parsers provide:
 - **Checkpoint/Resume**: Automatic checkpointing for long-running parses
 - **Smart Deduplication**: Prevents duplicate cases across page boundaries
 - **Source Page Tracking**: Records which PDF page each case was found on
-- **Automatic Embedding Generation**: Creates semantic embeddings for search
+
+### Cost & Performance
+
+- **Model**: GPT-5 or GPT-4o via Azure OpenAI
+- **Cost**: $4-6 for full PDF (655 pages)
+- **Speed**: 30-60 minutes
+- **Quality**: Excellent
 
 ## Quick Start
 
-### Option A: Azure AI Foundry (Recommended)
+### 1. Get Azure Credentials
 
-1. **Get Azure Credentials**
-   - Create an Azure OpenAI resource
-   - Deploy a model (GPT-4o recommended)
-   - Copy your endpoint and API key
+1. Create an Azure OpenAI resource
+2. Deploy GPT-5 or GPT-4o
+3. Copy your endpoint and API key
 
-2. **Configure and Run**
+### 2. Configure and Parse
+
+**Using the Notebook** (recommended):
+
+1. Open `02_azure_parse_and_embed.ipynb`
+2. Update cell 4 with your credentials:
    ```python
-   from damages_parser_azure import parse_compendium
-
-   cases = parse_compendium(
-       "2024damagescompendium.pdf",
-       endpoint="https://your-resource.openai.azure.com/",
-       api_key="your-api-key",
-       model="gpt-4o"  # Your deployment name
-   )
+   ENDPOINT = "https://your-resource.openai.azure.com/"
+   API_KEY = "your-api-key"
+   MODEL = "gpt-5-chat"  # or "gpt-4o"
    ```
+3. Run the cells to parse
 
-3. **Generate Embeddings**
-   ```python
-   from gemini_data_transformer import add_embeddings_to_gemini_cases
+**Using Python**:
 
-   add_embeddings_to_gemini_cases(
-       "damages_full.json",
-       "data/damages_with_embeddings.json"
-   )
-   ```
+```python
+from damages_parser_azure import parse_compendium
 
-4. **Launch Dashboard**
-   ```bash
-   streamlit run streamlit_app.py
-   ```
+cases = parse_compendium(
+    "2024damagescompendium.pdf",
+    endpoint="https://your-resource.openai.azure.com/",
+    api_key="your-api-key",
+    model="gpt-5-chat"  # or "gpt-4o"
+)
+```
 
-### Option B: Google Gemini
+### 3. Generate Embeddings
 
-1. **Get Gemini API Key**
-   - Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
-   - Create a new API key
+```python
+from data_transformer import add_embeddings_to_cases
 
-2. **Parse PDF**
-   ```python
-   from damages_parser_gemini import parse_compendium
+add_embeddings_to_cases(
+    "damages_full.json",
+    "data/damages_with_embeddings.json"
+)
+```
 
-   cases = parse_compendium(
-       "2024damagescompendium.pdf",
-       api_key="your-gemini-api-key",
-       output_json="damages_full.json"
-   )
-   ```
+### 4. Launch Dashboard
 
-3. **Generate Embeddings** (same as Azure)
+```bash
+streamlit run streamlit_app.py
+```
 
-4. **Launch Dashboard** (same as Azure)
+The dashboard will automatically detect and use the AI-parsed data!
 
 ## Detailed Usage
 
 ### Resume from Checkpoint
 
-Both parsers support resuming:
+If parsing is interrupted:
 
 ```python
-# Azure
 cases = parse_compendium(
     "2024damagescompendium.pdf",
     endpoint="...",
     api_key="...",
-    model="gpt-4o",
+    model="gpt-5-chat",
     resume=True  # <-- Resume from checkpoint
-)
-
-# Gemini
-cases = parse_compendium(
-    "2024damagescompendium.pdf",
-    api_key="...",
-    resume=True
 )
 ```
 
 ### Parse Specific Pages
 
+Useful for testing:
+
 ```python
-# Parse pages 100-200
 cases = parse_compendium(
     "2024damagescompendium.pdf",
     endpoint="...",
     api_key="...",
-    model="gpt-4o",
+    model="gpt-5-chat",
     start_page=100,
     end_page=200
 )
@@ -129,24 +108,17 @@ cases = parse_compendium(
 ### Command Line Usage
 
 ```bash
-# Azure
 python damages_parser_azure.py \
   2024damagescompendium.pdf \
   "https://your-resource.openai.azure.com/" \
   "your-api-key" \
-  "gpt-4o" \
-  damages_full.json
-
-# Gemini
-python damages_parser_gemini.py \
-  2024damagescompendium.pdf \
-  "your-gemini-api-key" \
+  "gpt-5-chat" \
   damages_full.json
 ```
 
 ## Data Format
 
-Both parsers produce the same JSON format:
+The parser produces structured JSON:
 
 ```json
 {
@@ -193,7 +165,7 @@ Both parsers produce the same JSON format:
 ## Dashboard Integration
 
 The dashboard automatically:
-- Detects the parsed format
+- Detects the AI-parsed format
 - Converts to dashboard format with embeddings
 - Displays enhanced case information
 - Saves converted data for future use
@@ -207,19 +179,6 @@ Enhanced display includes:
 - Full citations and judges
 - Source page numbers
 
-## Cost Comparison
-
-| Parser | Model | Input Cost | Output Cost | Total (655 pages) |
-|--------|-------|------------|-------------|-------------------|
-| Azure | GPT-4o | $2.50/1M | $10/1M | **$4-6** |
-| Azure | GPT-4 Turbo | $10/1M | $30/1M | $15-20 |
-| Gemini | 2.0 Flash | $0.075/1M | $0.30/1M | **$0.20-0.50** |
-
-**Recommendation**:
-- For best quality: Azure GPT-4o
-- For lowest cost: Google Gemini 2.0 Flash
-- Both produce excellent results
-
 ## Troubleshooting
 
 ### Azure Errors
@@ -228,18 +187,10 @@ Enhanced display includes:
 - **Solution**: Check your API key is correct
 
 **Problem**: `404 Model not found`
-- **Solution**: Verify deployment name matches your Azure deployment
+- **Solution**: Verify deployment name matches your Azure deployment (gpt-5-chat or gpt-4o)
 
 **Problem**: `429 Too Many Requests`
 - **Solution**: The parser auto-retries. Use `resume=True` if needed
-
-### Gemini Errors
-
-**Problem**: `403 Forbidden`
-- **Solution**: Check API key is valid and enabled
-
-**Problem**: `429 Quota exceeded`
-- **Solution**: Wait and resume with `resume=True`
 
 ### General Issues
 
@@ -257,9 +208,9 @@ cases = parse_compendium(..., resume=True)
 **Missing Embeddings**
 ```python
 # Regenerate embeddings
-from gemini_data_transformer import add_embeddings_to_gemini_cases
+from data_transformer import add_embeddings_to_cases
 
-add_embeddings_to_gemini_cases(
+add_embeddings_to_cases(
     "damages_full.json",
     "data/damages_with_embeddings.json"
 )
@@ -274,7 +225,7 @@ with open("damages_full.json") as f:
     data = json.load(f)
 
 format_type = detect_json_format(data)
-print(f"Format: {format_type}")
+print(f"Format: {format_type}")  # Should be "ai_parsed"
 ```
 
 ## Best Practices
@@ -284,7 +235,7 @@ print(f"Format: {format_type}")
 3. **Use Resume**: Always use `resume=True` if restarting
 4. **Backup Original**: Keep original data before replacing
 5. **Verify Output**: Spot-check a few cases manually
-6. **Track Costs**: Monitor API usage in respective consoles
+6. **Track Costs**: Monitor API usage in Azure Portal
 
 ## File Reference
 
@@ -292,11 +243,9 @@ print(f"Format: {format_type}")
 
 | File | Purpose |
 |------|---------|
-| `damages_parser_azure.py` | Azure OpenAI/Claude parser |
-| `damages_parser_gemini.py` | Google Gemini parser |
-| `gemini_data_transformer.py` | Data transformation utilities (works with both) |
+| `damages_parser_azure.py` | Azure OpenAI parser |
+| `data_transformer.py` | Data transformation utilities |
 | `02_azure_parse_and_embed.ipynb` | Azure parsing notebook |
-| `02_gemini_parse_and_embed.ipynb` | Gemini parsing notebook |
 
 ### Generated Files
 
@@ -311,7 +260,7 @@ print(f"Format: {format_type}")
 
 ### Custom Prompts
 
-Both parsers use customizable extraction prompts:
+The parser uses a customizable extraction prompt:
 
 ```python
 from damages_parser_azure import DamagesCompendiumParser
@@ -319,7 +268,7 @@ from damages_parser_azure import DamagesCompendiumParser
 parser = DamagesCompendiumParser(
     endpoint="...",
     api_key="...",
-    model="gpt-4o"
+    model="gpt-5-chat"
 )
 
 # Modify prompt if needed
@@ -329,92 +278,56 @@ parser.EXTRACTION_PROMPT = """Your custom prompt here..."""
 cases = parser.parse_pdf("2024damagescompendium.pdf")
 ```
 
-### Batch Processing
-
-Parse multiple PDFs:
-
-```python
-pdfs = [
-    "2024damagescompendium.pdf",
-    "2023damagescompendium.pdf",
-    "2022damagescompendium.pdf"
-]
-
-all_cases = []
-for pdf in pdfs:
-    cases = parse_compendium(
-        pdf,
-        endpoint="...",
-        api_key="...",
-        model="gpt-4o",
-        output_json=f"{pdf}.json"
-    )
-    all_cases.extend(cases)
-```
-
 ### Data Analysis
 
 Flatten and analyze with pandas:
 
 ```python
-from damages_parser_gemini import flatten_cases_to_records
 import pandas as pd
+from data_transformer import extract_statistics
 
-records = flatten_cases_to_records(cases)
-df = pd.DataFrame(records)
+# Get statistics
+stats = extract_statistics(cases)
+print(f"Multi-plaintiff cases: {stats['multi_plaintiff_count']}")
 
-# Analysis
+# Create DataFrame
+def flatten_cases(cases):
+    rows = []
+    for case in cases:
+        for p in case.get('plaintiffs', []):
+            rows.append({
+                'case_name': case.get('case_name'),
+                'year': case.get('year'),
+                'category': case.get('category'),
+                'plaintiff_id': p.get('plaintiff_id'),
+                'sex': p.get('sex'),
+                'age': p.get('age'),
+                'non_pecuniary_damages': p.get('non_pecuniary_damages'),
+            })
+    return pd.DataFrame(rows)
+
+df = flatten_cases(cases)
 df.groupby('category')['non_pecuniary_damages'].agg(['count', 'mean', 'median'])
-df[df['has_fla_claims']].describe()
-df.groupby('year')['non_pecuniary_damages'].mean().plot()
 ```
 
 ## Support
 
 For issues:
 1. Check this documentation
-2. Review the notebooks for examples
+2. Review the notebook for examples
 3. Examine parser source code documentation
 4. Check the troubleshooting section above
 
-## Migration Notes
+## Cost Details
 
-### From Legacy Extraction
+Using Azure OpenAI GPT-5 or GPT-4o:
+- Input: ~$2.50 per 1M tokens
+- Output: ~$10 per 1M tokens
 
-If you have existing data from the Camelot-based extraction (`01_extract_and_embed.ipynb`):
+For the full 655-page PDF:
+- ~500 tokens input per page
+- ~1000 tokens output per page
+- Total: ~325K input + ~650K output tokens
+- **Total cost: ~$4-6**
 
-1. **Keep Original**: Backup `data/damages_with_embeddings.json`
-2. **Parse with AI**: Use Azure or Gemini parser
-3. **Generate Embeddings**: Run transformation
-4. **Test Dashboard**: Verify everything works
-5. **Compare**: Spot-check cases between old and new
-
-The AI parsers typically provide:
-- More accurate plaintiff data
-- Better injury descriptions
-- Additional damage categories
-- Multi-plaintiff support
-- FLA claims extraction
-
-### Merge Strategies
-
-```python
-from gemini_data_transformer import merge_gemini_with_existing
-
-# Merge new AI-parsed data with existing
-merged = merge_gemini_with_existing(
-    gemini_json_path="damages_full.json",
-    existing_json_path="data/damages_with_embeddings.json",
-    output_path="data/damages_merged.json"
-)
-```
-
-## Future Enhancements
-
-Planned improvements:
-- Parallel processing for faster parsing
-- Validation against test cases
-- Incremental updates (parse only new cases)
-- Multi-language support
-- Enhanced error recovery
-- Quality scoring per case
+This is cost-effective for the value provided: accurate multi-plaintiff support, FLA claims extraction, and detailed injury information that would be difficult to extract with traditional table-based methods.

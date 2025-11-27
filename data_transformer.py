@@ -1,8 +1,8 @@
 """
-Data transformation utilities for Gemini-parsed case data.
+Data transformation utilities for AI-parsed case data.
 
-This module provides tools to convert Gemini-parsed case data into
-formats compatible with the dashboard's search and display systems.
+This module provides tools to convert AI-parsed case data (from Azure or other parsers)
+into formats compatible with the dashboard's search and display systems.
 """
 
 import json
@@ -12,18 +12,18 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 
-def convert_gemini_to_dashboard_format(
-    gemini_cases: List[Dict[str, Any]],
+def convert_to_dashboard_format(
+    ai_cases: List[Dict[str, Any]],
     model: Optional[SentenceTransformer] = None
 ) -> List[Dict[str, Any]]:
     """
-    Convert Gemini-parsed cases to dashboard format.
+    Convert AI-parsed cases to dashboard format.
 
-    Takes the rich Gemini format (with multiple plaintiffs, FLA claims, etc.)
+    Takes the rich AI-parsed format (with multiple plaintiffs, FLA claims, etc.)
     and converts it to the simpler dashboard format with embeddings.
 
     Args:
-        gemini_cases: List of cases from Gemini parser
+        ai_cases: List of cases from AI parser (Azure, etc.)
         model: SentenceTransformer model for generating embeddings
               (if None, embeddings are set to empty arrays)
 
@@ -32,14 +32,14 @@ def convert_gemini_to_dashboard_format(
 
     Example:
         from sentence_transformers import SentenceTransformer
-        from damages_parser_gemini import parse_compendium
+        from damages_parser_azure import parse_compendium
 
-        # Parse with Gemini
-        gemini_cases = parse_compendium(...)
+        # Parse with Azure
+        ai_cases = parse_compendium(...)
 
         # Convert to dashboard format
         model = SentenceTransformer('all-MiniLM-L6-v2')
-        dashboard_cases = convert_gemini_to_dashboard_format(gemini_cases, model)
+        dashboard_cases = convert_to_dashboard_format(ai_cases, model)
 
         # Save for dashboard
         with open('damages_with_embeddings.json', 'w') as f:
@@ -47,7 +47,7 @@ def convert_gemini_to_dashboard_format(
     """
     dashboard_cases = []
 
-    for case in gemini_cases:
+    for case in ai_cases:
         # For multi-plaintiff cases, create separate entries
         plaintiffs = case.get('plaintiffs', [])
 
@@ -183,22 +183,22 @@ def _create_dashboard_case(
     return dashboard_case
 
 
-def add_embeddings_to_gemini_cases(
-    gemini_json_path: str,
+def add_embeddings_to_cases(
+    input_json_path: str,
     output_path: str,
     model_name: str = 'sentence-transformers/all-MiniLM-L6-v2'
 ) -> List[Dict[str, Any]]:
     """
-    Load Gemini-parsed cases and add embeddings for dashboard use.
+    Load AI-parsed cases and add embeddings for dashboard use.
 
     This is a convenience function that:
-    1. Loads Gemini JSON
+    1. Loads AI-parsed JSON
     2. Converts to dashboard format
     3. Generates embeddings
     4. Saves to output file
 
     Args:
-        gemini_json_path: Path to Gemini-parsed JSON file
+        input_json_path: Path to AI-parsed JSON file
         output_path: Path to save dashboard-compatible JSON
         model_name: Name of the sentence transformer model
 
@@ -206,23 +206,23 @@ def add_embeddings_to_gemini_cases(
         List of dashboard-formatted cases with embeddings
 
     Example:
-        # After parsing with Gemini
-        dashboard_cases = add_embeddings_to_gemini_cases(
+        # After parsing with Azure
+        dashboard_cases = add_embeddings_to_cases(
             'damages_full.json',
             'data/damages_with_embeddings.json'
         )
     """
-    print(f"Loading Gemini cases from {gemini_json_path}...")
-    with open(gemini_json_path) as f:
-        gemini_cases = json.load(f)
+    print(f"Loading cases from {input_json_path}...")
+    with open(input_json_path) as f:
+        ai_cases = json.load(f)
 
-    print(f"Loaded {len(gemini_cases)} cases")
+    print(f"Loaded {len(ai_cases)} cases")
 
     print(f"Loading embedding model: {model_name}...")
     model = SentenceTransformer(model_name)
 
     print("Converting to dashboard format and generating embeddings...")
-    dashboard_cases = convert_gemini_to_dashboard_format(gemini_cases, model)
+    dashboard_cases = convert_to_dashboard_format(ai_cases, model)
 
     print(f"Generated {len(dashboard_cases)} dashboard cases")
 
@@ -238,120 +238,34 @@ def add_embeddings_to_gemini_cases(
     return dashboard_cases
 
 
-def merge_gemini_with_existing(
-    gemini_json_path: str,
-    existing_json_path: str,
-    output_path: str,
-    model_name: str = 'sentence-transformers/all-MiniLM-L6-v2'
-) -> List[Dict[str, Any]]:
+def extract_statistics(ai_cases: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Merge Gemini-parsed cases with existing dashboard data.
-
-    Useful when you want to add new cases or replace existing ones
-    with better Gemini-parsed data.
+    Extract statistics from AI-parsed cases.
 
     Args:
-        gemini_json_path: Path to Gemini-parsed JSON
-        existing_json_path: Path to existing dashboard JSON
-        output_path: Path to save merged results
-        model_name: Embedding model name
-
-    Returns:
-        Merged list of cases
-
-    Example:
-        merged = merge_gemini_with_existing(
-            'damages_full.json',
-            'data/damages_with_embeddings.json',
-            'data/damages_merged.json'
-        )
-    """
-    # Load existing cases
-    print(f"Loading existing cases from {existing_json_path}...")
-    with open(existing_json_path) as f:
-        existing_cases = json.load(f)
-    print(f"Loaded {len(existing_cases)} existing cases")
-
-    # Convert Gemini cases
-    print(f"Loading Gemini cases from {gemini_json_path}...")
-    with open(gemini_json_path) as f:
-        gemini_cases = json.load(f)
-    print(f"Loaded {len(gemini_cases)} Gemini cases")
-
-    print(f"Loading embedding model: {model_name}...")
-    model = SentenceTransformer(model_name)
-
-    print("Converting Gemini cases...")
-    new_cases = convert_gemini_to_dashboard_format(gemini_cases, model)
-    print(f"Converted to {len(new_cases)} dashboard cases")
-
-    # Merge: prioritize Gemini cases by case name
-    case_map = {}
-
-    # Add existing cases first
-    for case in existing_cases:
-        case_key = f"{case.get('case_name', 'UNKNOWN')}_{case.get('year', 0)}"
-        if case_key not in case_map:
-            case_map[case_key] = case
-
-    # Add/replace with Gemini cases
-    replaced = 0
-    added = 0
-    for case in new_cases:
-        case_key = f"{case.get('case_name', 'UNKNOWN')}_{case.get('year', 0)}"
-        if case_key in case_map:
-            replaced += 1
-        else:
-            added += 1
-        case_map[case_key] = case
-
-    merged_cases = list(case_map.values())
-
-    print(f"\nMerge results:")
-    print(f"  Existing: {len(existing_cases)}")
-    print(f"  New from Gemini: {len(new_cases)}")
-    print(f"  Replaced: {replaced}")
-    print(f"  Added: {added}")
-    print(f"  Total: {len(merged_cases)}")
-
-    # Save
-    print(f"\nSaving to {output_path}...")
-    with open(output_path, 'w') as f:
-        json.dump(merged_cases, f, indent=2)
-
-    print("✓ Done!")
-
-    return merged_cases
-
-
-def extract_gemini_statistics(gemini_cases: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Extract statistics from Gemini-parsed cases.
-
-    Args:
-        gemini_cases: List of Gemini-parsed cases
+        ai_cases: List of AI-parsed cases
 
     Returns:
         Dictionary of statistics
 
     Example:
-        stats = extract_gemini_statistics(cases)
+        stats = extract_statistics(cases)
         print(f"Multi-plaintiff cases: {stats['multi_plaintiff_count']}")
     """
-    total_cases = len(gemini_cases)
-    total_plaintiffs = sum(len(c.get('plaintiffs', [])) for c in gemini_cases)
-    multi_plaintiff_cases = [c for c in gemini_cases if len(c.get('plaintiffs', [])) > 1]
-    fla_cases = [c for c in gemini_cases if c.get('family_law_act_claims')]
+    total_cases = len(ai_cases)
+    total_plaintiffs = sum(len(c.get('plaintiffs', [])) for c in ai_cases)
+    multi_plaintiff_cases = [c for c in ai_cases if len(c.get('plaintiffs', [])) > 1]
+    fla_cases = [c for c in ai_cases if c.get('family_law_act_claims')]
 
     # Category distribution
     categories = {}
-    for case in gemini_cases:
+    for case in ai_cases:
         cat = case.get('category', 'Unknown')
         categories[cat] = categories.get(cat, 0) + 1
 
     # Damages statistics
     all_damages = []
-    for case in gemini_cases:
+    for case in ai_cases:
         for plaintiff in case.get('plaintiffs', []):
             damages = plaintiff.get('non_pecuniary_damages')
             if damages:
@@ -379,12 +293,12 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 3:
-        print("Usage: python gemini_data_transformer.py <gemini_json> <output_json>")
+        print("Usage: python data_transformer.py <input_json> <output_json>")
         print("\nExample:")
-        print("  python gemini_data_transformer.py damages_full.json data/damages_with_embeddings.json")
+        print("  python data_transformer.py damages_full.json data/damages_with_embeddings.json")
         sys.exit(1)
 
-    gemini_json = sys.argv[1]
+    input_json = sys.argv[1]
     output_json = sys.argv[2]
 
-    add_embeddings_to_gemini_cases(gemini_json, output_json)
+    add_embeddings_to_cases(input_json, output_json)

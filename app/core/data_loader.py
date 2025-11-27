@@ -19,7 +19,7 @@ from .config import (
     EMBEDDING_MODEL_NAME,
     DATA_FILE_PATH,
     REGION_MAP_PATH,
-    GEMINI_FULL_JSON_PATH
+    AI_PARSED_JSON_PATH
 )
 
 
@@ -85,22 +85,22 @@ def load_region_map() -> Dict[str, Any]:
 
 def detect_json_format(data: List[Dict[str, Any]]) -> str:
     """
-    Detect whether JSON data is in Gemini or dashboard format.
+    Detect whether JSON data is in AI-parsed or dashboard format.
 
     Args:
         data: List of case dictionaries
 
     Returns:
-        "gemini" or "dashboard"
+        "ai_parsed" or "dashboard"
     """
     if not data:
         return "unknown"
 
     sample = data[0]
 
-    # Gemini format has 'plaintiffs' array and 'case_id'
+    # AI-parsed format has 'plaintiffs' array and 'case_id'
     if 'plaintiffs' in sample and isinstance(sample.get('plaintiffs'), list):
-        return "gemini"
+        return "ai_parsed"
 
     # Dashboard format has 'embedding' and 'summary_text'
     if 'embedding' in sample and 'summary_text' in sample:
@@ -109,28 +109,28 @@ def detect_json_format(data: List[Dict[str, Any]]) -> str:
     return "unknown"
 
 
-def convert_gemini_to_dashboard_inline(
-    gemini_cases: List[Dict[str, Any]],
+def convert_ai_to_dashboard_inline(
+    ai_cases: List[Dict[str, Any]],
     model: SentenceTransformer
 ) -> List[Dict[str, Any]]:
     """
-    Convert Gemini format to dashboard format inline.
+    Convert AI-parsed format to dashboard format inline.
 
     This is a lightweight version that imports the transformer
     on-demand to avoid circular dependencies.
 
     Args:
-        gemini_cases: Cases in Gemini format
+        ai_cases: Cases in AI-parsed format
         model: SentenceTransformer model for embeddings
 
     Returns:
         Cases in dashboard format
     """
     try:
-        from gemini_data_transformer import convert_gemini_to_dashboard_format
-        return convert_gemini_to_dashboard_format(gemini_cases, model)
+        from data_transformer import convert_to_dashboard_format
+        return convert_to_dashboard_format(ai_cases, model)
     except ImportError:
-        st.error("⚠️ gemini_data_transformer module not found")
+        st.error("⚠️ data_transformer module not found")
         return []
 
 
@@ -141,13 +141,13 @@ def load_cases_auto() -> Optional[List[Dict[str, Any]]]:
 
     Tries to load from:
     1. Standard dashboard JSON (pre-computed embeddings)
-    2. Gemini-parsed JSON (with auto-conversion)
+    2. AI-parsed JSON (with auto-conversion)
 
     Returns:
         List of case dictionaries in dashboard format, or None if not found
     """
     data_path = Path(DATA_FILE_PATH)
-    gemini_path = Path(GEMINI_FULL_JSON_PATH)
+    ai_parsed_path = Path(AI_PARSED_JSON_PATH)
 
     # Try standard dashboard format first
     if data_path.exists():
@@ -158,24 +158,24 @@ def load_cases_auto() -> Optional[List[Dict[str, Any]]]:
 
         if format_type == "dashboard":
             return data
-        elif format_type == "gemini":
+        elif format_type == "ai_parsed":
             # Auto-convert
-            st.info("🔄 Detected Gemini format, converting to dashboard format...")
+            st.info("🔄 Detected AI-parsed format, converting to dashboard format...")
             model = load_embedding_model()
-            return convert_gemini_to_dashboard_inline(data, model)
+            return convert_ai_to_dashboard_inline(data, model)
 
-    # Try Gemini format
-    if gemini_path.exists():
-        st.info(f"📂 Loading from Gemini format: {gemini_path}")
-        with open(gemini_path) as f:
+    # Try AI-parsed format
+    if ai_parsed_path.exists():
+        st.info(f"📂 Loading from AI-parsed format: {ai_parsed_path}")
+        with open(ai_parsed_path) as f:
             data = json.load(f)
 
         format_type = detect_json_format(data)
 
-        if format_type == "gemini":
-            st.info("🔄 Converting Gemini format to dashboard format...")
+        if format_type == "ai_parsed":
+            st.info("🔄 Converting AI-parsed format to dashboard format...")
             model = load_embedding_model()
-            converted = convert_gemini_to_dashboard_inline(data, model)
+            converted = convert_ai_to_dashboard_inline(data, model)
 
             # Save for future use
             st.info(f"💾 Saving converted data to {DATA_FILE_PATH}...")
@@ -190,7 +190,7 @@ def load_cases_auto() -> Optional[List[Dict[str, Any]]]:
     st.info(
         "Please either:\n"
         "1. Run `01_extract_and_embed.ipynb` to generate the data, or\n"
-        "2. Place Gemini-parsed `damages_full.json` in the project root"
+        "2. Place AI-parsed `damages_full.json` in the project root"
     )
     return None
 
