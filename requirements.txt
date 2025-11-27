@@ -6,7 +6,7 @@ numpy>=1.24.0
 # PDF extraction
 camelot-py[cv]>=0.11.0
 pypdf2>=3.0.0
-pdfplumber>=0.10.0
+pdfplumber>=0.10.0  # Also used by Gemini parser
 
 # Machine learning and embeddings
 sentence-transformers>=2.2.0
