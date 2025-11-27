@@ -110,24 +110,24 @@ model, cases, region_map = initialize_data()
 # HELPER FUNCTIONS
 # =============================================================================
 
-def display_gemini_data(case: Dict) -> None:
-    """Display enhanced Gemini data if available."""
-    gemini_data = case.get('gemini_data')
-    if not gemini_data:
+def display_enhanced_data(case: Dict) -> None:
+    """Display enhanced AI-parsed data if available."""
+    extended_data = case.get('extended_data')
+    if not extended_data:
         return
 
     # Multi-plaintiff information
-    num_plaintiffs = gemini_data.get('num_plaintiffs', 0)
+    num_plaintiffs = extended_data.get('num_plaintiffs', 0)
     if num_plaintiffs > 1:
         st.info(f"⚠️ Multi-Plaintiff Case ({num_plaintiffs} plaintiffs)")
 
     # Plaintiff-specific details
-    plaintiff_id = gemini_data.get('plaintiff_id')
+    plaintiff_id = extended_data.get('plaintiff_id')
     if plaintiff_id:
         st.markdown(f"**Plaintiff:** {plaintiff_id}")
 
-    sex = gemini_data.get('sex')
-    age = gemini_data.get('age')
+    sex = extended_data.get('sex')
+    age = extended_data.get('age')
     if sex or age:
         demo = []
         if sex:
@@ -137,14 +137,14 @@ def display_gemini_data(case: Dict) -> None:
         st.markdown(f"**Demographics:** {', '.join(demo)}")
 
     # Injuries
-    injuries = gemini_data.get('injuries')
+    injuries = extended_data.get('injuries')
     if injuries:
         st.markdown("**Injuries:**")
         for injury in injuries:
             st.markdown(f"- {injury}")
 
     # Other damages
-    other_damages = gemini_data.get('other_damages')
+    other_damages = extended_data.get('other_damages')
     if other_damages:
         st.markdown("**Other Damages:**")
         for damage in other_damages:
@@ -157,7 +157,7 @@ def display_gemini_data(case: Dict) -> None:
                 st.markdown(f"- {damage_type}" + (f": {desc}" if desc else ""))
 
     # Family Law Act claims
-    fla_claims = gemini_data.get('family_law_act_claims')
+    fla_claims = extended_data.get('family_law_act_claims')
     if fla_claims:
         st.markdown("**Family Law Act Claims:**")
         for claim in fla_claims:
@@ -169,22 +169,22 @@ def display_gemini_data(case: Dict) -> None:
                 st.markdown(f"- {desc}")
 
     # Citations
-    citations = gemini_data.get('citations')
+    citations = extended_data.get('citations')
     if citations:
         st.markdown(f"**Citations:** {', '.join(citations)}")
 
     # Judges
-    judges = gemini_data.get('judges')
+    judges = extended_data.get('judges')
     if judges:
         st.markdown(f"**Judges:** {', '.join(judges)}")
 
     # Provisional damages flag
-    is_provisional = gemini_data.get('is_provisional')
+    is_provisional = extended_data.get('is_provisional')
     if is_provisional:
         st.warning("⚠️ Provisional damages award")
 
     # Comments
-    comments = gemini_data.get('comments')
+    comments = extended_data.get('comments')
     if comments:
         st.markdown(f"**Comments:** {comments}")
 
@@ -593,9 +593,9 @@ if search_button:
 
         for idx, (case, emb_sim, combined_score) in enumerate(results, 1):
             # Build expander title with multi-plaintiff indicator
-            gemini_data = case.get('gemini_data', {})
-            num_plaintiffs = gemini_data.get('num_plaintiffs', 0)
-            title_suffix = f" [P{gemini_data.get('plaintiff_id', '')}]" if num_plaintiffs > 1 else ""
+            extended_data = case.get('extended_data', {})
+            num_plaintiffs = extended_data.get('num_plaintiffs', 0)
+            title_suffix = f" [P{extended_data.get('plaintiff_id', '')}]" if num_plaintiffs > 1 else ""
 
             with st.expander(
                 f"**Case {idx}** - {case.get('case_name', 'Unknown')}{title_suffix} | "
@@ -621,9 +621,9 @@ if search_button:
                     st.markdown("**Case Summary:**")
                     st.text(case.get('summary_text', 'No summary available')[:CASE_SUMMARY_MAX_LENGTH] + "...")
 
-                    # Display enhanced Gemini data
+                    # Display enhanced AI-parsed data
                     st.divider()
-                    display_gemini_data(case)
+                    display_enhanced_data(case)
 
                 with col2:
                     st.metric("Similarity Score", f"{emb_sim*100:.1f}%")

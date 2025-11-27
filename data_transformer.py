@@ -161,8 +161,8 @@ def _create_dashboard_case(
         'summary_text': summary_text,
         'embedding': embedding,
 
-        # Extended fields from Gemini
-        'gemini_data': {
+        # Extended fields from AI parser
+        'extended_data': {
             'case_id': case.get('case_id'),
             'plaintiff_name': case.get('plaintiff_name'),
             'defendant_name': case.get('defendant_name'),
