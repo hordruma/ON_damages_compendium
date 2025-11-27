@@ -73,17 +73,22 @@ GEMINI_FULL_JSON_PATH = "damages_full.json"  # Gemini-parsed full data
 GEMINI_CHECKPOINT_PATH = "parsing_checkpoint.json"  # Parse checkpoint file
 
 # ============================================================================
-# GEMINI PARSER CONFIGURATION
+# AI PARSER CONFIGURATION
 # ============================================================================
+
+# Azure OpenAI/Claude settings
+AZURE_ENDPOINT = None  # Set to your Azure endpoint URL
+AZURE_API_KEY = None   # Set to your Azure API key
+AZURE_MODEL = "gpt-4o"  # Your deployment name
 
 # Gemini API settings
 GEMINI_MODEL = "gemini-2.0-flash-exp"  # Gemini model for parsing
 GEMINI_TEMPERATURE = 0.1               # Low temperature for consistent extraction
 GEMINI_MAX_OUTPUT_TOKENS = 8192        # Maximum output tokens per request
 
-# Parsing settings
-GEMINI_RATE_LIMIT_DELAY = 0.5          # Delay between API calls (seconds)
-GEMINI_MAX_RETRIES = 3                 # Maximum retries on API failure
+# Parsing settings (applies to all parsers)
+PARSER_RATE_LIMIT_DELAY = 0.5          # Delay between API calls (seconds)
+PARSER_MAX_RETRIES = 3                 # Maximum retries on API failure
 
 # ============================================================================
 # UI STYLING
