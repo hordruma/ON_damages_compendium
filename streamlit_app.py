@@ -97,6 +97,7 @@ st.markdown("""
         padding: 1rem;
         margin: 1rem 0;
         border-radius: 0.25rem;
+        color: #1f2937;
     }
 </style>
 """, unsafe_allow_html=True)
