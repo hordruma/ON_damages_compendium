@@ -19,7 +19,8 @@ from typing import Dict, List
 from app.core.config import *
 from app.core.data_loader import initialize_data
 from app.core.search import search_cases, extract_damages_value
-from app.ui.visualizations import create_inflation_chart, calculate_chart_statistics
+from app.ui.visualizations import create_inflation_chart, calculate_chart_statistics, create_damages_cap_chart
+from app.ui.fla_analytics import display_fla_analytics_page
 from app.ui.judge_analytics import display_judge_analytics_page
 
 # Import other application modules
@@ -200,7 +201,7 @@ st.markdown('<div class="main-header">⚖️ Ontario Damages Compendium</div>', 
 st.markdown('<div class="sub-header">Visual search tool for comparable personal injury awards in Ontario</div>', unsafe_allow_html=True)
 
 # Create tabs for different pages
-tab1, tab2 = st.tabs(["🔍 Case Search", "👨‍⚖️ Judge Analytics"])
+tab1, tab2, tab3 = st.tabs(["🔍 Case Search", "👨‍👩‍👧‍👦 FLA Damages", "👨‍⚖️ Judge Analytics"])
 
 # =============================================================================
 # TAB 1: CASE SEARCH
@@ -325,6 +326,61 @@ with st.sidebar:
 
     st.divider()
 
+    # Load compendium regions
+    compendium_regions = None
+    try:
+        with open("compendium_regions.json", "r") as f:
+            compendium_regions = json.load(f)
+    except:
+        pass
+
+    # Injury Categories (based on compendium structure)
+    st.subheader("Injury Categories")
+    st.caption("Select injury types based on compendium categories")
+
+    selected_injury_categories = []
+
+    if compendium_regions and "injury_categories" in compendium_regions:
+        for category_id, category_data in compendium_regions["injury_categories"].items():
+            with st.expander(category_data["label"]):
+                for subcategory in category_data["subcategories"]:
+                    key = f"cat_{category_id}_{subcategory}"
+                    if st.checkbox(subcategory, key=key):
+                        selected_injury_categories.append(subcategory)
+    else:
+        # Fallback to simple text input if config not available
+        st.info("Using simplified injury search - describe injuries in the text box below")
+
+    st.divider()
+
+    # Status Filters (checkboxes for non-injury attributes)
+    st.subheader("Case Characteristics")
+    st.caption("Additional filters for case characteristics")
+
+    status_filters = {}
+
+    if compendium_regions and "status_filters" in compendium_regions:
+        for filter_id, filter_data in compendium_regions["status_filters"].items():
+            status_filters[filter_id] = st.checkbox(
+                filter_data["label"],
+                help=filter_data["description"],
+                key=f"status_{filter_id}"
+            )
+
+    st.divider()
+
+    # Display selected categories
+    if selected_injury_categories:
+        st.subheader("Selected Categories")
+        for cat in selected_injury_categories[:5]:  # Show first 5
+            st.markdown(f'<span class="region-badge">{cat}</span>', unsafe_allow_html=True)
+        if len(selected_injury_categories) > 5:
+            st.caption(f"+ {len(selected_injury_categories) - 5} more...")
+    else:
+        st.info("No categories selected - will search all cases")
+
+    st.divider()
+
     # CPI Data Upload Section
     with st.expander("📊 Update CPI Data (Optional)", expanded=False):
         st.caption("Upload Bank of Canada CPI data to ensure accurate inflation adjustments")
@@ -374,42 +430,6 @@ with st.sidebar:
 
     st.divider()
 
-    # Region selection
-    st.subheader("Body Regions")
-    st.caption("Select one or more injured regions")
-
-    selected_regions = []
-
-    # Group regions by body area
-    region_groups = {
-        "Head & Spine": ["head", "cervical_spine", "thoracic_spine", "lumbar_spine", "sacroiliac"],
-        "Torso": ["chest", "abdomen", "pelvis"],
-        "Left Upper Limb": ["shoulder_left", "arm_left", "elbow_left", "forearm_left", "wrist_left", "hand_left"],
-        "Right Upper Limb": ["shoulder_right", "arm_right", "elbow_right", "forearm_right", "wrist_right", "hand_right"],
-        "Left Lower Limb": ["hip_left", "thigh_left", "knee_left", "lower_leg_left", "ankle_left", "foot_left"],
-        "Right Lower Limb": ["hip_right", "thigh_right", "knee_right", "lower_leg_right", "ankle_right", "foot_right"]
-    }
-
-    for group_name, region_ids in region_groups.items():
-        with st.expander(group_name):
-            for region_id in region_ids:
-                if region_id in region_map:
-                    label = region_map[region_id]["label"]
-                    if st.checkbox(label, key=region_id):
-                        selected_regions.append(region_id)
-
-    st.divider()
-
-    # Display selected regions
-    if selected_regions:
-        st.subheader("Selected Regions")
-        for region_id in selected_regions:
-            st.markdown(f'<span class="region-badge">{region_map[region_id]["label"]}</span>', unsafe_allow_html=True)
-    else:
-        st.info("No regions selected - will search all cases")
-
-    st.divider()
-
     # Search filters
     st.subheader("Search Filters")
 
@@ -430,6 +450,9 @@ with st.sidebar:
         step=5,
         help="Filter out cases below this similarity threshold"
     )
+
+    # Store legacy selected_regions as empty for backward compatibility
+    selected_regions = []
 
 with tab1:
     # =============================================================================
@@ -516,15 +539,26 @@ with tab1:
 
                 st.caption(f"Based on {len(damages_values)} cases with identified damage awards")
 
-            # Inflation-Adjusted Chart
+            # Charts Section
             if damages_values and len(results) > 0:
                 st.divider()
-                st.subheader("📊 Inflation-Adjusted Award Comparison")
+
+                # Damages Cap Comparison Chart
+                st.subheader("📊 Awards Relative to Ontario Damages Cap")
+                cap_fig = create_damages_cap_chart(damages_values, DEFAULT_REFERENCE_YEAR)
+                if cap_fig:
+                    st.plotly_chart(cap_fig, use_container_width=True)
+                    st.caption("💡 Bars are colored based on their proportion to the Ontario non-pecuniary damages cap")
+
+                st.divider()
+
+                # Inflation-Adjusted Timeline Chart
+                st.subheader("📈 Inflation-Adjusted Award Timeline")
 
                 fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
 
                 if fig:
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
 
                     # Calculate and display statistics
                     chart_data = []
@@ -615,8 +649,7 @@ with tab1:
                         display_enhanced_data(case)
 
                     with col2:
-                        st.metric("Similarity Score", f"{emb_sim*100:.1f}%")
-                        st.metric("Combined Score", f"{combined_score*100:.1f}%")
+                        st.metric("Match Score", f"{combined_score*100:.1f}%", help="Overall similarity based on injury description and body regions")
 
                         if case.get("region_score", 0) > 0:
                             st.metric("Region Match", f"{case['region_score']*100:.0f}%")
@@ -628,21 +661,22 @@ with tab1:
     if st.session_state.search_results:
         st.divider()
 
-        st.subheader("📥 Download Report")
+        st.subheader("📥 Generate PDF Report")
+        st.markdown("Create a professional PDF report with search parameters, damage analysis, and comparable cases.")
 
-        col_dl1, col_dl2, col_dl3 = st.columns([1, 1, 2])
+        col_dl1, col_dl2 = st.columns([1, 3])
 
         with col_dl1:
             num_cases = st.number_input(
-                "Cases in report:",
+                "Number of cases to include:",
                 min_value=1,
                 max_value=50,
                 value=10,
-                help="Number of top cases to include in PDF"
+                help="Number of top cases to include in PDF report"
             )
 
         with col_dl2:
-            if st.button("📄 Generate PDF Report", type="secondary"):
+            if st.button("📄 Generate PDF Report", type="primary", use_container_width=True):
                 with st.spinner("Generating PDF report..."):
                     try:
                         search_data = st.session_state.search_results
@@ -688,21 +722,26 @@ with tab1:
                                 data=pdf_data,
                                 file_name=pdf_filename,
                                 mime="application/pdf",
-                                type="primary"
+                                type="primary",
+                                use_container_width=True
                             )
 
                     except Exception as e:
                         st.error(f"❌ Error generating PDF: {str(e)}")
                         st.info("Please ensure all dependencies are installed: pip install reportlab")
 
-        with col_dl3:
-            st.caption("Generate a professional PDF report with search parameters, damage analysis, and comparable cases.")
-
 # =============================================================================
-# TAB 2: JUDGE ANALYTICS
+# TAB 2: FLA DAMAGES
 # =============================================================================
 
 with tab2:
+    display_fla_analytics_page(cases)
+
+# =============================================================================
+# TAB 3: JUDGE ANALYTICS
+# =============================================================================
+
+with tab3:
     display_judge_analytics_page(cases)
 
 # =============================================================================
