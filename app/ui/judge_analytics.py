@@ -13,6 +13,15 @@ import pandas as pd
 import numpy as np
 from collections import Counter
 
+# Import inflation adjustment
+try:
+    from inflation_adjuster import adjust_for_inflation, DEFAULT_REFERENCE_YEAR
+except ImportError:
+    # Fallback if module not available
+    DEFAULT_REFERENCE_YEAR = 2024
+    def adjust_for_inflation(amount, from_year, to_year):
+        return None
+
 
 def get_all_judges(cases: List[Dict[str, Any]]) -> List[str]:
     """
@@ -69,12 +78,22 @@ def calculate_judge_statistics(judge_cases: List[Dict[str, Any]]) -> Dict[str, A
     """
     total_cases = len(judge_cases)
 
-    # Extract damages values
+    # Extract damages values (both original and inflation-adjusted)
     damages_values = []
+    adjusted_damages_values = []
     for case in judge_cases:
         damage = case.get('damages')
+        year = case.get('year')
+
         if damage and damage > 0:
             damages_values.append(damage)
+
+            # Calculate inflation-adjusted value
+            if year:
+                adjusted = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
+                adjusted_damages_values.append(adjusted if adjusted else damage)
+            else:
+                adjusted_damages_values.append(damage)
 
     # Year distribution
     years = []
@@ -108,6 +127,14 @@ def calculate_judge_statistics(judge_cases: List[Dict[str, Any]]) -> Dict[str, A
             'max': max(damages_values) if damages_values else 0,
             'std': np.std(damages_values) if damages_values else 0,
         },
+        'adjusted_damages': {
+            'values': adjusted_damages_values,
+            'mean': np.mean(adjusted_damages_values) if adjusted_damages_values else 0,
+            'median': np.median(adjusted_damages_values) if adjusted_damages_values else 0,
+            'min': min(adjusted_damages_values) if adjusted_damages_values else 0,
+            'max': max(adjusted_damages_values) if adjusted_damages_values else 0,
+            'std': np.std(adjusted_damages_values) if adjusted_damages_values else 0,
+        },
         'years': {
             'all': years,
             'min': min(years) if years else None,
@@ -129,7 +156,7 @@ def calculate_judge_statistics(judge_cases: List[Dict[str, Any]]) -> Dict[str, A
 
 def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[go.Figure]:
     """
-    Create a timeline chart showing award amounts over years.
+    Create a timeline chart showing award amounts over years with inflation adjustment.
 
     Args:
         judge_cases: List of cases decided by the judge
@@ -146,9 +173,13 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         region = case.get('region', 'Unknown')
 
         if year and damage and damage > 0:
+            # Calculate inflation-adjusted value
+            adjusted_damage = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
+
             data_points.append({
                 'year': year,
                 'damages': damage,
+                'adjusted_damages': adjusted_damage if adjusted_damage else damage,
                 'case_name': case_name,
                 'region': region
             })
@@ -158,48 +189,60 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
 
     df = pd.DataFrame(data_points)
 
-    # Calculate yearly statistics
-    yearly_stats = df.groupby('year')['damages'].agg(['mean', 'median', 'count']).reset_index()
+    # Calculate yearly statistics (using adjusted values)
+    yearly_stats = df.groupby('year').agg({
+        'adjusted_damages': ['mean', 'median', 'count']
+    }).reset_index()
+    yearly_stats.columns = ['year', 'mean', 'median', 'count']
 
-    # Create figure with secondary y-axis
+    # Create figure
     fig = go.Figure()
 
-    # Add scatter plot for individual cases
+    # Add scatter plot for individual cases (adjusted values)
+    hover_text = []
+    for _, row in df.iterrows():
+        inflation_pct = ((row['adjusted_damages'] / row['damages']) - 1) * 100 if row['damages'] > 0 else 0
+        text = (f"<b>{row['case_name']}</b><br>"
+                f"Region: {row['region']}<br>"
+                f"Original Award: ${row['damages']:,.0f}<br>"
+                f"Adjusted ({DEFAULT_REFERENCE_YEAR}$): ${row['adjusted_damages']:,.0f}<br>"
+                f"Inflation Impact: +{inflation_pct:.1f}%")
+        hover_text.append(text)
+
     fig.add_trace(go.Scatter(
         x=df['year'],
-        y=df['damages'],
+        y=df['adjusted_damages'],
         mode='markers',
-        name='Individual Awards',
+        name=f'Individual Awards ({DEFAULT_REFERENCE_YEAR}$)',
         marker=dict(
             size=8,
-            color=df['damages'],
+            color=df['adjusted_damages'],
             colorscale='Viridis',
             showscale=True,
-            colorbar=dict(title="Award Amount"),
+            colorbar=dict(title=f"Award ({DEFAULT_REFERENCE_YEAR}$)"),
             line=dict(width=1, color='white')
         ),
-        text=[f"{row['case_name']}<br>{row['region']}<br>${row['damages']:,.0f}"
-              for _, row in df.iterrows()],
-        hovertemplate='<b>%{text}</b><br>Year: %{x}<extra></extra>'
+        text=hover_text,
+        hovertemplate='%{text}<br>Year: %{x}<extra></extra>'
     ))
 
-    # Add median trend line
+    # Add median trend line (adjusted values)
     fig.add_trace(go.Scatter(
         x=yearly_stats['year'],
         y=yearly_stats['median'],
         mode='lines+markers',
-        name='Yearly Median',
+        name=f'Yearly Median ({DEFAULT_REFERENCE_YEAR}$)',
         line=dict(color='red', width=3),
         marker=dict(size=10, symbol='diamond'),
-        text=[f"Median: ${val:,.0f}<br>Cases: {count}"
+        text=[f"Median: ${val:,.0f}<br>Cases: {int(count)}"
               for val, count in zip(yearly_stats['median'], yearly_stats['count'])],
         hovertemplate='Year: %{x}<br>%{text}<extra></extra>'
     ))
 
     fig.update_layout(
-        title='Award Amounts Over Time',
+        title=f'Award Amounts Over Time (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
         xaxis_title='Year',
-        yaxis_title='Award Amount ($)',
+        yaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
         hovermode='closest',
         showlegend=True,
         height=500,
@@ -257,35 +300,48 @@ def create_region_distribution_chart(stats: Dict[str, Any]) -> Optional[go.Figur
     return fig
 
 
-def create_damages_distribution_chart(stats: Dict[str, Any]) -> Optional[go.Figure]:
+def create_damages_distribution_chart(judge_cases: List[Dict[str, Any]]) -> Optional[go.Figure]:
     """
-    Create a histogram showing distribution of damage awards.
+    Create a histogram showing distribution of inflation-adjusted damage awards.
 
     Args:
-        stats: Statistics dictionary from calculate_judge_statistics
+        judge_cases: List of cases decided by the judge
 
     Returns:
         Plotly figure or None if insufficient data
     """
-    damages_values = stats['damages']['values']
+    # Collect inflation-adjusted damages
+    adjusted_damages = []
+    for case in judge_cases:
+        year = case.get('year')
+        damage = case.get('damages')
 
-    if not damages_values:
+        if damage and damage > 0:
+            if year:
+                adjusted = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
+                adjusted_damages.append(adjusted if adjusted else damage)
+            else:
+                # If no year, use original value
+                adjusted_damages.append(damage)
+
+    if not adjusted_damages:
         return None
+
+    median = np.median(adjusted_damages)
 
     fig = go.Figure(data=[
         go.Histogram(
-            x=damages_values,
+            x=adjusted_damages,
             nbinsx=30,
             marker=dict(
                 color='rgba(54, 162, 235, 0.7)',
                 line=dict(color='rgba(54, 162, 235, 1)', width=1)
             ),
-            hovertemplate='Award Range: $%{x}<br>Count: %{y}<extra></extra>'
+            hovertemplate=f'Award Range ({DEFAULT_REFERENCE_YEAR}$): $%{{x}}<br>Count: %{{y}}<extra></extra>'
         )
     ])
 
     # Add median line
-    median = stats['damages']['median']
     fig.add_vline(
         x=median,
         line_dash="dash",
@@ -295,8 +351,8 @@ def create_damages_distribution_chart(stats: Dict[str, Any]) -> Optional[go.Figu
     )
 
     fig.update_layout(
-        title='Distribution of Award Amounts',
-        xaxis_title='Award Amount ($)',
+        title=f'Distribution of Award Amounts (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
+        xaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
         yaxis_title='Number of Cases',
         height=400,
         template='plotly_white',
@@ -416,40 +472,42 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
     st.divider()
 
-    # Damages statistics
+    # Damages statistics (inflation-adjusted)
     if stats['cases_with_damages'] > 0:
-        st.subheader("💰 Award Statistics")
+        st.subheader(f"💰 Award Statistics (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})")
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
             st.metric(
-                "Median Award",
-                f"${stats['damages']['median']:,.0f}",
-                help="Middle value of all awards"
+                f"Median Award ({DEFAULT_REFERENCE_YEAR}$)",
+                f"${stats['adjusted_damages']['median']:,.0f}",
+                help=f"Middle value of all awards, adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
             )
 
         with col2:
             st.metric(
-                "Mean Award",
-                f"${stats['damages']['mean']:,.0f}",
-                help="Average of all awards"
+                f"Mean Award ({DEFAULT_REFERENCE_YEAR}$)",
+                f"${stats['adjusted_damages']['mean']:,.0f}",
+                help=f"Average of all awards, adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
             )
 
         with col3:
             st.metric(
                 "Std. Deviation",
-                f"${stats['damages']['std']:,.0f}",
-                help="Measure of award variability"
+                f"${stats['adjusted_damages']['std']:,.0f}",
+                help="Measure of award variability (inflation-adjusted)"
             )
 
         col1, col2 = st.columns(2)
 
         with col1:
-            st.metric("Minimum Award", f"${stats['damages']['min']:,.0f}")
+            st.metric("Minimum Award", f"${stats['adjusted_damages']['min']:,.0f}")
 
         with col2:
-            st.metric("Maximum Award", f"${stats['damages']['max']:,.0f}")
+            st.metric("Maximum Award", f"${stats['adjusted_damages']['max']:,.0f}")
+
+        st.caption(f"💡 All awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using Canadian CPI")
 
         st.divider()
 
@@ -469,7 +527,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
     with col1:
         st.subheader("📊 Award Distribution")
-        dist_fig = create_damages_distribution_chart(stats)
+        dist_fig = create_damages_distribution_chart(judge_cases)
         if dist_fig:
             st.plotly_chart(dist_fig, use_container_width=True)
         else:
