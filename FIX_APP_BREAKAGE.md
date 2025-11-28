@@ -2,99 +2,74 @@
 
 ## Issue Summary
 
-After the "new data" commit (44cf305), the app showed an error about not being able to find cases in the main body, while the sidebar continued to work.
+After the "new data" commit (44cf305), the app crashed with an `AttributeError` when trying to load the Judge Analytics tab.
 
 ## Root Cause
 
-The issue was caused by **Streamlit's cache retaining old data format** after the data file was updated:
+The issue was a **bug in the Judge Analytics code** introduced in commit `067ef4f` (feat: Add inflation adjustment to judge analytics).
 
-### Data Changes
-- **Old format**: 1,069 cases with `raw_fields` structure (including junk/header rows)
-- **New format**: 805 clean cases with `extended_data` structure
+### The Bug
 
-### Why It Broke
-When Streamlit cached the old data format and the data file was updated, the cached data became stale and incompatible, causing errors when the app tried to:
-1. Load and display cases
-2. Perform searches
-3. Access fields that changed structure
+Two Plotly method calls used incorrect method names:
+
+```python
+# ❌ WRONG - these methods don't exist
+fig.update_yaxis(tickformat='$,.0f')  # Line 252
+fig.update_xaxis(tickformat='$,.0f')  # Line 362
+
+# ✅ CORRECT - note the plural 'axes'
+fig.update_yaxes(tickformat='$,.0f')
+fig.update_xaxes(tickformat='$,.0f')
+```
+
+### Error Details
+
+```
+AttributeError in app/ui/judge_analytics.py, line 252
+    fig.update_yaxis(tickformat='$,.0f')
+    ^^^^^^^^^^^^^^^^
+```
+
+The error occurred when:
+1. The app initialized and loaded the Judge Analytics page
+2. It tried to create charts using invalid Plotly methods
+3. Python raised `AttributeError` because `update_yaxis()` doesn't exist on Figure objects
 
 ## Solution
 
-### Quick Fix (Already Applied)
-```bash
-python clear_cache.py
-```
+**Fixed in commit `1553348`**
 
-This clears all Streamlit cache and Python cache files.
+Changed two lines in `app/ui/judge_analytics.py`:
+- Line 252: `update_yaxis` → `update_yaxes`
+- Line 362: `update_xaxis` → `update_xaxes`
 
-### If Issue Persists
+## Why This Wasn't Caught Earlier
 
-1. **Clear browser cache/cookies** for localhost:8501
-2. **Restart the Streamlit app**:
-   ```bash
-   streamlit run streamlit_app.py --server.headless true
-   ```
-3. **Force cache clear** in Streamlit UI:
-   - Press `C` in the running app
-   - Or use the hamburger menu → Settings → Clear Cache
+This bug was introduced in the judge analytics feature but only manifested when:
+- The app tried to display the Judge Analytics tab
+- Plotly attempted to format the chart axes
 
-## Data Improvements in New Version
+The bug was in dormant code that wasn't executed during initial testing.
+
+## Data Quality Note
+
+The recent data update actually **improved** data quality:
 
 ✅ **Better quality**: Removed 7 junk/header entries
 ✅ **Richer metadata**: Added `extended_data` with judges, citations, injuries
-✅ **Cleaner structure**: All cases now have proper case names and data
+✅ **Cleaner structure**: All 805 cases now have proper case names and data
 ✅ **More searchable**: Better summary text generation for embeddings
 
-## Prevention for Future Updates
-
-The app now includes better cache management. When updating data:
-
-1. Run `python clear_cache.py` before restarting the app
-2. Or use the `--server.fileWatcherType none` flag to prevent auto-reloading
-
-## Technical Details
-
-### Old Data Structure (First Entry)
-```json
-{
-  "region": "UNKNOWN",
-  "case_name": "Plaintiff",  // <- Header row, not actual data
-  "year": null,
-  "damages": null,
-  "raw_fields": ["Plaintiff", "Defendant", "Year", ...],
-  "summary_text": "Plaintiff Defendant Year...",
-  "embedding": [...]
-}
-```
-
-### New Data Structure (First Entry)
-```json
-{
-  "region": "HEAD",
-  "case_name": "Dusk v. Malone",  // <- Actual case
-  "year": 1999,
-  "damages": 75000.0,
-  "summary_text": "Dusk v. Malone (1999). Category: HEAD. Plaintiff 1: Male...",
-  "embedding": [...],
-  "extended_data": {
-    "case_id": "dusk_malone_1999_3188bfdd",
-    "plaintiff_name": "Dusk",
-    "judges": ["Brennan J.", "O'Connor J.A.", ...],
-    "citations": ["[1999] O.J. No. 3917", ...],
-    "injuries": ["Tightness in parts of neck", ...],
-    ...
-  }
-}
-```
+The data update did not cause the bug - it simply revealed an existing code error.
 
 ## Verification
 
-After clearing cache, verify the app works:
+After the fix, both tabs work correctly:
+- ✅ **Case Search tab**: Working (was always working)
+- ✅ **Judge Analytics tab**: Now working (was broken)
 
-```python
-# Test script to verify data loads correctly
-python test_data_load.py
-python test_app_functionality.py
-```
-
-Both should show "✅ All tests passed!"
+To verify:
+1. Pull the latest changes
+2. Restart the Streamlit app
+3. Navigate to the "Judge Analytics" tab
+4. Charts should now display without errors
