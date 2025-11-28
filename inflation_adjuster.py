@@ -12,7 +12,7 @@ import requests
 from io import StringIO
 
 # Default reference year for adjustments
-DEFAULT_REFERENCE_YEAR = 2024
+DEFAULT_REFERENCE_YEAR = 2025
 
 # Path to Bank of Canada CPI CSV file
 BOC_CPI_CSV = Path(__file__).parent / "data" / "boc_cpi.csv"

@@ -730,5 +730,5 @@ with tab2:
 # =============================================================================
 
 st.divider()
-st.caption("© 2024 Ontario Damages Compendium Tool | Built for legal professionals | Data source: CCLA Damages Compendium 2024")
+st.caption("© 2025 Ontario Damages Compendium Tool | Built for legal professionals | Data source: CCLA Damages Compendium 2024")
 st.caption("⚠️ This tool provides reference information only. Always verify case details and consult primary sources.")
