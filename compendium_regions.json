@@ -1,0 +1,106 @@
+{
+  "injury_categories": {
+    "HEAD": {
+      "label": "Head",
+      "subcategories": [
+        "HEAD - General",
+        "Brain & Skull",
+        "Ears/Hearing",
+        "Eye/Sight",
+        "Teeth"
+      ]
+    },
+    "ARMS": {
+      "label": "Arms",
+      "subcategories": [
+        "Elbow",
+        "Forearm",
+        "Hand",
+        "Wrist",
+        "Whole Arm"
+      ]
+    },
+    "SPINE": {
+      "label": "Spine",
+      "subcategories": [
+        "Neck/Cervical Spine",
+        "Spine Below Neck",
+        "Whiplash"
+      ]
+    },
+    "BODY": {
+      "label": "Body/Torso",
+      "subcategories": [
+        "Back",
+        "Buttock and Thigh",
+        "Hip",
+        "Internal Organs",
+        "Reproductive Organs",
+        "Ribs",
+        "Shoulder & Collar Bone"
+      ]
+    },
+    "LEGS": {
+      "label": "Legs",
+      "subcategories": [
+        "Ankle",
+        "Foot",
+        "Knee",
+        "Leg/Loss of Leg",
+        "Lower Leg",
+        "Whole Leg",
+        "Thigh"
+      ]
+    },
+    "SKIN": {
+      "label": "Skin",
+      "subcategories": [
+        "Burns",
+        "Scars and Lacerations"
+      ]
+    },
+    "FATAL_INJURIES": {
+      "label": "Fatal Injuries",
+      "subcategories": [
+        "Husband",
+        "Father",
+        "Husband and Father",
+        "Wife",
+        "Mother",
+        "Wife & Mother",
+        "Son/Daughter",
+        "Brother/Sister",
+        "Grandparent",
+        "Grandchild"
+      ]
+    },
+    "MOST_SEVERE": {
+      "label": "Most Severe Injuries",
+      "subcategories": [
+        "General - Most Severe",
+        "Brain Damage - Very Severe",
+        "Paraplegia",
+        "Quadriplegia"
+      ]
+    },
+    "MISCELLANEOUS": {
+      "label": "Miscellaneous",
+      "subcategories": [
+        "General - Miscellaneous",
+        "Sexual Assault/Abuse",
+        "Traumatic Neurosis",
+        "Pain and Suffering - Minor Cases"
+      ]
+    }
+  },
+  "status_filters": {
+    "PRE_EXISTING": {
+      "label": "Pre-existing Disability or Condition",
+      "description": "Cases involving pre-existing conditions"
+    },
+    "LOSS_GUIDANCE": {
+      "label": "Loss of Guidance, Care and Companionship",
+      "description": "Family Law Act claims"
+    }
+  }
+}

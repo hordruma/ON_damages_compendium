@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import pdfplumber
 import requests
+from difflib import SequenceMatcher
 
 
 class PDFTextExtractor:
@@ -100,32 +101,49 @@ class DamagesCompendiumParser:
     # Extraction prompt template
     EXTRACTION_PROMPT = """You are parsing a legal damages compendium. Extract all case information from this page.
 
+CRITICAL INSTRUCTIONS:
+1. Look for section headings at the top of the page (like "HEAD", "SPINE", "ARMS", etc.) - this tells you the region/category
+2. In case names, plaintiff comes BEFORE "v." and defendant comes AFTER "v."
+   - Example: "Smith v. Jones" means Smith is plaintiff, Jones is defendant
+   - NEVER list the defendant as the plaintiff
+3. For multiple plaintiffs in the same case, create ONE case with multiple plaintiff objects
+4. Normalize judge names by removing titles like "J.", "J.A.", etc. at the end
+   - Example: "Abella J.", "Abella J.A.", "Abella" should all be normalized to "Abella"
+5. Properly categorize "other damages" by type:
+   - "future_loss_of_income" for future income loss
+   - "past_loss_of_income" for past income loss
+   - "cost_of_future_care" for future care costs
+   - "housekeeping_capacity" for loss of housekeeping
+   - "other" only if it doesn't fit above categories
+
 Return a JSON array of cases. Each case should have:
-- case_name: Full case name
-- plaintiff_name: Plaintiff name (if different from case_name)
-- defendant_name: Defendant name
+- case_name: Full case name (plaintiff v. defendant)
+- plaintiff_name: Plaintiff name only (before "v.")
+- defendant_name: Defendant name only (after "v.")
 - year: Year of decision (integer)
-- category: Category/type of injury (e.g., "CERVICAL SPINE", "HEAD INJURY")
+- category: Category from page heading (e.g., "HEAD", "SPINE", "ARMS") - extract from the page section title
+- region: More specific region if mentioned (e.g., "CERVICAL SPINE", "BRAIN & SKULL")
 - court: Court name
 - citations: Array of citation strings
-- judges: Array of judge names
+- judges: Array of judge names (normalized, without titles like J., J.A.)
 - plaintiffs: Array of plaintiff objects, each with:
-  - plaintiff_id: "P1", "P2", etc. for multiple plaintiffs
+  - plaintiff_id: "P1", "P2", etc. for multiple plaintiffs in same case
   - sex: "M" or "F"
   - age: Age in years (integer)
   - non_pecuniary_damages: Amount in dollars (float)
   - is_provisional: true/false if damages are provisional
   - injuries: Array of injury descriptions
-  - other_damages: Array of {type, amount, description} objects
-- family_law_act_claims: Array of {description, amount} objects
+  - other_damages: Array of {type, amount, description} objects where type is one of: future_loss_of_income, past_loss_of_income, cost_of_future_care, housekeeping_capacity, other
+- family_law_act_claims: Array of {description, amount, category} objects
 - comments: Any additional notes or comments
 
 Important:
-- If only one plaintiff, still use array with plaintiff_id "P1"
+- If multiple plaintiffs exist in ONE case, create ONE case object with multiple items in the plaintiffs array
+- DO NOT create duplicate cases for the same legal matter
 - Parse all monetary amounts as numbers (no $ or commas)
 - If information is not present, use null
 - Return empty array [] if no cases on this page
-- Be precise with numbers and dates
+- Normalize all judge names by removing trailing titles
 
 Page text:
 {page_text}
@@ -300,6 +318,51 @@ Return only the JSON array, no other text."""
         else:
             return self._call_azure_openai(prompt, max_retries)
 
+    @staticmethod
+    def normalize_judge_name(judge_name: str) -> str:
+        """
+        Normalize judge names by removing titles and standardizing format.
+
+        Args:
+            judge_name: Raw judge name
+
+        Returns:
+            Normalized judge name
+        """
+        if not judge_name:
+            return ""
+
+        # Remove common titles and suffixes
+        name = judge_name.strip()
+
+        # Remove trailing titles (J., J.A., C.J., etc.)
+        name = re.sub(r',?\s*(J\.A\.|J\.|C\.J\.|C\.J\.O\.|C\.J\.C\.)$', '', name, flags=re.IGNORECASE)
+
+        # Remove "The Honourable", "Hon.", etc. at start
+        name = re.sub(r'^(The\s+)?(Hon\.?|Honourable)\s+', '', name, flags=re.IGNORECASE)
+
+        # Standardize spacing
+        name = re.sub(r'\s+', ' ', name).strip()
+
+        return name
+
+    @staticmethod
+    def similar_strings(s1: str, s2: str, threshold: float = 0.85) -> bool:
+        """
+        Check if two strings are similar (for deduplication).
+
+        Args:
+            s1: First string
+            s2: Second string
+            threshold: Similarity threshold (0-1)
+
+        Returns:
+            True if strings are similar enough
+        """
+        if not s1 or not s2:
+            return False
+        return SequenceMatcher(None, s1.lower(), s2.lower()).ratio() >= threshold
+
     def _parse_response(self, response_text: str) -> List[Dict[str, Any]]:
         """
         Parse API JSON response.
@@ -321,8 +384,12 @@ Return only the JSON array, no other text."""
         try:
             cases = json.loads(response_text)
             if isinstance(cases, list):
+                # Post-process each case
+                for case in cases:
+                    self._post_process_case(case)
                 return cases
             elif isinstance(cases, dict):
+                self._post_process_case(cases)
                 return [cases]
             else:
                 return []
@@ -330,6 +397,39 @@ Return only the JSON array, no other text."""
             if self.verbose:
                 print(f"JSON parse error: {e}")
             return []
+
+    def _post_process_case(self, case: Dict[str, Any]) -> None:
+        """
+        Post-process a case to normalize data.
+
+        Args:
+            case: Case dictionary to modify in-place
+        """
+        # Normalize judge names
+        if 'judges' in case and case['judges']:
+            case['judges'] = [self.normalize_judge_name(j) for j in case['judges'] if j]
+            # Remove empty strings
+            case['judges'] = [j for j in case['judges'] if j]
+
+        # Ensure plaintiff/defendant are properly separated
+        if 'case_name' in case and case['case_name']:
+            case_name = case['case_name']
+            # Look for " v. " or " v " pattern
+            if ' v. ' in case_name or ' v ' in case_name:
+                parts = re.split(r'\s+v\.?\s+', case_name, maxsplit=1, flags=re.IGNORECASE)
+                if len(parts) == 2:
+                    if not case.get('plaintiff_name'):
+                        case['plaintiff_name'] = parts[0].strip()
+                    if not case.get('defendant_name'):
+                        case['defendant_name'] = parts[1].strip()
+
+        # Ensure "other_damages" have proper types
+        if 'plaintiffs' in case:
+            for plaintiff in case['plaintiffs']:
+                if 'other_damages' in plaintiff and plaintiff['other_damages']:
+                    for damage in plaintiff['other_damages']:
+                        if 'type' not in damage or not damage['type']:
+                            damage['type'] = 'other'
 
     def parse_page(self, page_number: int, page_text: str) -> List[Dict[str, Any]]:
         """
@@ -361,6 +461,36 @@ Return only the JSON array, no other text."""
             })
             return []
 
+    def is_duplicate_case(self, new_case: Dict[str, Any], existing_cases: List[Dict[str, Any]]) -> bool:
+        """
+        Check if a case is a duplicate of an existing case.
+
+        Args:
+            new_case: New case to check
+            existing_cases: List of existing cases
+
+        Returns:
+            True if duplicate found
+        """
+        new_name = new_case.get('case_name', '')
+        new_year = new_case.get('year')
+
+        for existing in existing_cases:
+            existing_name = existing.get('case_name', '')
+            existing_year = existing.get('year')
+
+            # Same year and similar case name
+            if new_year == existing_year and self.similar_strings(new_name, existing_name):
+                return True
+
+            # Check citation overlap
+            new_citations = set(new_case.get('citations', []))
+            existing_citations = set(existing.get('citations', []))
+            if new_citations and existing_citations and new_citations & existing_citations:
+                return True
+
+        return False
+
     def parse_pdf(
         self,
         pdf_path: str,
@@ -370,7 +500,7 @@ Return only the JSON array, no other text."""
         output_json: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Parse the entire PDF or a range of pages.
+        Parse the entire PDF or a range of pages with deduplication.
 
         Args:
             pdf_path: Path to PDF file
@@ -380,7 +510,7 @@ Return only the JSON array, no other text."""
             output_json: Path to save results incrementally
 
         Returns:
-            List of all parsed cases
+            List of all parsed cases (deduplicated)
         """
         extractor = PDFTextExtractor(pdf_path)
         total_pages = extractor.get_page_count()
@@ -390,6 +520,7 @@ Return only the JSON array, no other text."""
 
         all_cases = []
         case_ids_seen = set()
+        duplicates_found = 0
 
         if self.verbose:
             print(f"Parsing pages {start_page} to {end_page} of {total_pages}")
@@ -414,20 +545,32 @@ Return only the JSON array, no other text."""
             for case in page_cases:
                 # Generate unique ID if not present
                 if "case_id" not in case or not case["case_id"]:
-                    case["case_id"] = f"{case.get('case_name', 'UNKNOWN')}_{case.get('year', 0)}"
+                    case_name = case.get('case_name', 'UNKNOWN')
+                    year = case.get('year', 0)
+                    case["case_id"] = f"{case_name}_{year}"
 
-                if case["case_id"] not in case_ids_seen:
+                # Check for duplicates using both ID and similarity
+                is_dup = False
+                if case["case_id"] in case_ids_seen:
+                    is_dup = True
+                elif self.is_duplicate_case(case, all_cases):
+                    is_dup = True
+
+                if not is_dup:
                     all_cases.append(case)
                     case_ids_seen.add(case["case_id"])
                     new_cases += 1
+                else:
+                    duplicates_found += 1
 
             if self.verbose:
-                print(f"found {new_cases} new cases (total: {len(all_cases)})")
+                print(f"found {new_cases} new cases (total: {len(all_cases)}, {duplicates_found} duplicates skipped)")
 
             # Save checkpoint
             checkpoint = {
                 "last_page_processed": page_num,
                 "cases_count": len(all_cases),
+                "duplicates_found": duplicates_found,
                 "timestamp": time.time()
             }
             with open(checkpoint_file, "w") as f:
@@ -442,9 +585,10 @@ Return only the JSON array, no other text."""
             time.sleep(0.5)
 
         if self.verbose:
-            print(f"\n✓ Parsing complete: {len(all_cases)} cases")
+            print(f"\n✓ Parsing complete: {len(all_cases)} unique cases")
+            print(f"  Duplicates skipped: {duplicates_found}")
             if self.errors:
-                print(f"⚠ {len(self.errors)} errors occurred")
+                print(f"  ⚠ {len(self.errors)} errors occurred")
 
         return all_cases
 

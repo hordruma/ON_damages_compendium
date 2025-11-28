@@ -13,6 +13,9 @@ from inflation_adjuster import adjust_for_inflation, DEFAULT_REFERENCE_YEAR
 from app.core.config import CHART_MAX_CASES
 from app.core.search import extract_damages_value
 
+# Ontario non-pecuniary damages cap (as of 2024, indexed annually)
+ONTARIO_DAMAGES_CAP = 434_000  # CAD, adjusted for inflation to 2024
+
 
 def create_inflation_chart(
     results: List[Tuple[Dict[str, Any], float, float]],
@@ -120,7 +123,7 @@ def create_inflation_chart(
         hovertemplate='Trend: $%{y:,.0f}<br>Year: %{x:.0f}<extra></extra>'
     ))
 
-    # Update layout for professional appearance
+    # Update layout for professional appearance with dark mode support
     fig.update_layout(
         title=f'Damage Awards Over Time (Inflation-Adjusted to {reference_year}$)',
         xaxis_title='Year of Award',
@@ -140,7 +143,8 @@ def create_inflation_chart(
             xanchor="right",
             x=1
         ),
-        plot_bgcolor='rgba(240, 240, 240, 0.5)',
+        plot_bgcolor='rgba(0, 0, 0, 0)',  # Transparent background for dark mode compatibility
+        paper_bgcolor='rgba(0, 0, 0, 0)',  # Transparent paper background
         showlegend=True
     )
 
@@ -173,3 +177,90 @@ def calculate_chart_statistics(chart_data: List[Dict[str, Any]]) -> Dict[str, fl
         'median_adjusted': median_adjusted,
         'avg_inflation_impact': avg_inflation
     }
+
+
+def create_damages_cap_chart(
+    damages_values: List[float],
+    reference_year: int = DEFAULT_REFERENCE_YEAR,
+    damages_cap: float = ONTARIO_DAMAGES_CAP
+) -> Optional[go.Figure]:
+    """
+    Create a bar chart showing min, median, and max awards colored proportionally
+    to the Ontario damages cap.
+
+    Args:
+        damages_values: List of damage award amounts
+        reference_year: Year for inflation adjustment
+        damages_cap: Ontario non-pecuniary damages cap
+
+    Returns:
+        Plotly figure or None if insufficient data
+    """
+    if not damages_values or len(damages_values) < 2:
+        return None
+
+    min_val = np.min(damages_values)
+    median_val = np.median(damages_values)
+    max_val = np.max(damages_values)
+
+    # Calculate proportions relative to cap
+    min_pct = (min_val / damages_cap) * 100
+    median_pct = (median_val / damages_cap) * 100
+    max_pct = (max_val / damages_cap) * 100
+
+    # Color based on proportion to cap
+    def get_color(pct):
+        """Get color based on percentage of cap"""
+        if pct < 25:
+            return 'rgba(34, 197, 94, 0.7)'  # Green - low
+        elif pct < 50:
+            return 'rgba(59, 130, 246, 0.7)'  # Blue - moderate
+        elif pct < 75:
+            return 'rgba(251, 146, 60, 0.7)'  # Orange - high
+        else:
+            return 'rgba(239, 68, 68, 0.7)'  # Red - very high
+
+    fig = go.Figure()
+
+    # Add bars for min, median, max
+    bars_data = [
+        {'label': 'Minimum', 'value': min_val, 'pct': min_pct, 'color': get_color(min_pct)},
+        {'label': 'Median', 'value': median_val, 'pct': median_pct, 'color': get_color(median_pct)},
+        {'label': 'Maximum', 'value': max_val, 'pct': max_pct, 'color': get_color(max_pct)},
+    ]
+
+    fig.add_trace(go.Bar(
+        x=[d['label'] for d in bars_data],
+        y=[d['value'] for d in bars_data],
+        marker=dict(
+            color=[d['color'] for d in bars_data],
+            line=dict(color='rgba(0,0,0,0.3)', width=2)
+        ),
+        text=[f"${d['value']:,.0f}<br>({d['pct']:.1f}% of cap)" for d in bars_data],
+        textposition='outside',
+        hovertemplate='<b>%{x}</b><br>Amount: $%{y:,.0f}<br>Percent of Cap: %{customdata:.1f}%<extra></extra>',
+        customdata=[d['pct'] for d in bars_data]
+    ))
+
+    # Add horizontal line for damages cap
+    fig.add_hline(
+        y=damages_cap,
+        line_dash="dash",
+        line_color="red",
+        line_width=2,
+        annotation_text=f"Ontario Cap: ${damages_cap:,.0f}",
+        annotation_position="right"
+    )
+
+    fig.update_layout(
+        title=f'Award Statistics Relative to Ontario Damages Cap ({reference_year})',
+        xaxis_title='Statistic',
+        yaxis_title=f'Award Amount ({reference_year}$)',
+        yaxis=dict(tickformat='$,.0f'),
+        height=400,
+        showlegend=False,
+        plot_bgcolor='rgba(0, 0, 0, 0)',
+        paper_bgcolor='rgba(0, 0, 0, 0)',
+    )
+
+    return fig
