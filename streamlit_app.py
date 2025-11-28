@@ -91,14 +91,6 @@ st.markdown("""
         color: #6366f1;
         font-weight: 600;
     }
-    .instructions {
-        background-color: #eff6ff;
-        border-left: 4px solid #3b82f6;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 0.25rem;
-        color: #1f2937;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -215,33 +207,18 @@ tab1, tab2 = st.tabs(["🔍 Case Search", "👨‍⚖️ Judge Analytics"])
 # =============================================================================
 
 with tab1:
-    # Instructions
-    with st.expander("ℹ️ How to Use This Tool", expanded=False):
-        st.markdown("""
-        <div class="instructions">
-        <h4>Search Process:</h4>
-        <ol>
-            <li><strong>Select Demographics:</strong> Choose gender and age of the plaintiff</li>
-            <li><strong>Select Body Regions:</strong> Click on anatomical regions in the sidebar (multi-select supported)</li>
-            <li><strong>Describe Injury:</strong> Provide detailed injury description including mechanism, severity, and chronicity</li>
-            <li><strong>Search:</strong> Click "Find Comparable Cases" to see results</li>
-            <li><strong>Review:</strong> Examine matched cases and damage award ranges</li>
-        </ol>
-        <p><strong>Tips:</strong></p>
-        <ul>
-            <li>Use clinical terminology for best results (e.g., "C5-C6 disc herniation" not "neck pain")</li>
-            <li>Include chronicity information (acute, chronic, permanent)</li>
-            <li>Mention mechanism of injury (MVA, slip & fall, etc.) if relevant</li>
-            <li>Select multiple regions for complex multi-injury cases</li>
-        </ul>
-        </div>
-        """, unsafe_allow_html=True)
+    # Instructions - Always visible
+    st.info("""
+    **How to Search:** Describe the injury in detail below, optionally select demographics and body regions in the sidebar, then click "Find Comparable Cases" to see similar awards.
+
+    **💡 Tips:** Use clinical terminology (e.g., "C5-C6 disc herniation"), include severity and chronicity, mention mechanism of injury if relevant.
+    """)
 
     # =============================================================================
-    # EXPERT REPORT UPLOAD
+    # EXPERT REPORT UPLOAD (OPTIONAL)
     # =============================================================================
 
-    with st.expander("📄 Upload Expert/Medical Report (Optional)", expanded=False):
+    with st.expander("📄 **Optional:** Upload Expert/Medical Report for Auto-Extraction", expanded=False):
         st.markdown("""
         Upload a medical or expert report PDF, and the system will automatically extract injuries,
         limitations, and other relevant information to populate the search fields.
@@ -312,7 +289,7 @@ with tab1:
     # INJURY DESCRIPTION - MAIN INPUT
     # =============================================================================
 
-    st.subheader("🔍 Injury Description")
+    st.markdown("### 🔍 Describe the Injury")
 
     # Pre-populate if analysis exists
     default_injury_text = ""
@@ -320,14 +297,19 @@ with tab1:
         default_injury_text = st.session_state.analysis_data.get('injury_description', '')
 
     injury_text = st.text_area(
-        "Describe the injury in detail:",
+        "Injury details",
         value=default_injury_text,
-        height=150,
+        height=180,
         placeholder="Example: C5-C6 disc herniation with chronic radicular pain radiating to right upper extremity. Failed conservative management. MRI shows central disc protrusion with nerve root impingement. Ongoing neurological deficits including weakness and paresthesias...",
-        help="Include: mechanism, anatomical structures, severity, chronicity, functional impact"
+        help="Include: mechanism, anatomical structures, severity, chronicity, and functional impact",
+        label_visibility="collapsed"
     )
 
-    search_button = st.button("🔍 Find Comparable Cases", type="primary", width='stretch')
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        search_button = st.button("🔍 Find Comparable Cases", type="primary", width='stretch')
 
 # =============================================================================
 # SIDEBAR - SEARCH PARAMETERS
