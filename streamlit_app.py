@@ -91,13 +91,6 @@ st.markdown("""
         color: #6366f1;
         font-weight: 600;
     }
-    .instructions {
-        background-color: #eff6ff;
-        border-left: 4px solid #3b82f6;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 0.25rem;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -214,27 +207,109 @@ tab1, tab2 = st.tabs(["🔍 Case Search", "👨‍⚖️ Judge Analytics"])
 # =============================================================================
 
 with tab1:
-    # Instructions
-    with st.expander("ℹ️ How to Use This Tool", expanded=False):
+    # Instructions - Always visible
+    st.info("""
+    **How to Search:** Describe the injury in detail below, optionally select demographics and body regions in the sidebar, then click "Find Comparable Cases" to see similar awards.
+
+    **💡 Tips:** Use clinical terminology (e.g., "C5-C6 disc herniation"), include severity and chronicity, mention mechanism of injury if relevant.
+    """)
+
+    # =============================================================================
+    # EXPERT REPORT UPLOAD (OPTIONAL)
+    # =============================================================================
+
+    with st.expander("📄 **Optional:** Upload Expert/Medical Report for Auto-Extraction", expanded=False):
         st.markdown("""
-        <div class="instructions">
-        <h4>Search Process:</h4>
-        <ol>
-            <li><strong>Select Demographics:</strong> Choose gender and age of the plaintiff</li>
-            <li><strong>Select Body Regions:</strong> Click on anatomical regions in the sidebar (multi-select supported)</li>
-            <li><strong>Describe Injury:</strong> Provide detailed injury description including mechanism, severity, and chronicity</li>
-            <li><strong>Search:</strong> Click "Find Comparable Cases" to see results</li>
-            <li><strong>Review:</strong> Examine matched cases and damage award ranges</li>
-        </ol>
-        <p><strong>Tips:</strong></p>
-        <ul>
-            <li>Use clinical terminology for best results (e.g., "C5-C6 disc herniation" not "neck pain")</li>
-            <li>Include chronicity information (acute, chronic, permanent)</li>
-            <li>Mention mechanism of injury (MVA, slip & fall, etc.) if relevant</li>
-            <li>Select multiple regions for complex multi-injury cases</li>
-        </ul>
-        </div>
-        """, unsafe_allow_html=True)
+        Upload a medical or expert report PDF, and the system will automatically extract injuries,
+        limitations, and other relevant information to populate the search fields.
+        """)
+
+        col_upload1, col_upload2 = st.columns([2, 1])
+
+        with col_upload1:
+            uploaded_file = st.file_uploader(
+                "Choose a PDF file",
+                type=['pdf'],
+                help="Upload medical report, IME, expert opinion, or similar document"
+            )
+
+        with col_upload2:
+            use_llm = st.checkbox(
+                "Use AI Analysis",
+                value=True,
+                help="Use LLM for more accurate extraction (requires API key in .env file)"
+            )
+
+        if uploaded_file is not None:
+            if st.button("🔍 Analyze Expert Report", type="secondary"):
+                with st.spinner("Analyzing expert report..."):
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                        tmp_file.write(uploaded_file.getvalue())
+                        tmp_path = tmp_file.name
+
+                    try:
+                        analysis = analyze_expert_report(tmp_path, use_llm=use_llm)
+                        st.session_state.analysis_data = analysis
+
+                        st.success("✅ Expert report analyzed successfully!")
+
+                        st.subheader("Extracted Information")
+
+                        if analysis.get('injured_regions'):
+                            st.write("**Detected Regions:**")
+                            for region_id in analysis['injured_regions']:
+                                if region_id in region_map:
+                                    st.write(f"• {region_map[region_id]['label']}")
+
+                        if analysis.get('injury_description'):
+                            st.write("**Injury Description:**")
+                            st.write(analysis['injury_description'][:500])
+
+                        if analysis.get('limitations'):
+                            st.write("**Functional Limitations:**")
+                            for limitation in analysis['limitations'][:5]:
+                                st.write(f"• {limitation}")
+
+                        if analysis.get('chronicity'):
+                            st.write(f"**Chronicity:** {analysis['chronicity']}")
+
+                        if analysis.get('severity'):
+                            st.write(f"**Severity:** {analysis['severity']}")
+
+                        st.info("💡 Review the auto-populated injury description below and edit as needed before searching.")
+
+                    except Exception as e:
+                        st.error(f"❌ Error analyzing report: {str(e)}")
+                        st.info("Try using the manual input field below instead.")
+                    finally:
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
+
+    # =============================================================================
+    # INJURY DESCRIPTION - MAIN INPUT
+    # =============================================================================
+
+    st.markdown("### 🔍 Describe the Injury")
+
+    # Pre-populate if analysis exists
+    default_injury_text = ""
+    if st.session_state.analysis_data:
+        default_injury_text = st.session_state.analysis_data.get('injury_description', '')
+
+    injury_text = st.text_area(
+        "Injury details",
+        value=default_injury_text,
+        height=180,
+        placeholder="Example: C5-C6 disc herniation with chronic radicular pain radiating to right upper extremity. Failed conservative management. MRI shows central disc protrusion with nerve root impingement. Ongoing neurological deficits including weakness and paresthesias...",
+        help="Include: mechanism, anatomical structures, severity, chronicity, and functional impact",
+        label_visibility="collapsed"
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        search_button = st.button("🔍 Find Comparable Cases", type="primary", width='stretch')
 
 # =============================================================================
 # SIDEBAR - SEARCH PARAMETERS
@@ -356,102 +431,7 @@ with st.sidebar:
         help="Filter out cases below this similarity threshold"
     )
 
-    # =============================================================================
-    # MAIN CONTENT - EXPERT REPORT UPLOAD
-    # =============================================================================
-
-    st.divider()
-
-    with st.expander("📄 Upload Expert/Medical Report (Optional)", expanded=False):
-        st.markdown("""
-        Upload a medical or expert report PDF, and the system will automatically extract injuries,
-        limitations, and other relevant information to populate the search fields.
-        """)
-
-        col_upload1, col_upload2 = st.columns([2, 1])
-
-        with col_upload1:
-            uploaded_file = st.file_uploader(
-                "Choose a PDF file",
-                type=['pdf'],
-                help="Upload medical report, IME, expert opinion, or similar document"
-            )
-
-        with col_upload2:
-            use_llm = st.checkbox(
-                "Use AI Analysis",
-                value=True,
-                help="Use LLM for more accurate extraction (requires API key in .env file)"
-            )
-
-        if uploaded_file is not None:
-            if st.button("🔍 Analyze Expert Report", type="secondary"):
-                with st.spinner("Analyzing expert report..."):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-                        tmp_file.write(uploaded_file.getvalue())
-                        tmp_path = tmp_file.name
-
-                    try:
-                        analysis = analyze_expert_report(tmp_path, use_llm=use_llm)
-                        st.session_state.analysis_data = analysis
-
-                        st.success("✅ Expert report analyzed successfully!")
-
-                        st.subheader("Extracted Information")
-
-                        if analysis.get('injured_regions'):
-                            st.write("**Detected Regions:**")
-                            for region_id in analysis['injured_regions']:
-                                if region_id in region_map:
-                                    st.write(f"• {region_map[region_id]['label']}")
-
-                        if analysis.get('injury_description'):
-                            st.write("**Injury Description:**")
-                            st.write(analysis['injury_description'][:500])
-
-                        if analysis.get('limitations'):
-                            st.write("**Functional Limitations:**")
-                            for limitation in analysis['limitations'][:5]:
-                                st.write(f"• {limitation}")
-
-                        if analysis.get('chronicity'):
-                            st.write(f"**Chronicity:** {analysis['chronicity']}")
-
-                        if analysis.get('severity'):
-                            st.write(f"**Severity:** {analysis['severity']}")
-
-                        st.info("💡 Scroll down to review and edit the auto-populated fields before searching.")
-
-                    except Exception as e:
-                        st.error(f"❌ Error analyzing report: {str(e)}")
-                        st.info("Try using the manual input fields below instead.")
-                    finally:
-                        if os.path.exists(tmp_path):
-                            os.unlink(tmp_path)
-
-    # =============================================================================
-    # MAIN CONTENT - SEARCH INPUT
-    # =============================================================================
-
-    st.divider()
-
-    st.subheader("Injury Description")
-
-    # Pre-populate if analysis exists
-    default_injury_text = ""
-    if st.session_state.analysis_data:
-        default_injury_text = st.session_state.analysis_data.get('injury_description', '')
-
-    injury_text = st.text_area(
-        "Describe the injury in detail:",
-        value=default_injury_text,
-        height=150,
-        placeholder="Example: C5-C6 disc herniation with chronic radicular pain radiating to right upper extremity. Failed conservative management. MRI shows central disc protrusion with nerve root impingement. Ongoing neurological deficits including weakness and paresthesias...",
-        help="Include: mechanism, anatomical structures, severity, chronicity, functional impact"
-    )
-
-    search_button = st.button("🔍 Find Comparable Cases", type="primary", use_container_width=True)
-
+with tab1:
     # =============================================================================
     # SEARCH EXECUTION AND RESULTS DISPLAY
     # =============================================================================
@@ -544,7 +524,7 @@ with st.sidebar:
                 fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
 
                 if fig:
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
 
                     # Calculate and display statistics
                     chart_data = []
