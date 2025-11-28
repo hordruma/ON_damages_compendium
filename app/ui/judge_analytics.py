@@ -516,7 +516,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
     timeline_fig = create_awards_timeline_chart(judge_cases)
 
     if timeline_fig:
-        st.plotly_chart(timeline_fig, use_container_width=True)
+        st.plotly_chart(timeline_fig, width='stretch')
     else:
         st.info("Insufficient data with both year and damages information to display timeline")
 
@@ -529,7 +529,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
         st.subheader("📊 Award Distribution")
         dist_fig = create_damages_distribution_chart(judge_cases)
         if dist_fig:
-            st.plotly_chart(dist_fig, use_container_width=True)
+            st.plotly_chart(dist_fig, width='stretch')
         else:
             st.info("No damages data available")
 
@@ -537,7 +537,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
         st.subheader("📅 Case Volume by Year")
         volume_fig = create_yearly_case_volume_chart(stats)
         if volume_fig:
-            st.plotly_chart(volume_fig, use_container_width=True)
+            st.plotly_chart(volume_fig, width='stretch')
         else:
             st.info("No year data available")
 
@@ -548,7 +548,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
     region_fig = create_region_distribution_chart(stats)
 
     if region_fig:
-        st.plotly_chart(region_fig, use_container_width=True)
+        st.plotly_chart(region_fig, width='stretch')
     else:
         st.info("No region data available")
 
@@ -563,7 +563,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
             columns=['Court', 'Cases']
         ).sort_values('Cases', ascending=False)
 
-        st.dataframe(court_df, use_container_width=True, hide_index=True)
+        st.dataframe(court_df, width='stretch', hide_index=True)
 
     # Detailed case list
     with st.expander(f"📋 View All {len(judge_cases)} Cases"):
@@ -578,4 +578,4 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
             })
 
         cases_df = pd.DataFrame(case_list)
-        st.dataframe(cases_df, use_container_width=True, hide_index=True)
+        st.dataframe(cases_df, width='stretch', hide_index=True)

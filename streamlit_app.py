@@ -450,7 +450,7 @@ with st.sidebar:
         help="Include: mechanism, anatomical structures, severity, chronicity, functional impact"
     )
 
-    search_button = st.button("🔍 Find Comparable Cases", type="primary", use_container_width=True)
+    search_button = st.button("🔍 Find Comparable Cases", type="primary", width='stretch')
 
     # =============================================================================
     # SEARCH EXECUTION AND RESULTS DISPLAY
@@ -544,7 +544,7 @@ with st.sidebar:
                 fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
 
                 if fig:
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
 
                     # Calculate and display statistics
                     chart_data = []
