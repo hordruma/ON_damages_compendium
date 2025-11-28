@@ -249,7 +249,7 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         template='plotly_white'
     )
 
-    fig.update_yaxis(tickformat='$,.0f')
+    fig.update_yaxes(tickformat='$,.0f')
 
     return fig
 
@@ -359,7 +359,7 @@ def create_damages_distribution_chart(judge_cases: List[Dict[str, Any]]) -> Opti
         showlegend=False
     )
 
-    fig.update_xaxis(tickformat='$,.0f')
+    fig.update_xaxes(tickformat='$,.0f')
 
     return fig
 
