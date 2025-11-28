@@ -127,7 +127,7 @@ def _create_dashboard_case(
     # FLA claims
     fla_claims = case.get('family_law_act_claims', [])
     if fla_claims:
-        fla_desc = [claim.get('description', 'FLA claim') for claim in fla_claims]
+        fla_desc = [claim.get('description') or 'FLA claim' for claim in fla_claims]
         summary_parts.append(f"Family Law Act: {', '.join(fla_desc)}")
 
     # Comments
