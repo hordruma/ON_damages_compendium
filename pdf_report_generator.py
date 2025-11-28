@@ -341,7 +341,7 @@ class DamagesReportGenerator:
 
         <b>Data Source:</b> Canadian Case Law Association (CCLA) Damages Compendium 2024<br/><br/>
 
-        © 2024 Ontario Damages Comparator Tool
+        © 2025 Ontario Damages Comparator Tool
         """
 
         self.story.append(
