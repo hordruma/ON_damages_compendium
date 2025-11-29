@@ -702,13 +702,19 @@ Return only the JSON array, no other text."""
                         if 'type' not in damage or not damage['type']:
                             damage['type'] = 'other'
 
-    def parse_page(self, page_number: int, page_text: str) -> List[Dict[str, Any]]:
+    def parse_page(self, page_number: int, page_text: str, previous_page_text: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Parse a single page to extract case data.
+        Parse a single page to extract case data with optional context from previous page.
+
+        Uses a sliding window approach to handle cases that span multiple pages.
+        When previous_page_text is provided, the LLM can see continuations and
+        properly associate orphaned content (like comments, liability info) with
+        cases from the previous page.
 
         Args:
             page_number: Page number (for logging)
-            page_text: Extracted text from the page
+            page_text: Extracted text from the current page
+            previous_page_text: Optional text from previous page for context
 
         Returns:
             List of case dictionaries
@@ -716,7 +722,19 @@ Return only the JSON array, no other text."""
         if not page_text or len(page_text.strip()) < 50:
             return []
 
-        prompt = self.EXTRACTION_PROMPT.format(page_text=page_text)
+        # Build context window if previous page provided
+        if previous_page_text:
+            # Combine previous and current page with clear separator
+            combined_text = (
+                f"=== PREVIOUS PAGE (for context) ===\n"
+                f"{previous_page_text}\n\n"
+                f"=== CURRENT PAGE {page_number} (extract cases from here) ===\n"
+                f"{page_text}"
+            )
+            prompt = self.EXTRACTION_PROMPT.format(page_text=combined_text)
+        else:
+            prompt = self.EXTRACTION_PROMPT.format(page_text=page_text)
+
         response = self._call_api(prompt)
 
         if response:
@@ -955,7 +973,9 @@ Return only the JSON array, no other text."""
         if self.verbose:
             print(f"Parsing pages {start_page} to {end_page} of {total_pages}")
             print(f"Using model: {self.model}")
+            print(f"Using sliding window for multi-page case handling")
 
+        previous_page_text = None
         for page_num in range(start_page, end_page + 1):
             if self.verbose:
                 print(f"\nPage {page_num}/{end_page}...", end=" ")
@@ -965,10 +985,14 @@ Return only the JSON array, no other text."""
             if not page_text:
                 if self.verbose:
                     print("(empty)")
+                previous_page_text = None  # Reset context on empty page
                 continue
 
-            # Parse page
-            page_cases = self.parse_page(page_num, page_text)
+            # Parse page with sliding window context
+            page_cases = self.parse_page(page_num, page_text, previous_page_text)
+
+            # Update sliding window - current page becomes previous for next iteration
+            previous_page_text = page_text
 
             # Deduplicate and merge
             new_cases = 0
@@ -1079,13 +1103,23 @@ Return only the JSON array, no other text."""
             print(f"Parsing pages {start_page} to {end_page} of {total_pages}")
             print(f"Using model: {self.model}")
             print(f"Max concurrent requests: {max_concurrent}")
+            print(f"Using sliding window for multi-page case handling")
 
-        # Extract all page texts first (fast, sequential is fine)
+        # Extract all page texts first and build sliding window context
         page_data = []
+        page_texts_by_num = {}  # Store all page texts for context lookups
+
         for page_num in range(start_page, end_page + 1):
             page_text = extractor.extract_page(page_num)
             if page_text and len(page_text.strip()) >= 50:
-                page_data.append((page_num, page_text))
+                page_texts_by_num[page_num] = page_text
+
+        # Build page_data with sliding window context
+        for page_num in sorted(page_texts_by_num.keys()):
+            page_text = page_texts_by_num[page_num]
+            # Get previous page text if it exists
+            previous_page_text = page_texts_by_num.get(page_num - 1)
+            page_data.append((page_num, page_text, previous_page_text))
 
         if self.verbose:
             print(f"Extracted {len(page_data)} non-empty pages, parsing concurrently...")
@@ -1094,13 +1128,24 @@ Return only the JSON array, no other text."""
         async with aiohttp.ClientSession() as session:
             semaphore = asyncio.Semaphore(max_concurrent)
 
-            async def parse_page_with_limit(page_num: int, page_text: str):
-                """Parse a page with concurrency limit."""
+            async def parse_page_with_limit(page_num: int, page_text: str, previous_page_text: Optional[str]):
+                """Parse a page with concurrency limit and sliding window context."""
                 async with semaphore:
                     if self.verbose:
                         print(f"Page {page_num}/{end_page}...", end=" ", flush=True)
 
-                    prompt = self.EXTRACTION_PROMPT.format(page_text=page_text)
+                    # Build context window if previous page provided
+                    if previous_page_text:
+                        combined_text = (
+                            f"=== PREVIOUS PAGE (for context) ===\n"
+                            f"{previous_page_text}\n\n"
+                            f"=== CURRENT PAGE {page_num} (extract cases from here) ===\n"
+                            f"{page_text}"
+                        )
+                        prompt = self.EXTRACTION_PROMPT.format(page_text=combined_text)
+                    else:
+                        prompt = self.EXTRACTION_PROMPT.format(page_text=page_text)
+
                     response = await self._call_api_async(session, prompt)
 
                     if response:
@@ -1121,8 +1166,9 @@ Return only the JSON array, no other text."""
                             print("✗ failed", flush=True)
                         return page_num, []
 
-            # Execute all page parsing concurrently
-            tasks = [parse_page_with_limit(page_num, page_text) for page_num, page_text in page_data]
+            # Execute all page parsing concurrently with sliding window
+            tasks = [parse_page_with_limit(page_num, page_text, prev_text)
+                     for page_num, page_text, prev_text in page_data]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Process results in page order for deterministic merging

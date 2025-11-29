@@ -4,10 +4,11 @@ This document explains the performance optimizations implemented in the damages 
 
 ## Summary of Optimizations
 
-The parser has been optimized with two major improvements:
+The parser has been optimized with three major improvements:
 
 1. **Hash Index for O(1) Duplicate Detection** - Speeds up duplicate detection from O(n²) to O(1)
 2. **Async/Concurrent API Calls** - Enables parallel processing of pages for 10-50x speedup
+3. **Sliding Window Context** - Handles cases that span multiple pages (pagination breaks)
 
 ### Expected Performance Improvements
 
@@ -90,15 +91,77 @@ For 655 pages: 655 × (API time + 0.5s) = 30-60 minutes
 Now processes pages concurrently with controlled parallelism:
 
 ```python
-# NEW CODE - Concurrent processing
+# NEW CODE - Concurrent processing with sliding window
 async with aiohttp.ClientSession() as session:
     semaphore = asyncio.Semaphore(max_concurrent=50)  # Limit concurrent requests
 
-    tasks = [parse_page_async(page_num, page_text) for page_num, page_text in pages]
+    # Each page gets previous page as context
+    tasks = [parse_page_async(page_num, page_text, prev_text)
+             for page_num, page_text, prev_text in pages]
     results = await asyncio.gather(*tasks)  # Process all concurrently
 ```
 
 With 50 concurrent requests: 655 pages / 50 = ~13 batches = 3-5 minutes
+
+## 3. Sliding Window Context for Multi-Page Cases
+
+### The Problem: Pagination Breaks
+
+Real-world case entries can span multiple pages:
+
+**Page 10:**
+```
+Litwinenko v. Beaver Lumber Co (2006)
+Female, 69 years
+$15,000 non-pecuniary damages
+Injuries: head, ribs, leg, shoulder...
+```
+
+**Page 11 (continuation - no case header):**
+```
+Liability:
+Trial - 50/50
+Appeal - 15/85 in favour of appellant
+```
+
+Without context, Page 11's content would be **lost** (no case name to match).
+
+### The Solution: Sliding Window
+
+Each page is parsed with the previous page as context:
+
+```python
+# Synchronous version
+previous_page_text = None
+for page_num in range(start_page, end_page + 1):
+    page_text = extract_page(page_num)
+
+    # Parse with previous page context
+    page_cases = parse_page(page_num, page_text, previous_page_text)
+
+    # Current page becomes context for next page
+    previous_page_text = page_text
+```
+
+The LLM receives:
+```
+=== PREVIOUS PAGE (for context) ===
+Litwinenko v. Beaver Lumber Co (2006)
+[...full case details...]
+
+=== CURRENT PAGE 11 (extract cases from here) ===
+Liability:
+Trial - 50/50
+Appeal - 15/85 in favour of appellant
+```
+
+Now the LLM can:
+1. See the case context from Page 10
+2. Recognize Page 11 is a continuation
+3. Extract "Litwinenko v. Beaver Lumber Co (2006)" with the liability info
+4. The deduplication logic merges it with Page 10's entry
+
+**Result**: No data loss, complete case information captured!
 
 ### Ensuring Nothing is Missed
 
