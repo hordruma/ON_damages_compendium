@@ -133,8 +133,8 @@ Return a JSON array of cases. Each case should have:
   - non_pecuniary_damages: Amount in dollars (float)
   - is_provisional: true/false if damages are provisional
   - injuries: Array of injury descriptions
-  - other_damages: Array of {type, amount, description} objects where type is one of: future_loss_of_income, past_loss_of_income, cost_of_future_care, housekeeping_capacity, other
-- family_law_act_claims: Array of {description, amount, category} objects
+  - other_damages: Array of {{type, amount, description}} objects where type is one of: future_loss_of_income, past_loss_of_income, cost_of_future_care, housekeeping_capacity, other
+- family_law_act_claims: Array of {{description, amount, category}} objects
 - comments: Any additional notes or comments
 
 Important:
