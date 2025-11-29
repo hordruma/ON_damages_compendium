@@ -633,8 +633,8 @@ Return only the JSON array, no other text."""
             existing_case['family_law_act_claims'] = existing_fla
 
         # Merge comments
-        existing_comments = existing_case.get('comments', '')
-        new_comments = new_case.get('comments', '')
+        existing_comments = existing_case.get('comments') or ''
+        new_comments = new_case.get('comments') or ''
 
         if new_comments and new_comments not in existing_comments:
             if existing_comments:
