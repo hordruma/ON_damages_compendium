@@ -1336,14 +1336,31 @@ def parse_compendium(
     # Parse (use async mode for 10-50x speedup if enabled)
     if async_mode:
         # Run async version
-        new_cases = asyncio.run(parser.parse_pdf_async(
-            pdf_path,
-            start_page=actual_start_page,
-            end_page=end_page,
-            checkpoint_file=checkpoint_file,
-            output_json=output_json,
-            max_concurrent=max_concurrent
-        ))
+        # Handle both Jupyter (existing event loop) and regular Python
+        try:
+            loop = asyncio.get_running_loop()
+            # We're in Jupyter or another environment with a running loop
+            # Create a task and wait for it using nest_asyncio pattern
+            import nest_asyncio
+            nest_asyncio.apply()
+            new_cases = asyncio.run(parser.parse_pdf_async(
+                pdf_path,
+                start_page=actual_start_page,
+                end_page=end_page,
+                checkpoint_file=checkpoint_file,
+                output_json=output_json,
+                max_concurrent=max_concurrent
+            ))
+        except RuntimeError:
+            # No running loop - use normal asyncio.run()
+            new_cases = asyncio.run(parser.parse_pdf_async(
+                pdf_path,
+                start_page=actual_start_page,
+                end_page=end_page,
+                checkpoint_file=checkpoint_file,
+                output_json=output_json,
+                max_concurrent=max_concurrent
+            ))
     else:
         # Run synchronous version
         new_cases = parser.parse_pdf(
