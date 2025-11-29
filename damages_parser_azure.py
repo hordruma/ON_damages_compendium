@@ -48,10 +48,52 @@ import re
 import asyncio
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set
+from collections import deque
 import pdfplumber
 import requests
 import aiohttp
 from difflib import SequenceMatcher
+
+
+class RateLimiter:
+    """Simple rate limiter using a sliding window approach."""
+
+    def __init__(self, max_requests: int, time_window: float = 60.0):
+        """
+        Initialize rate limiter.
+
+        Args:
+            max_requests: Maximum number of requests allowed in the time window
+            time_window: Time window in seconds (default 60s = 1 minute)
+        """
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.requests = deque()
+
+    async def acquire(self):
+        """
+        Wait if necessary to stay within rate limits.
+
+        Uses a sliding window to track requests and sleeps if limit would be exceeded.
+        """
+        now = time.time()
+
+        # Remove requests outside the time window
+        while self.requests and self.requests[0] < now - self.time_window:
+            self.requests.popleft()
+
+        # If at limit, wait until oldest request expires
+        if len(self.requests) >= self.max_requests:
+            sleep_time = self.requests[0] + self.time_window - now
+            if sleep_time > 0:
+                await asyncio.sleep(sleep_time)
+            # Clean up again after sleeping
+            now = time.time()
+            while self.requests and self.requests[0] < now - self.time_window:
+                self.requests.popleft()
+
+        # Record this request
+        self.requests.append(now)
 
 
 class PDFTextExtractor:
@@ -377,9 +419,17 @@ Return only the JSON array, no other text."""
                         continue
 
                     else:
+                        # Retry on server errors (5xx), fail immediately on client errors (4xx)
                         if self.verbose:
                             text = await response.text()
                             print(f"API error {response.status}: {text}")
+
+                        # Retry on 5xx errors (server-side issues)
+                        if response.status >= 500:
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(2 ** attempt)
+                                continue
+                        # Don't retry on 4xx errors (client-side issues)
                         return None
 
             except Exception as e:
@@ -439,9 +489,17 @@ Return only the JSON array, no other text."""
                         continue
 
                     else:
+                        # Retry on server errors (5xx), fail immediately on client errors (4xx)
                         if self.verbose:
                             text = await response.text()
                             print(f"API error {response.status}: {text}")
+
+                        # Retry on 5xx errors (server-side issues)
+                        if response.status >= 500:
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(2 ** attempt)
+                                continue
+                        # Don't retry on 4xx errors (client-side issues)
                         return None
 
             except Exception as e:
@@ -1067,7 +1125,8 @@ Return only the JSON array, no other text."""
         end_page: Optional[int] = None,
         checkpoint_file: str = "parsing_checkpoint.json",
         output_json: Optional[str] = None,
-        max_concurrent: int = 50
+        max_concurrent: int = 10,
+        requests_per_minute: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Parse the PDF with concurrent API calls for 10-50x speed improvement.
@@ -1081,7 +1140,8 @@ Return only the JSON array, no other text."""
             end_page: Ending page number (None = all pages)
             checkpoint_file: Path to save checkpoints
             output_json: Path to save results incrementally
-            max_concurrent: Maximum concurrent API requests (default 50)
+            max_concurrent: Maximum concurrent API requests (default 10, safe for most APIs)
+            requests_per_minute: Optional rate limit in requests/minute (e.g., 200 for Azure limits)
 
         Returns:
             List of all parsed cases (deduplicated)
@@ -1099,10 +1159,17 @@ Return only the JSON array, no other text."""
         citation_index: Dict[str, Set[int]] = {}
         duplicates_found = 0
 
+        # Create rate limiter if specified
+        rate_limiter = None
+        if requests_per_minute:
+            rate_limiter = RateLimiter(requests_per_minute, time_window=60.0)
+
         if self.verbose:
             print(f"Parsing pages {start_page} to {end_page} of {total_pages}")
             print(f"Using model: {self.model}")
             print(f"Max concurrent requests: {max_concurrent}")
+            if requests_per_minute:
+                print(f"Rate limit: {requests_per_minute} requests/minute")
             print(f"Using sliding window for multi-page case handling")
 
         # Extract all page texts first and build sliding window context
@@ -1145,6 +1212,10 @@ Return only the JSON array, no other text."""
                         prompt = self.EXTRACTION_PROMPT.format(page_text=combined_text)
                     else:
                         prompt = self.EXTRACTION_PROMPT.format(page_text=page_text)
+
+                    # Apply rate limiting if configured
+                    if rate_limiter:
+                        await rate_limiter.acquire()
 
                     response = await self._call_api_async(session, prompt)
 
@@ -1251,7 +1322,8 @@ def parse_compendium(
     end_page: Optional[int] = None,
     verbose: bool = True,
     async_mode: bool = True,
-    max_concurrent: int = 50
+    max_concurrent: int = 10,
+    requests_per_minute: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Parse the Ontario Damages Compendium PDF using Azure AI.
@@ -1271,18 +1343,20 @@ def parse_compendium(
         end_page: Ending page
         verbose: Whether to print progress
         async_mode: If True, use concurrent API calls (10-50x faster, default True)
-        max_concurrent: Maximum concurrent requests when async_mode=True (default 50)
+        max_concurrent: Maximum concurrent requests when async_mode=True (default 10)
+        requests_per_minute: Optional rate limit (e.g., 200 for Azure free tier)
 
     Returns:
         List of parsed case dictionaries
 
     Example:
-        # Fresh parse with Azure OpenAI
+        # Fresh parse with Azure OpenAI and rate limiting
         cases = parse_compendium(
             "2024damagescompendium.pdf",
             endpoint="https://your-resource.openai.azure.com/",
             api_key="your-key",
-            model="gpt-4o"
+            model="gpt-4o",
+            requests_per_minute=200  # Azure rate limit
         )
 
         # Resume after interruption
@@ -1349,7 +1423,8 @@ def parse_compendium(
                 end_page=end_page,
                 checkpoint_file=checkpoint_file,
                 output_json=output_json,
-                max_concurrent=max_concurrent
+                max_concurrent=max_concurrent,
+                requests_per_minute=requests_per_minute
             ))
         except RuntimeError:
             # No running loop - use normal asyncio.run()
@@ -1359,7 +1434,8 @@ def parse_compendium(
                 end_page=end_page,
                 checkpoint_file=checkpoint_file,
                 output_json=output_json,
-                max_concurrent=max_concurrent
+                max_concurrent=max_concurrent,
+                requests_per_minute=requests_per_minute
             ))
     else:
         # Run synchronous version
