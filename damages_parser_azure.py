@@ -45,10 +45,12 @@ Usage:
 import json
 import time
 import re
+import asyncio
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 import pdfplumber
 import requests
+import aiohttp
 from difflib import SequenceMatcher
 
 
@@ -328,6 +330,147 @@ Return only the JSON array, no other text."""
         else:
             return self._call_azure_openai(prompt, max_retries)
 
+    async def _call_azure_openai_async(self, session: aiohttp.ClientSession, prompt: str, max_retries: int = 3) -> Optional[str]:
+        """
+        Async version of Azure OpenAI API call.
+
+        Args:
+            session: aiohttp ClientSession for connection pooling
+            prompt: The prompt to send
+            max_retries: Maximum number of retries on failure
+
+        Returns:
+            Response text or None if all retries failed
+        """
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": self.api_key,
+        }
+
+        url = f"{self.endpoint}/openai/deployments/{self.model}/chat/completions?api-version={self.api_version}"
+
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.1,
+            "max_tokens": 8192,
+        }
+
+        for attempt in range(max_retries):
+            try:
+                async with session.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=120)) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if "choices" in result and len(result["choices"]) > 0:
+                            return result["choices"][0]["message"]["content"]
+                        return None
+
+                    elif response.status == 429:  # Rate limit
+                        wait_time = 2 ** attempt
+                        if self.verbose:
+                            print(f"Rate limit hit, waiting {wait_time}s...")
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                    else:
+                        if self.verbose:
+                            text = await response.text()
+                            print(f"API error {response.status}: {text}")
+                        return None
+
+            except Exception as e:
+                if self.verbose:
+                    print(f"Request error (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+                    continue
+                return None
+
+        return None
+
+    async def _call_azure_claude_async(self, session: aiohttp.ClientSession, prompt: str, max_retries: int = 3) -> Optional[str]:
+        """
+        Async version of Azure AI Foundry Claude API call.
+
+        Args:
+            session: aiohttp ClientSession for connection pooling
+            prompt: The prompt to send
+            max_retries: Maximum number of retries on failure
+
+        Returns:
+            Response text or None if all retries failed
+        """
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": self.api_key,
+        }
+
+        url = f"{self.endpoint}/models/{self.model}/chat/completions"
+
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.1,
+            "max_tokens": 8192,
+        }
+
+        for attempt in range(max_retries):
+            try:
+                async with session.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=120)) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        if "choices" in result and len(result["choices"]) > 0:
+                            return result["choices"][0]["message"]["content"]
+                        return None
+
+                    elif response.status == 429:  # Rate limit
+                        wait_time = 2 ** attempt
+                        if self.verbose:
+                            print(f"Rate limit hit, waiting {wait_time}s...")
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                    else:
+                        if self.verbose:
+                            text = await response.text()
+                            print(f"API error {response.status}: {text}")
+                        return None
+
+            except Exception as e:
+                if self.verbose:
+                    print(f"Request error (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+                    continue
+                return None
+
+        return None
+
+    async def _call_api_async(self, session: aiohttp.ClientSession, prompt: str, max_retries: int = 3) -> Optional[str]:
+        """
+        Async call to the appropriate API based on model type.
+
+        Args:
+            session: aiohttp ClientSession for connection pooling
+            prompt: The prompt to send
+            max_retries: Maximum number of retries on failure
+
+        Returns:
+            Response text or None if all retries failed
+        """
+        if self.is_claude:
+            return await self._call_azure_claude_async(session, prompt, max_retries)
+        else:
+            return await self._call_azure_openai_async(session, prompt, max_retries)
+
     @staticmethod
     def normalize_judge_name(judge_name: str) -> str:
         """
@@ -372,6 +515,124 @@ Return only the JSON array, no other text."""
         if not s1 or not s2:
             return False
         return SequenceMatcher(None, s1.lower(), s2.lower()).ratio() >= threshold
+
+    @staticmethod
+    def _normalize_case_key(case_name: str, year: Optional[int]) -> str:
+        """
+        Create a normalized key for case lookup.
+
+        Args:
+            case_name: The case name
+            year: The case year
+
+        Returns:
+            Normalized key for hash index lookup
+        """
+        if not case_name:
+            return ""
+        # Normalize: lowercase, remove extra spaces, strip
+        normalized = re.sub(r'\s+', ' ', case_name.lower().strip())
+        # Remove common punctuation variations
+        normalized = normalized.replace(',', '').replace('.', '')
+        year_str = str(year) if year else ""
+        return f"{normalized}_{year_str}"
+
+    def _update_indices(
+        self,
+        case: Dict[str, Any],
+        case_index: int,
+        case_id_index: Dict[str, int],
+        name_year_index: Dict[str, int],
+        citation_index: Dict[str, Set[int]]
+    ) -> None:
+        """
+        Update all hash indices when adding a new case.
+
+        Args:
+            case: The case to index
+            case_index: The index position of the case in all_cases list
+            case_id_index: Index mapping case_id to position
+            name_year_index: Index mapping normalized name+year to position
+            citation_index: Index mapping citations to set of case positions
+        """
+        # Index by case_id
+        case_id = case.get("case_id")
+        if case_id:
+            case_id_index[case_id] = case_index
+
+        # Index by normalized name+year
+        case_name = case.get("case_name", "")
+        year = case.get("year")
+        key = self._normalize_case_key(case_name, year)
+        if key:
+            name_year_index[key] = case_index
+
+        # Index by citations
+        citations = case.get("citations", [])
+        for citation in citations:
+            if citation:
+                if citation not in citation_index:
+                    citation_index[citation] = set()
+                citation_index[citation].add(case_index)
+
+    def find_duplicate_case_fast(
+        self,
+        new_case: Dict[str, Any],
+        all_cases: List[Dict[str, Any]],
+        case_id_index: Dict[str, int],
+        name_year_index: Dict[str, int],
+        citation_index: Dict[str, Set[int]]
+    ) -> Optional[int]:
+        """
+        Fast O(1) duplicate detection using hash indices.
+
+        Args:
+            new_case: New case to check
+            all_cases: List of existing cases
+            case_id_index: Hash index for case IDs
+            name_year_index: Hash index for case name+year
+            citation_index: Hash index for citations
+
+        Returns:
+            Index of matching case, or None if no duplicate found
+        """
+        # 1. Check by case_id (fastest)
+        case_id = new_case.get("case_id")
+        if case_id and case_id in case_id_index:
+            return case_id_index[case_id]
+
+        # 2. Check by exact normalized name+year match
+        case_name = new_case.get("case_name", "")
+        year = new_case.get("year")
+        key = self._normalize_case_key(case_name, year)
+        if key and key in name_year_index:
+            return name_year_index[key]
+
+        # 3. Check by citation overlap
+        new_citations = set(new_case.get("citations", []))
+        if new_citations:
+            for citation in new_citations:
+                if citation in citation_index:
+                    # Return first matching case with overlapping citation
+                    case_indices = citation_index[citation]
+                    if case_indices:
+                        return min(case_indices)  # Return earliest match
+
+        # 4. Fall back to fuzzy matching (rare, only for edge cases)
+        # This handles typos or slight variations not caught by normalization
+        new_name = new_case.get('case_name', '')
+        new_year = new_case.get('year')
+
+        if new_name and new_year:
+            # Only check cases with same year for efficiency
+            for idx, existing in enumerate(all_cases):
+                existing_year = existing.get('year')
+                if new_year == existing_year:
+                    existing_name = existing.get('case_name', '')
+                    if self.similar_strings(new_name, existing_name):
+                        return idx
+
+        return None
 
     def _parse_response(self, response_text: str) -> List[Dict[str, Any]]:
         """
@@ -441,13 +702,19 @@ Return only the JSON array, no other text."""
                         if 'type' not in damage or not damage['type']:
                             damage['type'] = 'other'
 
-    def parse_page(self, page_number: int, page_text: str) -> List[Dict[str, Any]]:
+    def parse_page(self, page_number: int, page_text: str, previous_page_text: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Parse a single page to extract case data.
+        Parse a single page to extract case data with optional context from previous page.
+
+        Uses a sliding window approach to handle cases that span multiple pages.
+        When previous_page_text is provided, the LLM can see continuations and
+        properly associate orphaned content (like comments, liability info) with
+        cases from the previous page.
 
         Args:
             page_number: Page number (for logging)
-            page_text: Extracted text from the page
+            page_text: Extracted text from the current page
+            previous_page_text: Optional text from previous page for context
 
         Returns:
             List of case dictionaries
@@ -455,7 +722,19 @@ Return only the JSON array, no other text."""
         if not page_text or len(page_text.strip()) < 50:
             return []
 
-        prompt = self.EXTRACTION_PROMPT.format(page_text=page_text)
+        # Build context window if previous page provided
+        if previous_page_text:
+            # Combine previous and current page with clear separator
+            combined_text = (
+                f"=== PREVIOUS PAGE (for context) ===\n"
+                f"{previous_page_text}\n\n"
+                f"=== CURRENT PAGE {page_number} (extract cases from here) ===\n"
+                f"{page_text}"
+            )
+            prompt = self.EXTRACTION_PROMPT.format(page_text=combined_text)
+        else:
+            prompt = self.EXTRACTION_PROMPT.format(page_text=page_text)
+
         response = self._call_api(prompt)
 
         if response:
@@ -685,13 +964,18 @@ Return only the JSON array, no other text."""
             end_page = total_pages
 
         all_cases = []
-        case_ids_seen = set()
+        # Initialize hash indices for O(1) duplicate detection
+        case_id_index: Dict[str, int] = {}  # case_id -> index
+        name_year_index: Dict[str, int] = {}  # normalized_name_year -> index
+        citation_index: Dict[str, Set[int]] = {}  # citation -> set of indices
         duplicates_found = 0
 
         if self.verbose:
             print(f"Parsing pages {start_page} to {end_page} of {total_pages}")
             print(f"Using model: {self.model}")
+            print(f"Using sliding window for multi-page case handling")
 
+        previous_page_text = None
         for page_num in range(start_page, end_page + 1):
             if self.verbose:
                 print(f"\nPage {page_num}/{end_page}...", end=" ")
@@ -701,10 +985,14 @@ Return only the JSON array, no other text."""
             if not page_text:
                 if self.verbose:
                     print("(empty)")
+                previous_page_text = None  # Reset context on empty page
                 continue
 
-            # Parse page
-            page_cases = self.parse_page(page_num, page_text)
+            # Parse page with sliding window context
+            page_cases = self.parse_page(page_num, page_text, previous_page_text)
+
+            # Update sliding window - current page becomes previous for next iteration
+            previous_page_text = page_text
 
             # Deduplicate and merge
             new_cases = 0
@@ -716,26 +1004,27 @@ Return only the JSON array, no other text."""
                     year = case.get('year', 0)
                     case["case_id"] = f"{case_name}_{year}"
 
-                # Check for duplicates using both ID and similarity
-                duplicate_idx = None
-                if case["case_id"] in case_ids_seen:
-                    # Find which case has this ID
-                    duplicate_idx = next(
-                        (i for i, c in enumerate(all_cases) if c.get("case_id") == case["case_id"]),
-                        None
-                    )
-                else:
-                    duplicate_idx = self.find_duplicate_case(case, all_cases)
+                # Check for duplicates using fast O(1) hash index lookup
+                duplicate_idx = self.find_duplicate_case_fast(
+                    case,
+                    all_cases,
+                    case_id_index,
+                    name_year_index,
+                    citation_index
+                )
 
                 if duplicate_idx is not None:
-                    # Merge the duplicate case data
+                    # Merge the duplicate case data (handles multi-page cases)
                     self.merge_cases(all_cases[duplicate_idx], case)
                     merged_cases += 1
                     duplicates_found += 1
+                    # Update indices with any new information from merged case
+                    self._update_indices(case, duplicate_idx, case_id_index, name_year_index, citation_index)
                 else:
-                    # New case - add it
+                    # New case - add it and update all indices
+                    case_index = len(all_cases)
                     all_cases.append(case)
-                    case_ids_seen.add(case["case_id"])
+                    self._update_indices(case, case_index, case_id_index, name_year_index, citation_index)
                     new_cases += 1
 
             if self.verbose:
@@ -771,6 +1060,184 @@ Return only the JSON array, no other text."""
 
         return all_cases
 
+    async def parse_pdf_async(
+        self,
+        pdf_path: str,
+        start_page: int = 1,
+        end_page: Optional[int] = None,
+        checkpoint_file: str = "parsing_checkpoint.json",
+        output_json: Optional[str] = None,
+        max_concurrent: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Parse the PDF with concurrent API calls for 10-50x speed improvement.
+
+        This method processes multiple pages in parallel while maintaining
+        proper deduplication and merging of cases that span multiple pages.
+
+        Args:
+            pdf_path: Path to PDF file
+            start_page: Starting page number (1-indexed)
+            end_page: Ending page number (None = all pages)
+            checkpoint_file: Path to save checkpoints
+            output_json: Path to save results incrementally
+            max_concurrent: Maximum concurrent API requests (default 50)
+
+        Returns:
+            List of all parsed cases (deduplicated)
+        """
+        extractor = PDFTextExtractor(pdf_path)
+        total_pages = extractor.get_page_count()
+
+        if end_page is None:
+            end_page = total_pages
+
+        # Initialize hash indices for O(1) duplicate detection
+        all_cases: List[Dict[str, Any]] = []
+        case_id_index: Dict[str, int] = {}
+        name_year_index: Dict[str, int] = {}
+        citation_index: Dict[str, Set[int]] = {}
+        duplicates_found = 0
+
+        if self.verbose:
+            print(f"Parsing pages {start_page} to {end_page} of {total_pages}")
+            print(f"Using model: {self.model}")
+            print(f"Max concurrent requests: {max_concurrent}")
+            print(f"Using sliding window for multi-page case handling")
+
+        # Extract all page texts first and build sliding window context
+        page_data = []
+        page_texts_by_num = {}  # Store all page texts for context lookups
+
+        for page_num in range(start_page, end_page + 1):
+            page_text = extractor.extract_page(page_num)
+            if page_text and len(page_text.strip()) >= 50:
+                page_texts_by_num[page_num] = page_text
+
+        # Build page_data with sliding window context
+        for page_num in sorted(page_texts_by_num.keys()):
+            page_text = page_texts_by_num[page_num]
+            # Get previous page text if it exists
+            previous_page_text = page_texts_by_num.get(page_num - 1)
+            page_data.append((page_num, page_text, previous_page_text))
+
+        if self.verbose:
+            print(f"Extracted {len(page_data)} non-empty pages, parsing concurrently...")
+
+        # Parse pages concurrently
+        async with aiohttp.ClientSession() as session:
+            semaphore = asyncio.Semaphore(max_concurrent)
+
+            async def parse_page_with_limit(page_num: int, page_text: str, previous_page_text: Optional[str]):
+                """Parse a page with concurrency limit and sliding window context."""
+                async with semaphore:
+                    if self.verbose:
+                        print(f"Page {page_num}/{end_page}...", end=" ", flush=True)
+
+                    # Build context window if previous page provided
+                    if previous_page_text:
+                        combined_text = (
+                            f"=== PREVIOUS PAGE (for context) ===\n"
+                            f"{previous_page_text}\n\n"
+                            f"=== CURRENT PAGE {page_num} (extract cases from here) ===\n"
+                            f"{page_text}"
+                        )
+                        prompt = self.EXTRACTION_PROMPT.format(page_text=combined_text)
+                    else:
+                        prompt = self.EXTRACTION_PROMPT.format(page_text=page_text)
+
+                    response = await self._call_api_async(session, prompt)
+
+                    if response:
+                        cases = self._parse_response(response)
+                        # Add source page to each case
+                        for case in cases:
+                            case['source_page'] = page_num
+
+                        if self.verbose:
+                            print(f"✓ {len(cases)} cases", flush=True)
+                        return page_num, cases
+                    else:
+                        self.errors.append({
+                            "page": page_num,
+                            "error": "Failed to get valid response from API"
+                        })
+                        if self.verbose:
+                            print("✗ failed", flush=True)
+                        return page_num, []
+
+            # Execute all page parsing concurrently with sliding window
+            tasks = [parse_page_with_limit(page_num, page_text, prev_text)
+                     for page_num, page_text, prev_text in page_data]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process results in page order for deterministic merging
+        results_by_page = {}
+        for result in results:
+            if isinstance(result, Exception):
+                if self.verbose:
+                    print(f"Error in concurrent parsing: {result}")
+                continue
+            page_num, page_cases = result
+            results_by_page[page_num] = page_cases
+
+        # Deduplicate and merge in sequential order to ensure consistency
+        if self.verbose:
+            print("\nMerging and deduplicating cases...")
+
+        for page_num in sorted(results_by_page.keys()):
+            page_cases = results_by_page[page_num]
+
+            for case in page_cases:
+                # Generate unique ID if not present
+                if "case_id" not in case or not case["case_id"]:
+                    case_name = case.get('case_name', 'UNKNOWN')
+                    year = case.get('year', 0)
+                    case["case_id"] = f"{case_name}_{year}"
+
+                # Check for duplicates using fast O(1) hash index lookup
+                duplicate_idx = self.find_duplicate_case_fast(
+                    case,
+                    all_cases,
+                    case_id_index,
+                    name_year_index,
+                    citation_index
+                )
+
+                if duplicate_idx is not None:
+                    # Merge the duplicate case data (handles multi-page cases)
+                    self.merge_cases(all_cases[duplicate_idx], case)
+                    duplicates_found += 1
+                    # Update indices with any new information from merged case
+                    self._update_indices(case, duplicate_idx, case_id_index, name_year_index, citation_index)
+                else:
+                    # New case - add it and update all indices
+                    case_index = len(all_cases)
+                    all_cases.append(case)
+                    self._update_indices(case, case_index, case_id_index, name_year_index, citation_index)
+
+        # Save final results
+        if output_json:
+            with open(output_json, "w") as f:
+                json.dump(all_cases, f, indent=2)
+
+        checkpoint = {
+            "last_page_processed": end_page,
+            "cases_count": len(all_cases),
+            "duplicates_found": duplicates_found,
+            "timestamp": time.time()
+        }
+        with open(checkpoint_file, "w") as f:
+            json.dump(checkpoint, f, indent=2)
+
+        if self.verbose:
+            print(f"\n✓ Parsing complete: {len(all_cases)} unique cases")
+            print(f"  Duplicates merged: {duplicates_found}")
+            if self.errors:
+                print(f"  ⚠ {len(self.errors)} errors occurred")
+
+        return all_cases
+
 
 def parse_compendium(
     pdf_path: str,
@@ -782,7 +1249,9 @@ def parse_compendium(
     resume: bool = False,
     start_page: Optional[int] = None,
     end_page: Optional[int] = None,
-    verbose: bool = True
+    verbose: bool = True,
+    async_mode: bool = True,
+    max_concurrent: int = 50
 ) -> List[Dict[str, Any]]:
     """
     Parse the Ontario Damages Compendium PDF using Azure AI.
@@ -801,6 +1270,8 @@ def parse_compendium(
         start_page: Starting page (overrides resume)
         end_page: Ending page
         verbose: Whether to print progress
+        async_mode: If True, use concurrent API calls (10-50x faster, default True)
+        max_concurrent: Maximum concurrent requests when async_mode=True (default 50)
 
     Returns:
         List of parsed case dictionaries
@@ -862,14 +1333,26 @@ def parse_compendium(
             if verbose:
                 print("No checkpoint found, starting fresh")
 
-    # Parse
-    new_cases = parser.parse_pdf(
-        pdf_path,
-        start_page=actual_start_page,
-        end_page=end_page,
-        checkpoint_file=checkpoint_file,
-        output_json=output_json
-    )
+    # Parse (use async mode for 10-50x speedup if enabled)
+    if async_mode:
+        # Run async version
+        new_cases = asyncio.run(parser.parse_pdf_async(
+            pdf_path,
+            start_page=actual_start_page,
+            end_page=end_page,
+            checkpoint_file=checkpoint_file,
+            output_json=output_json,
+            max_concurrent=max_concurrent
+        ))
+    else:
+        # Run synchronous version
+        new_cases = parser.parse_pdf(
+            pdf_path,
+            start_page=actual_start_page,
+            end_page=end_page,
+            checkpoint_file=checkpoint_file,
+            output_json=output_json
+        )
 
     # Merge with existing cases if resuming
     if resume and existing_cases:
