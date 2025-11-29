@@ -167,7 +167,7 @@ class DamagesCompendiumParser:
     """
 
     # Extraction prompt template
-    EXTRACTION_PROMPT = """You are parsing a legal damages compendium. Extract all case information from this page.
+    EXTRACTION_PROMPT = """You are parsing a legal damages compendium. Extract all case information from the CURRENT PAGE text provided below.
 
 CRITICAL INSTRUCTIONS:
 1. Look for section headings at the top of the page (like "HEAD", "SPINE", "ARMS", etc.) - this tells you the region/category
@@ -183,6 +183,7 @@ CRITICAL INSTRUCTIONS:
    - "cost_of_future_care" for future care costs
    - "housekeeping_capacity" for loss of housekeeping
    - "other" only if it doesn't fit above categories
+6. IMPORTANT: Extract ALL cases that appear on the current page, even if they seem to be incomplete or continuing from a previous page
 
 Return a JSON array of cases. Each case should have:
 - case_name: Full case name (plaintiff v. defendant)
@@ -210,10 +211,13 @@ Important:
 - DO NOT create duplicate cases for the same legal matter
 - Parse all monetary amounts as numbers (no $ or commas)
 - If information is not present, use null
-- Return empty array [] if no cases on this page
+- Return empty array [] ONLY if there are truly no cases on this page
 - Normalize all judge names by removing trailing titles
+- If a case appears to continue from a previous page, extract whatever information is available on the current page
 
-Page text:
+{context_section}
+
+CURRENT PAGE - Extract cases from this text:
 {page_text}
 
 Return only the JSON array, no other text."""
@@ -686,18 +690,22 @@ Return only the JSON array, no other text."""
         if not page_text or len(page_text.strip()) < 50:
             return []
 
-        # Build context window if previous page provided
-        if previous_page_text:
-            # Combine previous and current page with clear separator
-            combined_text = (
-                f"=== PREVIOUS PAGE (for context) ===\n"
-                f"{previous_page_text}\n\n"
-                f"=== CURRENT PAGE {page_number} (extract cases from here) ===\n"
-                f"{page_text}"
+        # Build context section if previous page provided
+        if previous_page_text and previous_page_text.strip():
+            context_section = (
+                f"PREVIOUS PAGE CONTEXT (for reference only - DO NOT extract cases from here):\n"
+                f"---\n"
+                f"{previous_page_text}\n"
+                f"---\n"
             )
-            prompt = self.EXTRACTION_PROMPT.format(page_text=combined_text)
         else:
-            prompt = self.EXTRACTION_PROMPT.format(page_text=page_text)
+            context_section = ""
+
+        # Format prompt with clear separation of context and target
+        prompt = self.EXTRACTION_PROMPT.format(
+            context_section=context_section,
+            page_text=page_text
+        )
 
         response = self._call_api(prompt)
 
