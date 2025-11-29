@@ -646,6 +646,12 @@ Return only the JSON array, no other text."""
         existing_comments = existing_case.get('comments') or ''
         new_comments = new_case.get('comments') or ''
 
+        # Normalize comments to strings if they're lists
+        if isinstance(existing_comments, list):
+            existing_comments = ' | '.join(filter(None, existing_comments))
+        if isinstance(new_comments, list):
+            new_comments = ' | '.join(filter(None, new_comments))
+
         if new_comments and new_comments not in existing_comments:
             if existing_comments:
                 existing_case['comments'] = f"{existing_comments} | {new_comments}"
