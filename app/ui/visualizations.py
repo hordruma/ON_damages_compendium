@@ -7,7 +7,7 @@ of damage award data, including inflation-adjusted comparisons.
 
 import plotly.graph_objects as go
 import numpy as np
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 
 from inflation_adjuster import adjust_for_inflation, DEFAULT_REFERENCE_YEAR
 from app.core.config import CHART_MAX_CASES
