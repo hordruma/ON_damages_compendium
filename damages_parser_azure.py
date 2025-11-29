@@ -232,6 +232,17 @@ Return only the JSON array, no other text."""
         # Detect if using Azure OpenAI or Azure AI Foundry (Claude)
         self.is_claude = 'claude' in model.lower()
 
+        # Detect if model uses max_completion_tokens (newer models) vs max_tokens (older models)
+        # Newer models (GPT-4o, GPT-5, o1, o3 series) use max_completion_tokens
+        model_lower = model.lower()
+        self.uses_max_completion_tokens = any([
+            'gpt-4o' in model_lower,
+            'gpt-5' in model_lower,
+            'o1-' in model_lower,
+            'o3-' in model_lower,
+            'chatgpt-4o' in model_lower
+        ])
+
     def _call_azure_openai(self, prompt: str, max_retries: int = 3) -> Optional[str]:
         """
         Call Azure OpenAI API with retry logic.
@@ -259,8 +270,13 @@ Return only the JSON array, no other text."""
                 }
             ],
             "temperature": 0.1,  # Low temperature for consistent extraction
-            "max_tokens": 8192,
         }
+
+        # Use correct token parameter based on model
+        if self.uses_max_completion_tokens:
+            payload["max_completion_tokens"] = 8192
+        else:
+            payload["max_tokens"] = 8192
 
         for attempt in range(max_retries):
             try:
@@ -273,7 +289,12 @@ Return only the JSON array, no other text."""
                     return None
 
                 elif response.status_code == 429:  # Rate limit
-                    wait_time = 2 ** attempt  # Exponential backoff
+                    # Check for Retry-After header, otherwise wait 1 second
+                    retry_after = response.headers.get('Retry-After')
+                    if retry_after and retry_after.isdigit():
+                        wait_time = int(retry_after)
+                    else:
+                        wait_time = 1  # Fixed wait time instead of exponential backoff
                     if self.verbose:
                         print(f"Rate limit hit, waiting {wait_time}s...")
                     time.sleep(wait_time)
@@ -321,8 +342,13 @@ Return only the JSON array, no other text."""
                 }
             ],
             "temperature": 0.1,
-            "max_tokens": 8192,
         }
+
+        # Use correct token parameter based on model
+        if self.uses_max_completion_tokens:
+            payload["max_completion_tokens"] = 8192
+        else:
+            payload["max_tokens"] = 8192
 
         for attempt in range(max_retries):
             try:
@@ -335,7 +361,12 @@ Return only the JSON array, no other text."""
                     return None
 
                 elif response.status_code == 429:  # Rate limit
-                    wait_time = 2 ** attempt
+                    # Check for Retry-After header, otherwise wait 1 second
+                    retry_after = response.headers.get('Retry-After')
+                    if retry_after and retry_after.isdigit():
+                        wait_time = int(retry_after)
+                    else:
+                        wait_time = 1  # Fixed wait time instead of exponential backoff
                     if self.verbose:
                         print(f"Rate limit hit, waiting {wait_time}s...")
                     time.sleep(wait_time)
@@ -399,8 +430,13 @@ Return only the JSON array, no other text."""
                 }
             ],
             "temperature": 0.1,
-            "max_tokens": 8192,
         }
+
+        # Use correct token parameter based on model
+        if self.uses_max_completion_tokens:
+            payload["max_completion_tokens"] = 8192
+        else:
+            payload["max_tokens"] = 8192
 
         for attempt in range(max_retries):
             try:
@@ -412,7 +448,12 @@ Return only the JSON array, no other text."""
                         return None
 
                     elif response.status == 429:  # Rate limit
-                        wait_time = 2 ** attempt
+                        # Check for Retry-After header, otherwise wait 1 second
+                        retry_after = response.headers.get('Retry-After')
+                        if retry_after and retry_after.isdigit():
+                            wait_time = int(retry_after)
+                        else:
+                            wait_time = 1  # Fixed wait time instead of exponential backoff
                         if self.verbose:
                             print(f"Rate limit hit, waiting {wait_time}s...")
                         await asyncio.sleep(wait_time)
@@ -469,8 +510,13 @@ Return only the JSON array, no other text."""
                 }
             ],
             "temperature": 0.1,
-            "max_tokens": 8192,
         }
+
+        # Use correct token parameter based on model
+        if self.uses_max_completion_tokens:
+            payload["max_completion_tokens"] = 8192
+        else:
+            payload["max_tokens"] = 8192
 
         for attempt in range(max_retries):
             try:
@@ -482,7 +528,12 @@ Return only the JSON array, no other text."""
                         return None
 
                     elif response.status == 429:  # Rate limit
-                        wait_time = 2 ** attempt
+                        # Check for Retry-After header, otherwise wait 1 second
+                        retry_after = response.headers.get('Retry-After')
+                        if retry_after and retry_after.isdigit():
+                            wait_time = int(retry_after)
+                        else:
+                            wait_time = 1  # Fixed wait time instead of exponential backoff
                         if self.verbose:
                             print(f"Rate limit hit, waiting {wait_time}s...")
                         await asyncio.sleep(wait_time)
