@@ -25,6 +25,7 @@ ipywidgets>=8.0.0
 python-dotenv>=1.0.0
 requests>=2.31.0
 aiohttp>=3.9.0  # For async API calls in optimized parser
+nest-asyncio>=1.5.0  # For async support in Jupyter notebooks
 
 # PDF Report Generation
 reportlab>=4.0.0
