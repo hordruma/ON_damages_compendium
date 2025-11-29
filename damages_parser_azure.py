@@ -1050,7 +1050,6 @@ def parse_compendium(
     start_page: Optional[int] = None,
     end_page: Optional[int] = None,
     verbose: bool = True,
-    max_concurrent: int = 10,
     requests_per_minute: int = 200
 ) -> List[Dict[str, Any]]:
     """
@@ -1070,7 +1069,6 @@ def parse_compendium(
         start_page: Starting page (overrides resume)
         end_page: Ending page
         verbose: Whether to print progress
-        max_concurrent: Maximum concurrent requests (default: 10, currently not used but accepted for compatibility)
         requests_per_minute: Maximum API requests per minute (default: 200 for Azure)
 
     Returns:
