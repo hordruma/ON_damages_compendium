@@ -846,9 +846,14 @@ Return only the JSON array, no other text."""
                     new_damages = new_plaintiff.get('other_damages') or []
 
                     # Create a set of existing damage types to avoid true duplicates
-                    existing_damage_keys = {(d.get('type'), d.get('amount')) for d in existing_damages}
+                    # Use tuple keys with None handling for safe comparison
+                    existing_damage_keys = {(d.get('type') if isinstance(d, dict) else None,
+                                            d.get('amount') if isinstance(d, dict) else None)
+                                           for d in existing_damages if d}
 
                     for new_damage in new_damages:
+                        if not new_damage or not isinstance(new_damage, dict):
+                            continue
                         damage_key = (new_damage.get('type'), new_damage.get('amount'))
                         if damage_key not in existing_damage_keys:
                             existing_damages.append(new_damage)
@@ -857,11 +862,17 @@ Return only the JSON array, no other text."""
                     # Update non-pecuniary damages if higher (take max)
                     existing_npd = existing_plaintiff.get('non_pecuniary_damages')
                     new_npd = new_plaintiff.get('non_pecuniary_damages')
-                    if new_npd and (not existing_npd or new_npd > existing_npd):
-                        existing_plaintiff['non_pecuniary_damages'] = new_npd
-                        # Also update provisional flag if present
-                        if 'is_provisional' in new_plaintiff:
-                            existing_plaintiff['is_provisional'] = new_plaintiff['is_provisional']
+                    # Safely handle None values and ensure numeric comparison
+                    try:
+                        if new_npd is not None and (existing_npd is None or (isinstance(new_npd, (int, float)) and isinstance(existing_npd, (int, float)) and new_npd > existing_npd)):
+                            existing_plaintiff['non_pecuniary_damages'] = new_npd
+                            # Also update provisional flag if present
+                            if 'is_provisional' in new_plaintiff:
+                                existing_plaintiff['is_provisional'] = new_plaintiff['is_provisional']
+                    except (TypeError, ValueError):
+                        # If comparison fails, prefer the new value if it exists and existing doesn't
+                        if new_npd is not None and existing_npd is None:
+                            existing_plaintiff['non_pecuniary_damages'] = new_npd
 
                     # Merge comments for this plaintiff
                     existing_comments = existing_plaintiff.get('comments') or ''
@@ -884,9 +895,15 @@ Return only the JSON array, no other text."""
         new_fla = new_case.get('family_law_act_claims') or []
 
         # Create a set of existing FLA claim keys to avoid duplicates
-        existing_fla_keys = {(f.get('category'), f.get('amount'), f.get('description')) for f in existing_fla}
+        # Use tuple keys with None handling for safe comparison
+        existing_fla_keys = {(f.get('category') if isinstance(f, dict) else None,
+                             f.get('amount') if isinstance(f, dict) else None,
+                             f.get('description') if isinstance(f, dict) else None)
+                            for f in existing_fla if f}
 
         for new_claim in new_fla:
+            if not new_claim or not isinstance(new_claim, dict):
+                continue
             claim_key = (new_claim.get('category'), new_claim.get('amount'), new_claim.get('description'))
             if claim_key not in existing_fla_keys:
                 existing_fla.append(new_claim)
@@ -1033,6 +1050,7 @@ def parse_compendium(
     start_page: Optional[int] = None,
     end_page: Optional[int] = None,
     verbose: bool = True,
+    max_concurrent: int = 10,
     requests_per_minute: int = 200
 ) -> List[Dict[str, Any]]:
     """
@@ -1052,6 +1070,7 @@ def parse_compendium(
         start_page: Starting page (overrides resume)
         end_page: Ending page
         verbose: Whether to print progress
+        max_concurrent: Maximum concurrent requests (default: 10, currently not used but accepted for compatibility)
         requests_per_minute: Maximum API requests per minute (default: 200 for Azure)
 
     Returns:
