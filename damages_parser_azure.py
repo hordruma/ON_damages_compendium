@@ -527,10 +527,20 @@ Return only the JSON array, no other text."""
             existing_case['source_pages'].append(new_page)
 
         # Merge categories (body regions) - this is crucial for multi-table cases
-        existing_categories = set(filter(None, [existing_case.get('category')]))
+        existing_category = existing_case.get('category')
+        if existing_category is None:
+            existing_categories = set()
+        elif isinstance(existing_category, str):
+            existing_categories = set(filter(None, [existing_category]))
+        else:  # list or other iterable
+            existing_categories = set(filter(None, existing_category))
+
         new_category = new_case.get('category')
         if new_category:
-            existing_categories.add(new_category)
+            if isinstance(new_category, str):
+                existing_categories.add(new_category)
+            elif isinstance(new_category, list):
+                existing_categories.update(new_category)
         if existing_categories:
             existing_case['category'] = list(existing_categories)
 
