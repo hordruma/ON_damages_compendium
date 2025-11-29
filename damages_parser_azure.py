@@ -535,7 +535,14 @@ Return only the JSON array, no other text."""
             existing_case['category'] = list(existing_categories)
 
         # Merge regions
-        existing_regions = set(filter(None, [existing_case.get('region')] if isinstance(existing_case.get('region'), str) else existing_case.get('region', [])))
+        existing_region = existing_case.get('region')
+        if existing_region is None:
+            existing_regions = set()
+        elif isinstance(existing_region, str):
+            existing_regions = set(filter(None, [existing_region]))
+        else:  # list or other iterable
+            existing_regions = set(filter(None, existing_region))
+
         new_region = new_case.get('region')
         if new_region:
             if isinstance(new_region, str):
@@ -546,22 +553,22 @@ Return only the JSON array, no other text."""
             existing_case['region'] = list(existing_regions)
 
         # Merge citations
-        existing_citations = set(existing_case.get('citations', []))
-        new_citations = set(new_case.get('citations', []))
+        existing_citations = set(existing_case.get('citations') or [])
+        new_citations = set(new_case.get('citations') or [])
         merged_citations = existing_citations | new_citations
         if merged_citations:
             existing_case['citations'] = list(merged_citations)
 
         # Merge judges
-        existing_judges = set(existing_case.get('judges', []))
-        new_judges = set(new_case.get('judges', []))
+        existing_judges = set(existing_case.get('judges') or [])
+        new_judges = set(new_case.get('judges') or [])
         merged_judges = existing_judges | new_judges
         if merged_judges:
             existing_case['judges'] = list(merged_judges)
 
         # Merge plaintiffs - match by plaintiff_id or merge all
-        existing_plaintiffs = existing_case.get('plaintiffs', [])
-        new_plaintiffs = new_case.get('plaintiffs', [])
+        existing_plaintiffs = existing_case.get('plaintiffs') or []
+        new_plaintiffs = new_case.get('plaintiffs') or []
 
         if existing_plaintiffs and new_plaintiffs:
             # Create a mapping of existing plaintiffs by ID
@@ -575,15 +582,15 @@ Return only the JSON array, no other text."""
                     existing_plaintiff = existing_by_id[plaintiff_id]
 
                     # Merge injuries
-                    existing_injuries = set(existing_plaintiff.get('injuries', []))
-                    new_injuries = set(new_plaintiff.get('injuries', []))
+                    existing_injuries = set(existing_plaintiff.get('injuries') or [])
+                    new_injuries = set(new_plaintiff.get('injuries') or [])
                     merged_injuries = existing_injuries | new_injuries
                     if merged_injuries:
                         existing_plaintiff['injuries'] = list(merged_injuries)
 
                     # Merge other_damages
-                    existing_damages = existing_plaintiff.get('other_damages', [])
-                    new_damages = new_plaintiff.get('other_damages', [])
+                    existing_damages = existing_plaintiff.get('other_damages') or []
+                    new_damages = new_plaintiff.get('other_damages') or []
 
                     # Create a set of existing damage types to avoid true duplicates
                     existing_damage_keys = {(d.get('type'), d.get('amount')) for d in existing_damages}
@@ -610,8 +617,8 @@ Return only the JSON array, no other text."""
             existing_case['plaintiffs'] = new_plaintiffs
 
         # Merge Family Law Act claims
-        existing_fla = existing_case.get('family_law_act_claims', [])
-        new_fla = new_case.get('family_law_act_claims', [])
+        existing_fla = existing_case.get('family_law_act_claims') or []
+        new_fla = new_case.get('family_law_act_claims') or []
 
         # Create a set of existing FLA claim keys to avoid duplicates
         existing_fla_keys = {(f.get('category'), f.get('amount'), f.get('description')) for f in existing_fla}
