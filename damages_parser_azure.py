@@ -144,8 +144,8 @@ Return a JSON array of cases. Each case should have:
   - is_provisional: true/false if damages are provisional
   - injuries: Array of injury descriptions
   - other_damages: Array of {{type, amount, description}} objects where type is one of: future_loss_of_income, past_loss_of_income, cost_of_future_care, housekeeping_capacity, other
+  - comments: Any additional notes or comments specific to this plaintiff
 - family_law_act_claims: Array of {{description, amount, category}} objects
-- comments: Any additional notes or comments
 
 Important:
 - If multiple plaintiffs exist in ONE case, create ONE case object with multiple items in the plaintiffs array
@@ -619,6 +619,16 @@ Return only the JSON array, no other text."""
                         # Also update provisional flag if present
                         if 'is_provisional' in new_plaintiff:
                             existing_plaintiff['is_provisional'] = new_plaintiff['is_provisional']
+
+                    # Merge comments for this plaintiff
+                    existing_comments = existing_plaintiff.get('comments') or ''
+                    new_comments = new_plaintiff.get('comments') or ''
+
+                    if new_comments and new_comments not in existing_comments:
+                        if existing_comments:
+                            existing_plaintiff['comments'] = f"{existing_comments} | {new_comments}"
+                        else:
+                            existing_plaintiff['comments'] = new_comments
                 else:
                     # New plaintiff - add them
                     existing_plaintiffs.append(new_plaintiff)
@@ -641,22 +651,6 @@ Return only the JSON array, no other text."""
 
         if existing_fla:
             existing_case['family_law_act_claims'] = existing_fla
-
-        # Merge comments
-        existing_comments = existing_case.get('comments') or ''
-        new_comments = new_case.get('comments') or ''
-
-        # Normalize comments to strings if they're lists
-        if isinstance(existing_comments, list):
-            existing_comments = ' | '.join(filter(None, existing_comments))
-        if isinstance(new_comments, list):
-            new_comments = ' | '.join(filter(None, new_comments))
-
-        if new_comments and new_comments not in existing_comments:
-            if existing_comments:
-                existing_case['comments'] = f"{existing_comments} | {new_comments}"
-            else:
-                existing_case['comments'] = new_comments
 
         # Update metadata fields if they're missing
         for field in ['court', 'plaintiff_name', 'defendant_name']:
