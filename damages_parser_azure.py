@@ -7,10 +7,20 @@ using Azure OpenAI (GPT-4o, GPT-4) or Claude models via Azure AI Foundry.
 Features:
 - PDF text extraction with pdfplumber
 - Structured data extraction using Azure OpenAI or Claude
+- Intelligent case merging for duplicates across multiple pages/sections
+- Multi-page source tracking (cases appearing in multiple body region tables)
 - Checkpoint/resume functionality for long-running parses
 - Multi-plaintiff support
 - Family Law Act claims extraction
 - Comprehensive error handling
+
+Case Merging Behavior:
+When a case appears in multiple locations (e.g., different body region tables),
+the parser automatically merges all instances to create a complete record:
+- Combines all body regions/categories (e.g., HEAD + SPINE)
+- Merges all injuries from all instances
+- Preserves all damages and claims
+- Tracks all source pages where the case appeared
 
 Usage:
     from damages_parser_azure import parse_compendium
@@ -461,35 +471,174 @@ Return only the JSON array, no other text."""
             })
             return []
 
-    def is_duplicate_case(self, new_case: Dict[str, Any], existing_cases: List[Dict[str, Any]]) -> bool:
+    def find_duplicate_case(self, new_case: Dict[str, Any], existing_cases: List[Dict[str, Any]]) -> Optional[int]:
         """
-        Check if a case is a duplicate of an existing case.
+        Find if a case is a duplicate and return its index.
 
         Args:
             new_case: New case to check
             existing_cases: List of existing cases
 
         Returns:
-            True if duplicate found
+            Index of matching case, or None if no duplicate found
         """
         new_name = new_case.get('case_name', '')
         new_year = new_case.get('year')
 
-        for existing in existing_cases:
+        for idx, existing in enumerate(existing_cases):
             existing_name = existing.get('case_name', '')
             existing_year = existing.get('year')
 
             # Same year and similar case name
             if new_year == existing_year and self.similar_strings(new_name, existing_name):
-                return True
+                return idx
 
             # Check citation overlap
             new_citations = set(new_case.get('citations', []))
             existing_citations = set(existing.get('citations', []))
             if new_citations and existing_citations and new_citations & existing_citations:
-                return True
+                return idx
 
-        return False
+        return None
+
+    def merge_cases(self, existing_case: Dict[str, Any], new_case: Dict[str, Any]) -> None:
+        """
+        Merge information from a duplicate case into an existing case.
+
+        This is critical for cases appearing in multiple body region tables,
+        ensuring all injuries, regions, and damages are captured.
+
+        Args:
+            existing_case: The case to merge into (modified in-place)
+            new_case: The duplicate case with potentially new information
+        """
+        # Track all source pages
+        if 'source_pages' not in existing_case:
+            # Convert old single source_page to list if needed
+            if 'source_page' in existing_case:
+                existing_case['source_pages'] = [existing_case['source_page']]
+                del existing_case['source_page']
+            else:
+                existing_case['source_pages'] = []
+
+        # Add new source page
+        new_page = new_case.get('source_page')
+        if new_page and new_page not in existing_case['source_pages']:
+            existing_case['source_pages'].append(new_page)
+
+        # Merge categories (body regions) - this is crucial for multi-table cases
+        existing_categories = set(filter(None, [existing_case.get('category')]))
+        new_category = new_case.get('category')
+        if new_category:
+            existing_categories.add(new_category)
+        if existing_categories:
+            existing_case['category'] = list(existing_categories)
+
+        # Merge regions
+        existing_regions = set(filter(None, [existing_case.get('region')] if isinstance(existing_case.get('region'), str) else existing_case.get('region', [])))
+        new_region = new_case.get('region')
+        if new_region:
+            if isinstance(new_region, str):
+                existing_regions.add(new_region)
+            elif isinstance(new_region, list):
+                existing_regions.update(new_region)
+        if existing_regions:
+            existing_case['region'] = list(existing_regions)
+
+        # Merge citations
+        existing_citations = set(existing_case.get('citations', []))
+        new_citations = set(new_case.get('citations', []))
+        merged_citations = existing_citations | new_citations
+        if merged_citations:
+            existing_case['citations'] = list(merged_citations)
+
+        # Merge judges
+        existing_judges = set(existing_case.get('judges', []))
+        new_judges = set(new_case.get('judges', []))
+        merged_judges = existing_judges | new_judges
+        if merged_judges:
+            existing_case['judges'] = list(merged_judges)
+
+        # Merge plaintiffs - match by plaintiff_id or merge all
+        existing_plaintiffs = existing_case.get('plaintiffs', [])
+        new_plaintiffs = new_case.get('plaintiffs', [])
+
+        if existing_plaintiffs and new_plaintiffs:
+            # Create a mapping of existing plaintiffs by ID
+            existing_by_id = {p.get('plaintiff_id'): p for p in existing_plaintiffs if p.get('plaintiff_id')}
+
+            for new_plaintiff in new_plaintiffs:
+                plaintiff_id = new_plaintiff.get('plaintiff_id')
+
+                if plaintiff_id and plaintiff_id in existing_by_id:
+                    # Merge plaintiff data
+                    existing_plaintiff = existing_by_id[plaintiff_id]
+
+                    # Merge injuries
+                    existing_injuries = set(existing_plaintiff.get('injuries', []))
+                    new_injuries = set(new_plaintiff.get('injuries', []))
+                    merged_injuries = existing_injuries | new_injuries
+                    if merged_injuries:
+                        existing_plaintiff['injuries'] = list(merged_injuries)
+
+                    # Merge other_damages
+                    existing_damages = existing_plaintiff.get('other_damages', [])
+                    new_damages = new_plaintiff.get('other_damages', [])
+
+                    # Create a set of existing damage types to avoid true duplicates
+                    existing_damage_keys = {(d.get('type'), d.get('amount')) for d in existing_damages}
+
+                    for new_damage in new_damages:
+                        damage_key = (new_damage.get('type'), new_damage.get('amount'))
+                        if damage_key not in existing_damage_keys:
+                            existing_damages.append(new_damage)
+                            existing_damage_keys.add(damage_key)
+
+                    # Update non-pecuniary damages if higher (take max)
+                    existing_npd = existing_plaintiff.get('non_pecuniary_damages')
+                    new_npd = new_plaintiff.get('non_pecuniary_damages')
+                    if new_npd and (not existing_npd or new_npd > existing_npd):
+                        existing_plaintiff['non_pecuniary_damages'] = new_npd
+                        # Also update provisional flag if present
+                        if 'is_provisional' in new_plaintiff:
+                            existing_plaintiff['is_provisional'] = new_plaintiff['is_provisional']
+                else:
+                    # New plaintiff - add them
+                    existing_plaintiffs.append(new_plaintiff)
+        elif new_plaintiffs and not existing_plaintiffs:
+            # No existing plaintiffs, use new ones
+            existing_case['plaintiffs'] = new_plaintiffs
+
+        # Merge Family Law Act claims
+        existing_fla = existing_case.get('family_law_act_claims', [])
+        new_fla = new_case.get('family_law_act_claims', [])
+
+        # Create a set of existing FLA claim keys to avoid duplicates
+        existing_fla_keys = {(f.get('category'), f.get('amount'), f.get('description')) for f in existing_fla}
+
+        for new_claim in new_fla:
+            claim_key = (new_claim.get('category'), new_claim.get('amount'), new_claim.get('description'))
+            if claim_key not in existing_fla_keys:
+                existing_fla.append(new_claim)
+                existing_fla_keys.add(claim_key)
+
+        if existing_fla:
+            existing_case['family_law_act_claims'] = existing_fla
+
+        # Merge comments
+        existing_comments = existing_case.get('comments', '')
+        new_comments = new_case.get('comments', '')
+
+        if new_comments and new_comments not in existing_comments:
+            if existing_comments:
+                existing_case['comments'] = f"{existing_comments} | {new_comments}"
+            else:
+                existing_case['comments'] = new_comments
+
+        # Update metadata fields if they're missing
+        for field in ['court', 'plaintiff_name', 'defendant_name']:
+            if not existing_case.get(field) and new_case.get(field):
+                existing_case[field] = new_case[field]
 
     def parse_pdf(
         self,
@@ -540,8 +689,9 @@ Return only the JSON array, no other text."""
             # Parse page
             page_cases = self.parse_page(page_num, page_text)
 
-            # Deduplicate and add
+            # Deduplicate and merge
             new_cases = 0
+            merged_cases = 0
             for case in page_cases:
                 # Generate unique ID if not present
                 if "case_id" not in case or not case["case_id"]:
@@ -550,21 +700,33 @@ Return only the JSON array, no other text."""
                     case["case_id"] = f"{case_name}_{year}"
 
                 # Check for duplicates using both ID and similarity
-                is_dup = False
+                duplicate_idx = None
                 if case["case_id"] in case_ids_seen:
-                    is_dup = True
-                elif self.is_duplicate_case(case, all_cases):
-                    is_dup = True
+                    # Find which case has this ID
+                    duplicate_idx = next(
+                        (i for i, c in enumerate(all_cases) if c.get("case_id") == case["case_id"]),
+                        None
+                    )
+                else:
+                    duplicate_idx = self.find_duplicate_case(case, all_cases)
 
-                if not is_dup:
+                if duplicate_idx is not None:
+                    # Merge the duplicate case data
+                    self.merge_cases(all_cases[duplicate_idx], case)
+                    merged_cases += 1
+                    duplicates_found += 1
+                else:
+                    # New case - add it
                     all_cases.append(case)
                     case_ids_seen.add(case["case_id"])
                     new_cases += 1
-                else:
-                    duplicates_found += 1
 
             if self.verbose:
-                print(f"found {new_cases} new cases (total: {len(all_cases)}, {duplicates_found} duplicates skipped)")
+                msg = f"found {new_cases} new"
+                if merged_cases > 0:
+                    msg += f", merged {merged_cases}"
+                msg += f" (total: {len(all_cases)}, {duplicates_found} duplicates processed)"
+                print(msg)
 
             # Save checkpoint
             checkpoint = {
@@ -586,7 +748,7 @@ Return only the JSON array, no other text."""
 
         if self.verbose:
             print(f"\n✓ Parsing complete: {len(all_cases)} unique cases")
-            print(f"  Duplicates skipped: {duplicates_found}")
+            print(f"  Duplicates merged: {duplicates_found}")
             if self.errors:
                 print(f"  ⚠ {len(self.errors)} errors occurred")
 
@@ -694,20 +856,32 @@ def parse_compendium(
 
     # Merge with existing cases if resuming
     if resume and existing_cases:
-        # Create a set of existing case IDs
-        existing_ids = {c["case_id"] for c in existing_cases}
+        # Create a mapping of existing cases by case_id for efficient lookup
+        existing_by_id = {c["case_id"]: i for i, c in enumerate(existing_cases)}
 
-        # Add only new cases
+        new_added = 0
+        merged_on_resume = 0
+
+        # Merge or add each new case
         for case in new_cases:
-            if case["case_id"] not in existing_ids:
+            case_id = case["case_id"]
+            if case_id in existing_by_id:
+                # Merge with existing case
+                idx = existing_by_id[case_id]
+                parser.merge_cases(existing_cases[idx], case)
+                merged_on_resume += 1
+            else:
+                # New case - add it
                 existing_cases.append(case)
+                new_added += 1
 
         # Save merged results
         with open(output_json, "w") as f:
             json.dump(existing_cases, f, indent=2)
 
         if verbose:
-            print(f"Merged: {len(existing_cases)} total cases")
+            print(f"Resume merge: {new_added} new cases added, {merged_on_resume} cases merged")
+            print(f"Total: {len(existing_cases)} cases")
 
         return existing_cases
 
