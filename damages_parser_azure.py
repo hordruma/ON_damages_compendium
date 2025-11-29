@@ -262,7 +262,7 @@ Return only the JSON array, no other text."""
 
         # Set appropriate temperature based on model
         # Some models like Claude 3.5 Sonnet only support temperature=1.0
-        if 'claude-3-5' in model_lower or '3.5-sonnet' in model_lower:
+        if any(x in model_lower for x in ['claude-3-5', '3.5-sonnet', '5-sonnet', 'sonnet-3-5', 'nano']):
             self.temperature = 1.0
         else:
             self.temperature = 0.1  # Low temperature for consistent extraction
