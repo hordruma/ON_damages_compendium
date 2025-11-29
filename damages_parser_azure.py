@@ -377,9 +377,17 @@ Return only the JSON array, no other text."""
                         continue
 
                     else:
+                        # Retry on server errors (5xx), fail immediately on client errors (4xx)
                         if self.verbose:
                             text = await response.text()
                             print(f"API error {response.status}: {text}")
+
+                        # Retry on 5xx errors (server-side issues)
+                        if response.status >= 500:
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(2 ** attempt)
+                                continue
+                        # Don't retry on 4xx errors (client-side issues)
                         return None
 
             except Exception as e:
@@ -439,9 +447,17 @@ Return only the JSON array, no other text."""
                         continue
 
                     else:
+                        # Retry on server errors (5xx), fail immediately on client errors (4xx)
                         if self.verbose:
                             text = await response.text()
                             print(f"API error {response.status}: {text}")
+
+                        # Retry on 5xx errors (server-side issues)
+                        if response.status >= 500:
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(2 ** attempt)
+                                continue
+                        # Don't retry on 4xx errors (client-side issues)
                         return None
 
             except Exception as e:
