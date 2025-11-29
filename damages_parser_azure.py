@@ -13,6 +13,7 @@ Features:
 - Multi-plaintiff support
 - Family Law Act claims extraction
 - Comprehensive error handling and retry logic
+- Rate limiting to stay within Azure API limits
 
 Case Merging Behavior:
 When a case appears in multiple locations (e.g., different body region tables),
@@ -30,6 +31,15 @@ Usage:
         endpoint="https://your-resource.openai.azure.com/",
         api_key="your-api-key",
         model="gpt-4o"
+    )
+
+    # Parse with custom rate limit (Azure default is 200 req/min)
+    cases = parse_compendium(
+        "2024damagescompendium.pdf",
+        endpoint="https://your-resource.openai.azure.com/",
+        api_key="your-api-key",
+        model="gpt-4o",
+        requests_per_minute=188  # Stay under Azure's 200 req/min limit
     )
 
     # Resume from interruption
@@ -50,6 +60,54 @@ from typing import List, Dict, Any, Optional, Set
 import pdfplumber
 import requests
 from difflib import SequenceMatcher
+from collections import deque
+
+
+class RateLimiter:
+    """
+    Rate limiter to control API requests per minute.
+
+    Uses a sliding window approach to track requests and ensure
+    we don't exceed the specified rate limit.
+    """
+
+    def __init__(self, requests_per_minute: int = 200):
+        """
+        Initialize the rate limiter.
+
+        Args:
+            requests_per_minute: Maximum number of requests allowed per minute
+        """
+        self.requests_per_minute = requests_per_minute
+        self.request_times: deque = deque()
+        self.window_seconds = 60.0
+
+    def wait_if_needed(self):
+        """
+        Wait if necessary to stay within rate limits.
+
+        This method should be called before making each API request.
+        It will automatically sleep if we're approaching the rate limit.
+        """
+        now = time.time()
+
+        # Remove requests older than our window
+        while self.request_times and self.request_times[0] < now - self.window_seconds:
+            self.request_times.popleft()
+
+        # If we're at the limit, wait until the oldest request falls out of the window
+        if len(self.request_times) >= self.requests_per_minute:
+            oldest_request = self.request_times[0]
+            sleep_time = (oldest_request + self.window_seconds) - now
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+                # Clean up old requests after sleeping
+                now = time.time()
+                while self.request_times and self.request_times[0] < now - self.window_seconds:
+                    self.request_times.popleft()
+
+        # Record this request
+        self.request_times.append(time.time())
 
 
 class PDFTextExtractor:
@@ -166,7 +224,8 @@ Return only the JSON array, no other text."""
         api_key: str,
         model: str,
         api_version: str = "2024-02-15-preview",
-        verbose: bool = True
+        verbose: bool = True,
+        rate_limiter: Optional[RateLimiter] = None
     ):
         """
         Initialize the parser.
@@ -177,12 +236,14 @@ Return only the JSON array, no other text."""
             model: Model deployment name (e.g., "gpt-4o", "claude-3-5-sonnet")
             api_version: Azure OpenAI API version
             verbose: Whether to print progress messages
+            rate_limiter: Optional rate limiter to control API request rate
         """
         self.endpoint = endpoint.rstrip('/')
         self.api_key = api_key
         self.model = model
         self.api_version = api_version
         self.verbose = verbose
+        self.rate_limiter = rate_limiter
         self.errors: List[Dict[str, Any]] = []
 
         # Detect if using Azure OpenAI or Azure AI Foundry (Claude)
@@ -199,6 +260,13 @@ Return only the JSON array, no other text."""
             'chatgpt-4o' in model_lower
         ])
 
+        # Set appropriate temperature based on model
+        # Some models like Claude 3.5 Sonnet only support temperature=1.0
+        if 'claude-3-5' in model_lower or '3.5-sonnet' in model_lower:
+            self.temperature = 1.0
+        else:
+            self.temperature = 0.1  # Low temperature for consistent extraction
+
     def _call_azure_openai(self, prompt: str, max_retries: int = 3) -> Optional[str]:
         """
         Call Azure OpenAI API with retry logic.
@@ -210,6 +278,10 @@ Return only the JSON array, no other text."""
         Returns:
             Response text or None if all retries failed
         """
+        # Apply rate limiting before making the request
+        if self.rate_limiter:
+            self.rate_limiter.wait_if_needed()
+
         headers = {
             "Content-Type": "application/json",
             "api-key": self.api_key,
@@ -225,7 +297,7 @@ Return only the JSON array, no other text."""
                     "content": prompt
                 }
             ],
-            "temperature": 0.1,  # Low temperature for consistent extraction
+            "temperature": self.temperature,
         }
 
         # Use correct token parameter based on model
@@ -282,6 +354,10 @@ Return only the JSON array, no other text."""
         Returns:
             Response text or None if all retries failed
         """
+        # Apply rate limiting before making the request
+        if self.rate_limiter:
+            self.rate_limiter.wait_if_needed()
+
         headers = {
             "Content-Type": "application/json",
             "api-key": self.api_key,
@@ -297,7 +373,7 @@ Return only the JSON array, no other text."""
                     "content": prompt
                 }
             ],
-            "temperature": 0.1,
+            "temperature": self.temperature,
         }
 
         # Use correct token parameter based on model
@@ -937,9 +1013,6 @@ Return only the JSON array, no other text."""
                 with open(output_json, "w") as f:
                     json.dump(all_cases, f, indent=2)
 
-            # Rate limiting - small delay between pages
-            time.sleep(0.5)
-
         if self.verbose:
             print(f"\n✓ Parsing complete: {len(all_cases)} unique cases")
             print(f"  Duplicates merged: {duplicates_found}")
@@ -959,7 +1032,8 @@ def parse_compendium(
     resume: bool = False,
     start_page: Optional[int] = None,
     end_page: Optional[int] = None,
-    verbose: bool = True
+    verbose: bool = True,
+    requests_per_minute: int = 200
 ) -> List[Dict[str, Any]]:
     """
     Parse the Ontario Damages Compendium PDF using Azure AI.
@@ -978,6 +1052,7 @@ def parse_compendium(
         start_page: Starting page (overrides resume)
         end_page: Ending page
         verbose: Whether to print progress
+        requests_per_minute: Maximum API requests per minute (default: 200 for Azure)
 
     Returns:
         List of parsed case dictionaries
@@ -1000,17 +1075,22 @@ def parse_compendium(
             resume=True
         )
 
-        # Parse specific page range
+        # Parse with custom rate limit
         cases = parse_compendium(
             "2024damagescompendium.pdf",
             endpoint="https://your-resource.openai.azure.com/",
             api_key="your-key",
             model="gpt-4o",
-            start_page=100,
-            end_page=200
+            requests_per_minute=188  # Stay under Azure's 200 req/min limit
         )
     """
-    parser = DamagesCompendiumParser(endpoint, api_key, model, verbose=verbose)
+    # Create rate limiter if requests_per_minute is specified
+    rate_limiter = RateLimiter(requests_per_minute) if requests_per_minute > 0 else None
+
+    if verbose and rate_limiter:
+        print(f"Rate limiting enabled: {requests_per_minute} requests/minute")
+
+    parser = DamagesCompendiumParser(endpoint, api_key, model, verbose=verbose, rate_limiter=rate_limiter)
 
     actual_start_page = start_page if start_page else 1
     existing_cases = []
