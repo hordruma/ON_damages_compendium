@@ -92,7 +92,7 @@ Extract the following information and return as JSON:
   "year": year as integer or null,
   "citation": "Citation string" or null,
   "court": "Court name" or null,
-  "judge": "Judge name (normalized, without J./J.A.)" or null,
+  "judge": "Judge's LAST NAME ONLY (e.g., 'Smith' not 'A. Smith J.')" or null,
   "sex": "M" or "F" or null,
   "age": age as integer or null,
   "non_pecuniary_damages": amount in dollars (number, no $ or commas) or null,
@@ -105,7 +105,8 @@ Extract the following information and return as JSON:
 
 IMPORTANT:
 - Set "is_continuation": true if this row has no case name or citation (it's continuing the previous case)
-- Normalize judge names: remove "J.", "J.A.", "C.J." suffixes
+- Judge names: Extract LAST NAME ONLY, no first initials, no titles (J., J.A., J.J.A., C.J., etc.)
+  Examples: "Smith J." -> "Smith", "A. Brown J.A." -> "Brown", "Hon. Jones" -> "Jones"
 - Parse monetary amounts as numbers only (no $ or commas)
 - Return only valid JSON, no other text
 
@@ -214,6 +215,54 @@ Return the JSON object:"""
                 return None
 
         return None
+
+    @staticmethod
+    def normalize_judge_name(judge_name: str) -> str:
+        """
+        Normalize judge names to last name only.
+
+        Examples:
+            "Smith J." -> "Smith"
+            "A. Smith J.A." -> "Smith"
+            "Hon. John Smith J." -> "Smith"
+            "Smith, J." -> "Smith"
+            "Brown J.J.A." -> "Brown"
+
+        Args:
+            judge_name: Raw judge name
+
+        Returns:
+            Normalized last name only
+        """
+        if not judge_name:
+            return ""
+
+        name = judge_name.strip()
+
+        # Remove trailing titles and suffixes (J., J.A., J.J.A., C.J., etc.)
+        name = re.sub(r',?\s*(J\.J\.A\.|J\.A\.|J\.|C\.J\.|C\.J\.O\.|C\.J\.C\.)$', '', name, flags=re.IGNORECASE)
+
+        # Remove "The Honourable", "Hon.", etc. at start
+        name = re.sub(r'^(The\s+)?(Hon\.?|Honourable)\s+', '', name, flags=re.IGNORECASE)
+
+        # Remove any remaining commas
+        name = name.replace(',', '')
+
+        # Standardize spacing
+        name = re.sub(r'\s+', ' ', name).strip()
+
+        # Extract last name (last word after splitting)
+        # This handles "A. Smith", "John Smith", "A.B. Smith" -> "Smith"
+        if name:
+            parts = name.split()
+            if parts:
+                # Last part is the last name
+                last_name = parts[-1]
+                # Clean up any remaining periods
+                last_name = last_name.rstrip('.')
+                return last_name
+
+        return ""
 
     def detect_section_header(self, page_text: str) -> str:
         """
@@ -329,6 +378,11 @@ Return the JSON object:"""
                 data = json.loads(response)
                 data['source_page'] = page_number
                 data['category'] = section
+
+                # Normalize judge name to last name only
+                if data.get('judge'):
+                    data['judge'] = self.normalize_judge_name(data['judge'])
+
                 return data
             except json.JSONDecodeError as e:
                 if self.verbose:
