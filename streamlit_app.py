@@ -45,18 +45,17 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for professional styling with improved UX
+# Custom CSS for professional styling with improved UX and dark mode support
 st.markdown("""
 <style>
+    /* Light mode defaults */
     .main-header {
         font-size: 2.5rem;
         font-weight: 700;
-        color: #111827;
         margin-bottom: 0.5rem;
     }
     .sub-header {
         font-size: 1.15rem;
-        color: #4b5563;
         margin-bottom: 2rem;
         line-height: 1.6;
     }
@@ -75,10 +74,8 @@ st.markdown("""
         border-radius: 0.625rem;
         padding: 1.25rem;
         margin-bottom: 1.25rem;
-        background-color: #f9fafb;
     }
     .damage-summary {
-        background-color: #d1fae5;
         border-left: 5px solid #059669;
         padding: 1.25rem;
         margin: 1rem 0;
@@ -87,7 +84,6 @@ st.markdown("""
     .metric-value {
         font-size: 1.75rem;
         font-weight: 700;
-        color: #047857;
     }
     .similarity-score {
         color: #4f46e5;
@@ -98,24 +94,30 @@ st.markdown("""
     .stMarkdown {
         font-size: 1.05rem;
         line-height: 1.7;
-        color: #1f2937;
     }
     /* Better expander visibility */
     .streamlit-expanderHeader {
         font-size: 1.1rem !important;
         font-weight: 600 !important;
-        color: #111827 !important;
     }
     /* Improve metric contrast */
     [data-testid="stMetricValue"] {
         font-size: 1.8rem;
         font-weight: 700;
-        color: #111827;
     }
     /* Better button contrast */
     .stButton>button {
         font-weight: 600;
         font-size: 1rem;
+    }
+
+    /* Dark mode overrides - use Streamlit's color variables instead of hardcoded colors */
+    [data-theme="dark"] .case-card {
+        border-color: #4b5563;
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+    [data-theme="dark"] .damage-summary {
+        background-color: rgba(5, 150, 105, 0.15);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -331,15 +333,39 @@ with tab1:
         label_visibility="collapsed"
     )
 
-    # Demographics - moved from sidebar for better UX
-    st.markdown("#### Optional Filters")
-    col_demo1, col_demo2 = st.columns(2)
+    # Case Characteristics - moved from sidebar for better workflow
+    st.markdown("#### Case Characteristics (Optional)")
+    st.caption("Additional filters for case characteristics")
 
-    with col_demo1:
-        gender = st.radio("Gender:", ["Male", "Female", "Not Specified"], index=2, horizontal=True)
+    # Load compendium regions for status filters
+    status_filters = {}
+    compendium_regions_for_status = None
+    try:
+        with open("compendium_regions.json", "r") as f:
+            compendium_regions_for_status = json.load(f)
+    except:
+        pass
 
-    with col_demo2:
-        age = st.slider("Age:", 5, 100, 35, help="Age of plaintiff at time of injury")
+    if compendium_regions_for_status and "status_filters" in compendium_regions_for_status:
+        # Create columns for better layout
+        num_filters = len(compendium_regions_for_status["status_filters"])
+        cols_per_row = 3
+        rows_needed = (num_filters + cols_per_row - 1) // cols_per_row
+
+        filters_list = list(compendium_regions_for_status["status_filters"].items())
+
+        for row_idx in range(rows_needed):
+            cols = st.columns(cols_per_row)
+            for col_idx in range(cols_per_row):
+                filter_idx = row_idx * cols_per_row + col_idx
+                if filter_idx < len(filters_list):
+                    filter_id, filter_data = filters_list[filter_idx]
+                    with cols[col_idx]:
+                        status_filters[filter_id] = st.checkbox(
+                            filter_data["label"],
+                            help=filter_data["description"],
+                            key=f"status_{filter_id}"
+                        )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -353,6 +379,13 @@ with tab1:
 
 with st.sidebar:
     st.header("Search Parameters")
+
+    # Demographics - back in sidebar for better organization
+    st.subheader("Demographics")
+    gender = st.radio("Gender:", ["Male", "Female", "Not Specified"], index=2, horizontal=False)
+    age = st.slider("Age:", 5, 100, 35, help="Age of plaintiff at time of injury")
+
+    st.divider()
 
     # Load compendium regions
     compendium_regions = None
@@ -378,22 +411,6 @@ with st.sidebar:
     else:
         # Fallback to simple text input if config not available
         st.info("Using simplified injury search - describe injuries in the text box below")
-
-    st.divider()
-
-    # Status Filters (checkboxes for non-injury attributes)
-    st.subheader("Case Characteristics")
-    st.caption("Additional filters for case characteristics")
-
-    status_filters = {}
-
-    if compendium_regions and "status_filters" in compendium_regions:
-        for filter_id, filter_data in compendium_regions["status_filters"].items():
-            status_filters[filter_id] = st.checkbox(
-                filter_data["label"],
-                help=filter_data["description"],
-                key=f"status_{filter_id}"
-            )
 
     st.divider()
 
@@ -536,38 +553,14 @@ with tab1:
             else:
                 st.info(f"🔍 Showing top {len(results)} of {num_results} requested cases")
 
-            # Extract damages for summary
+            # Extract damages for charts
             damages_values = []
             for case, emb_sim, combined_score in results:
                 damage_val = extract_damages_value(case)
                 if damage_val:
                     damages_values.append(damage_val)
 
-            # Damage summary metrics
-            if damages_values:
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    st.markdown('<div class="damage-summary">', unsafe_allow_html=True)
-                    st.markdown("**Median Award**")
-                    st.markdown(f'<div class="metric-value">${np.median(damages_values):,.0f}</div>', unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                with col2:
-                    st.markdown('<div class="damage-summary">', unsafe_allow_html=True)
-                    st.markdown("**Range (Min)**")
-                    st.markdown(f'<div class="metric-value">${np.min(damages_values):,.0f}</div>', unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                with col3:
-                    st.markdown('<div class="damage-summary">', unsafe_allow_html=True)
-                    st.markdown("**Range (Max)**")
-                    st.markdown(f'<div class="metric-value">${np.max(damages_values):,.0f}</div>', unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                st.caption(f"Based on {len(damages_values)} cases with identified damage awards")
-
-            # Charts Section
+            # Charts Section (min/med/max shown in cap chart below)
             if damages_values and len(results) > 0:
                 st.divider()
 
