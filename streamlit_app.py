@@ -319,10 +319,18 @@ with tab1:
 
     st.markdown("### 🔍 Describe the Injury")
 
-    # Pre-populate if analysis exists
+    # Pre-populate if analysis exists (from expert report analyzer)
     default_injury_text = ""
     if st.session_state.analysis_data:
-        default_injury_text = st.session_state.analysis_data.get('injury_description', '')
+        # Build injury text from extracted injuries and sequelae
+        injuries = st.session_state.analysis_data.get('injuries', [])
+        sequelae = st.session_state.analysis_data.get('sequelae', [])
+        parts = []
+        if injuries:
+            parts.append("; ".join(injuries))
+        if sequelae:
+            parts.append("; ".join(sequelae))
+        default_injury_text = " | ".join(parts) if parts else ""
 
     injury_text = st.text_area(
         "Injury details",
@@ -487,17 +495,9 @@ with st.sidebar:
         help="Maximum number of cases to return"
     )
 
-    min_similarity = st.slider(
-        "Minimum similarity (%):",
-        min_value=0,
-        max_value=100,
-        value=0,
-        step=5,
-        help="Filter out cases below this similarity threshold"
-    )
-
-    # Store legacy selected_regions as empty for backward compatibility
-    selected_regions = []
+    # Wire injury categories to selected_regions for exclusive filtering
+    # selected_regions is used as an exclusive filter: only cases with at least one selected region
+    selected_regions = selected_injury_categories
 
 with tab1:
     # =============================================================================
@@ -509,10 +509,7 @@ with tab1:
             st.warning("⚠️ Please enter an injury description")
         else:
             with st.spinner("Searching comparable cases..."):
-                # Convert similarity percentage to decimal (0-1 range)
-                min_similarity_threshold = min_similarity / 100.0
-
-                # Get search results
+                # Get search results (no minimum threshold - user sees all results)
                 results = search_cases(
                     injury_text,
                     selected_regions,
@@ -523,14 +520,6 @@ with tab1:
                     age=age,
                     top_n=num_results
                 )
-
-                # Apply similarity filtering
-                if min_similarity_threshold > 0:
-                    results = [
-                        (case, emb_sim, combined_score)
-                        for case, emb_sim, combined_score in results
-                        if combined_score >= min_similarity_threshold
-                    ]
 
             # Store results in session state
             st.session_state.search_results = {
@@ -547,11 +536,8 @@ with tab1:
             st.divider()
             st.header("Search Results")
 
-            # Display filter info if active
-            if min_similarity_threshold > 0:
-                st.info(f"🔍 Showing {len(results)} cases with similarity ≥ {min_similarity}% (filtered from top {num_results})")
-            else:
-                st.info(f"🔍 Showing top {len(results)} of {num_results} requested cases")
+            # Display search info
+            st.info(f"🔍 Showing {len(results)} comparable cases (sorted by relevance)")
 
             # Extract damages for charts
             damages_values = []
