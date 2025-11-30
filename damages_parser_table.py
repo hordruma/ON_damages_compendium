@@ -1,15 +1,17 @@
 """
-Ontario Damages Compendium Parser - Table-Based Extraction
+Ontario Damages Compendium Parser - Hybrid Camelot + LLM Approach
 
 This is a more efficient alternative to damages_parser_azure.py that:
-- Extracts tables directly from PDF using pdfplumber
-- Processes rows one at a time (cheaper, faster)
+- Extracts tables directly from PDF using Camelot (better table detection)
+- Processes rows one at a time with LLM (handles multi-plaintiff cases)
 - Uses column headers to pre-label data
 - Deterministically merges rows without citations into previous case
 - Tracks body region from section headers
 
 Advantages over full-page extraction:
 - 10-50x cheaper (sends only row text, not full pages)
+- Better table detection (Camelot lattice-based extraction)
+- Handles complex cases (multiple plaintiffs in one cell)
 - Faster processing (smaller prompts)
 - More reliable (structured input)
 - Works better with lighter models (5-nano, 4o-mini)
@@ -32,7 +34,7 @@ import time
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set, Tuple
-import pdfplumber
+import camelot
 import requests
 from collections import deque
 
@@ -314,15 +316,24 @@ Return the JSON object:"""
 
         return "UNKNOWN"
 
-    def extract_tables_from_page(self, page) -> List[List[List[str]]]:
+    def extract_tables_from_pdf(self, pdf_path: str, page_spec: str) -> List[Any]:
         """
-        Extract tables from a pdfplumber page object.
+        Extract tables from PDF using Camelot.
 
-        Returns list of tables, where each table is a list of rows,
-        and each row is a list of cell values.
+        Args:
+            pdf_path: Path to PDF file
+            page_spec: Page specification (e.g., "1-10" or "all")
+
+        Returns:
+            List of Camelot table objects
         """
         try:
-            tables = page.extract_tables()
+            tables = camelot.read_pdf(
+                pdf_path,
+                pages=page_spec,
+                flavor="lattice",
+                strip_text="\n"
+            )
             return tables if tables else []
         except Exception as e:
             if self.verbose:
@@ -431,7 +442,7 @@ Return the JSON object:"""
         output_json: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Parse PDF using table extraction.
+        Parse PDF using Camelot table extraction + LLM row parsing.
 
         Args:
             pdf_path: Path to PDF
@@ -447,93 +458,108 @@ Return the JSON object:"""
         total_rows = 0
         continuation_rows = 0
 
-        with pdfplumber.open(pdf_path) as pdf:
-            total_pages = len(pdf.pages)
-            if end_page is None:
-                end_page = total_pages
+        # Build page specification for Camelot
+        if end_page is None:
+            page_spec = "all"
+        else:
+            page_spec = f"{start_page}-{end_page}"
 
-            if self.verbose:
-                print(f"Parsing pages {start_page} to {end_page} of {total_pages}")
-                print(f"Using table-based extraction (row-by-row)")
-                print(f"Model: {self.model}")
+        if self.verbose:
+            print(f"Parsing pages {page_spec}")
+            print(f"Using Camelot table extraction + LLM row parsing")
+            print(f"Model: {self.model}")
 
-            for page_num in range(start_page - 1, end_page):  # 0-indexed
-                page = pdf.pages[page_num]
-                page_number = page_num + 1  # 1-indexed for display
+        # Extract all tables using Camelot
+        if self.verbose:
+            print("\n📄 Extracting tables with Camelot...")
 
-                if self.verbose:
-                    print(f"\nPage {page_number}/{end_page}...", end=" ")
+        tables = self.extract_tables_from_pdf(pdf_path, page_spec)
 
-                # Detect section
-                page_text = page.extract_text() or ""
-                section = self.detect_section_header(page_text)
+        if self.verbose:
+            print(f"✅ Extracted {len(tables)} tables")
 
-                # Extract tables
-                tables = self.extract_tables_from_page(page)
+        # Track current section per page
+        section_by_page = {}
 
-                if not tables:
-                    if self.verbose:
-                        print("no tables")
+        # Process each table
+        for table_idx, table in enumerate(tables):
+            page_number = table.page  # Camelot table objects have .page attribute
+
+            if self.verbose and (table_idx == 0 or table.page != tables[table_idx-1].page):
+                print(f"\nPage {page_number}...", end=" ")
+
+            # Detect section for this page (cache it)
+            if page_number not in section_by_page:
+                # For Camelot, we need to extract page text separately
+                # Use a simple heuristic based on table content
+                section = self.detect_section_from_table(table)
+                section_by_page[page_number] = section
+
+            section = section_by_page[page_number]
+
+            # Get table data as DataFrame
+            df = table.df
+
+            if len(df) < 2:  # Need header + at least 1 row
+                continue
+
+            # First row is usually header
+            header = [str(cell).strip() if cell else "" for cell in df.iloc[0]]
+
+            # Skip if header looks wrong
+            if not any(h.lower() in ['plaintiff', 'case', 'year'] for h in header):
+                continue
+
+            page_rows = 0
+            page_new = 0
+            page_merged = 0
+
+            # Process data rows
+            for idx in range(1, len(df)):
+                row = df.iloc[idx]
+                row_cells = [str(cell).strip() if cell else "" for cell in row]
+
+                # Skip empty rows
+                if not any(row_cells):
                     continue
 
-                page_rows = 0
-                page_new = 0
-                page_merged = 0
+                page_rows += 1
+                total_rows += 1
 
-                # Process each table
-                for table_idx, table in enumerate(tables):
-                    if len(table) < 2:  # Need header + at least 1 row
-                        continue
+                # Parse row with LLM
+                row_data = self.parse_row(row_cells, header, section, page_number)
 
-                    # First row is usually header
-                    header = [str(cell).strip() if cell else "" for cell in table[0]]
+                if not row_data:
+                    continue
 
-                    # Skip if header looks wrong
-                    if not any(h.lower() in ['plaintiff', 'case', 'year'] for h in header):
-                        continue
+                # Check if continuation row
+                if row_data.get('is_continuation') and current_case:
+                    # Merge into current case
+                    self.merge_continuation_row(current_case, row_data)
+                    page_merged += 1
+                    continuation_rows += 1
+                else:
+                    # New case
+                    if current_case:
+                        all_cases.append(current_case)
 
-                    # Process data rows
-                    for row in table[1:]:
-                        row_cells = [str(cell).strip() if cell else "" for cell in row]
+                    current_case = row_data
+                    page_new += 1
 
-                        # Skip empty rows
-                        if not any(row_cells):
-                            continue
+            if self.verbose and page_rows > 0:
+                print(f"{page_rows} rows, {page_new} new, {page_merged} merged")
 
-                        page_rows += 1
-                        total_rows += 1
+            # Save incremental results every 10 tables
+            if output_json and table_idx > 0 and table_idx % 10 == 0:
+                if current_case:
+                    all_cases.append(current_case)
+                    current_case = None
+                with open(output_json, 'w') as f:
+                    json.dump(all_cases, f, indent=2)
 
-                        # Parse row
-                        row_data = self.parse_row(row_cells, header, section, page_number)
-
-                        if not row_data:
-                            continue
-
-                        # Check if continuation row
-                        if row_data.get('is_continuation') and current_case:
-                            # Merge into current case
-                            self.merge_continuation_row(current_case, row_data)
-                            page_merged += 1
-                            continuation_rows += 1
-                        else:
-                            # New case
-                            if current_case:
-                                all_cases.append(current_case)
-
-                            current_case = row_data
-                            page_new += 1
-
-                if self.verbose:
-                    print(f"{page_rows} rows, {page_new} new cases, {page_merged} merged (total: {len(all_cases)})")
-
-                # Save incremental results
-                if output_json and page_number % 10 == 0:
-                    with open(output_json, 'w') as f:
-                        json.dump(all_cases, f, indent=2)
-
-            # Add final case
-            if current_case:
-                all_cases.append(current_case)
+        # Add final case
+        if current_case:
+            all_cases.append(current_case)
 
         if self.verbose:
             print(f"\n✓ Parsing complete")
@@ -548,6 +574,18 @@ Return the JSON object:"""
 
         return all_cases
 
+    def detect_section_from_table(self, table) -> str:
+        """
+        Detect body region section from table content.
+
+        Since we're using Camelot, we extract section from table text.
+        """
+        # Get table text
+        df = table.df
+        table_text = " ".join([str(cell) for row in df.values for cell in row])
+
+        return self.detect_section_header(table_text)
+
 
 def parse_compendium_tables(
     pdf_path: str,
@@ -561,9 +599,11 @@ def parse_compendium_tables(
     requests_per_minute: int = 200
 ) -> List[Dict[str, Any]]:
     """
-    Parse Ontario Damages Compendium using table extraction.
+    Parse Ontario Damages Compendium using hybrid Camelot + LLM approach.
 
     This is more efficient than full-page parsing:
+    - Better table detection (Camelot lattice-based)
+    - Handles complex cases (multiple plaintiffs per cell)
     - 10-50x cheaper (processes rows instead of full pages)
     - Faster (smaller prompts)
     - More reliable (structured input)
