@@ -643,14 +643,18 @@ with tab1:
             st.subheader(f"Top {len(results)} Comparable Cases")
 
             for idx, (case, emb_sim, combined_score) in enumerate(results, 1):
-                # Build expander title with multi-plaintiff indicator
+                # Build expander title with multi-plaintiff indicator and award amount
                 extended_data = case.get('extended_data', {})
                 num_plaintiffs = extended_data.get('num_plaintiffs', 0)
                 title_suffix = f" [P{extended_data.get('plaintiff_id', '')}]" if num_plaintiffs > 1 else ""
 
+                # Get damage value for expander title
+                damage_val = extract_damages_value(case)
+                damage_display = f" | Award: ${damage_val:,.0f}" if damage_val else ""
+
                 with st.expander(
                     f"**Case {idx}** - {case.get('case_name', 'Unknown')}{title_suffix} | "
-                    f"Region: {case.get('region', 'Unknown')} | "
+                    f"Region: {case.get('region', 'Unknown')}{damage_display} | "
                     f"Match: {combined_score*100:.1f}%",
                     expanded=(idx <= EXPANDED_RESULTS_COUNT)
                 ):
@@ -665,14 +669,10 @@ with tab1:
                         if case.get('court'):
                             st.markdown(f"**Court:** {case['court']}")
 
-                        damage_val = extract_damages_value(case)
                         if damage_val:
                             st.markdown(f"**Damages:** ${damage_val:,.0f}")
 
-                        # Display summary without redundant label
-                        summary_text = case.get('summary_text', 'No summary available')[:CASE_SUMMARY_MAX_LENGTH]
-                        if summary_text and summary_text != 'No summary available':
-                            st.text(summary_text + "...")
+                        # Summary paragraph removed - pertinent info shown in enhanced data below
 
                         # Display enhanced AI-parsed data
                         st.divider()
