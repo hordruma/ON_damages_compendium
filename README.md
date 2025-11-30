@@ -7,7 +7,7 @@ A professional legal tool for searching comparable personal injury awards in Ont
 - **Visual Body Mapping**: Click on anatomical regions to select injury locations
 - **Multi-Region Selection**: Support for cases with multiple injuries
 - **Clinical Anatomy Labels**: Professional medical terminology for PI and insurance lawyers
-- **AI-Powered Search**: Embedding-based similarity matching for finding comparable cases
+- **Injury-Focused Search**: Semantic search based on injury descriptions with metadata filtering
 - **Damage Award Analysis**: Automatic calculation of median, min, and max damage ranges
 - **Gender & Age Filters**: Adjust search based on plaintiff demographics
 - **🆕 Expert Report Analysis**: Upload medical/expert reports for automatic injury extraction

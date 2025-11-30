@@ -1,11 +1,12 @@
 """
-Search and matching algorithms for the Ontario Damages Compendium.
+Injury-focused semantic search for the Ontario Damages Compendium.
 
-This module implements injury-focused semantic search that:
-- Embeds and searches only on injuries and sequelae (not full text)
-- Uses exclusive region filtering via sidebar multi-select
-- Computes meta_score from injury-tag overlap and age/gender proximity
-- Returns all results sorted by combined_score (no minimum threshold)
+This module implements semantic search focused on injury data:
+- Embeddings computed only on injuries and sequelae (not full text)
+- Exclusive region filtering: cases must match selected anatomical regions
+- Metadata scoring from injury overlap, gender match, and age proximity
+- Results sorted by relevance (no minimum threshold cutoff)
+- All results displayed to user for manual review
 """
 
 import numpy as np
@@ -151,14 +152,14 @@ def search_cases(
     meta_weight: float = 0.2
 ) -> List[Tuple[Dict[str, Any], float, float]]:
     """
-    Search cases using injury-focused embeddings with exclusive region filtering.
+    Search cases using injury-focused semantic matching.
 
     Algorithm:
-    1. Apply exclusive region filter: only cases with at least one selected region
-    2. Compute semantic similarity on injury embeddings (inj_emb)
-    3. Compute meta_score from injury-tag overlap + age/gender
-    4. Combine scores: combined = inj_weight * inj_sim + meta_weight * meta_score
-    5. Return top N sorted by combined_score (no minimum threshold)
+    1. Apply exclusive region filter: only include cases matching selected regions
+    2. Compute cosine similarity on injury-focused embeddings
+    3. Compute metadata score from injury overlap, gender match, age proximity
+    4. Combine scores: combined = inj_weight * injury_sim + meta_weight * meta_score
+    5. Return top N sorted by combined_score descending (no minimum threshold)
 
     Args:
         query_text: Free-text injury description from user (no preprocessing)
