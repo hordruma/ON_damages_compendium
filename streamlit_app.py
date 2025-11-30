@@ -45,52 +45,77 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for professional styling
+# Custom CSS for professional styling with improved UX
 st.markdown("""
 <style>
     .main-header {
         font-size: 2.5rem;
         font-weight: 700;
-        color: #1f2937;
+        color: #111827;
         margin-bottom: 0.5rem;
     }
     .sub-header {
-        font-size: 1.1rem;
-        color: #6b7280;
+        font-size: 1.15rem;
+        color: #4b5563;
         margin-bottom: 2rem;
+        line-height: 1.6;
     }
     .region-badge {
         display: inline-block;
-        padding: 0.25rem 0.75rem;
+        padding: 0.35rem 0.85rem;
         margin: 0.25rem;
-        background-color: #3b82f6;
-        color: white;
+        background-color: #2563eb;
+        color: #ffffff;
         border-radius: 0.375rem;
-        font-size: 0.875rem;
-        font-weight: 500;
+        font-size: 0.9rem;
+        font-weight: 600;
     }
     .case-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin-bottom: 1rem;
+        border: 2px solid #d1d5db;
+        border-radius: 0.625rem;
+        padding: 1.25rem;
+        margin-bottom: 1.25rem;
         background-color: #f9fafb;
     }
     .damage-summary {
-        background-color: #ecfdf5;
-        border-left: 4px solid #10b981;
-        padding: 1rem;
+        background-color: #d1fae5;
+        border-left: 5px solid #059669;
+        padding: 1.25rem;
         margin: 1rem 0;
-        border-radius: 0.25rem;
+        border-radius: 0.375rem;
     }
     .metric-value {
-        font-size: 1.5rem;
+        font-size: 1.75rem;
         font-weight: 700;
-        color: #059669;
+        color: #047857;
     }
     .similarity-score {
-        color: #6366f1;
+        color: #4f46e5;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    /* Improve readability */
+    .stMarkdown {
+        font-size: 1.05rem;
+        line-height: 1.7;
+        color: #1f2937;
+    }
+    /* Better expander visibility */
+    .streamlit-expanderHeader {
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        color: #111827 !important;
+    }
+    /* Improve metric contrast */
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #111827;
+    }
+    /* Better button contrast */
+    .stButton>button {
         font-weight: 600;
+        font-size: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -201,7 +226,7 @@ st.markdown('<div class="main-header">⚖️ Ontario Damages Compendium</div>', 
 st.markdown('<div class="sub-header">Visual search tool for comparable personal injury awards in Ontario</div>', unsafe_allow_html=True)
 
 # Create tabs for different pages
-tab1, tab2, tab3 = st.tabs(["🔍 Case Search", "👨‍👩‍👧‍👦 FLA Damages", "👨‍⚖️ Judge Analytics"])
+tab1, tab2, tab3 = st.tabs(["🔍 Case Search", "⚰️ Fatal Injuries (FLA by Relationship)", "👨‍⚖️ Judge Analytics"])
 
 # =============================================================================
 # TAB 1: CASE SEARCH
@@ -306,11 +331,21 @@ with tab1:
         label_visibility="collapsed"
     )
 
+    # Demographics - moved from sidebar for better UX
+    st.markdown("#### Optional Filters")
+    col_demo1, col_demo2 = st.columns(2)
+
+    with col_demo1:
+        gender = st.radio("Gender:", ["Male", "Female", "Not Specified"], index=2, horizontal=True)
+
+    with col_demo2:
+        age = st.slider("Age:", 5, 100, 35, help="Age of plaintiff at time of injury")
+
     st.markdown("<br>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        search_button = st.button("🔍 Find Comparable Cases", type="primary", width='stretch')
+        search_button = st.button("🔍 Find Comparable Cases", type="primary", use_container_width=True)
 
 # =============================================================================
 # SIDEBAR - SEARCH PARAMETERS
@@ -318,13 +353,6 @@ with tab1:
 
 with st.sidebar:
     st.header("Search Parameters")
-
-    # Demographics
-    st.subheader("Demographics")
-    gender = st.radio("Gender:", ["Male", "Female", "Not Specified"], index=2)
-    age = st.slider("Age:", 5, 100, 35, help="Age of plaintiff at time of injury")
-
-    st.divider()
 
     # Load compendium regions
     compendium_regions = None
@@ -615,14 +643,18 @@ with tab1:
             st.subheader(f"Top {len(results)} Comparable Cases")
 
             for idx, (case, emb_sim, combined_score) in enumerate(results, 1):
-                # Build expander title with multi-plaintiff indicator
+                # Build expander title with multi-plaintiff indicator and award amount
                 extended_data = case.get('extended_data', {})
                 num_plaintiffs = extended_data.get('num_plaintiffs', 0)
                 title_suffix = f" [P{extended_data.get('plaintiff_id', '')}]" if num_plaintiffs > 1 else ""
 
+                # Get damage value for expander title
+                damage_val = extract_damages_value(case)
+                damage_display = f" | Award: ${damage_val:,.0f}" if damage_val else ""
+
                 with st.expander(
                     f"**Case {idx}** - {case.get('case_name', 'Unknown')}{title_suffix} | "
-                    f"Region: {case.get('region', 'Unknown')} | "
+                    f"Region: {case.get('region', 'Unknown')}{damage_display} | "
                     f"Match: {combined_score*100:.1f}%",
                     expanded=(idx <= EXPANDED_RESULTS_COUNT)
                 ):
@@ -637,12 +669,10 @@ with tab1:
                         if case.get('court'):
                             st.markdown(f"**Court:** {case['court']}")
 
-                        damage_val = extract_damages_value(case)
                         if damage_val:
                             st.markdown(f"**Damages:** ${damage_val:,.0f}")
 
-                        st.markdown("**Case Summary:**")
-                        st.text(case.get('summary_text', 'No summary available')[:CASE_SUMMARY_MAX_LENGTH] + "...")
+                        # Summary paragraph removed - pertinent info shown in enhanced data below
 
                         # Display enhanced AI-parsed data
                         st.divider()

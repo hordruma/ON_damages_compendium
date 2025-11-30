@@ -2,7 +2,7 @@
 Family Law Act (FLA) Damages Analytics
 
 This module provides specialized analytics for Family Law Act claims,
-including award distributions, relationships, and comparisons to the FLA damages cap.
+including award distributions and relationships.
 """
 
 import streamlit as st
@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
 from collections import Counter
+import re
 
 # Import inflation adjustment
 try:
@@ -21,8 +22,62 @@ except ImportError:
     def adjust_for_inflation(amount, from_year, to_year):
         return None
 
-# Ontario FLA damages cap (indexed annually)
-FLA_DAMAGES_CAP = 100_000  # CAD, for loss of guidance, care and companionship
+
+def normalize_fla_relationship(description: str) -> Optional[str]:
+    """
+    Normalize FLA relationship descriptions and exclude non-relationship damages.
+
+    Extracts relationship type from description and fixes encoding errors.
+
+    Args:
+        description: Raw FLA claim description
+
+    Returns:
+        Normalized relationship name or None if not a relationship claim
+    """
+    if not description:
+        return None
+
+    # Fix encoding errors (Euro sign and other mojibake)
+    desc = description.replace('€', '').replace('â', '').strip()
+
+    # Exclude general/punitive damages
+    exclude_patterns = [
+        r'\bgeneral\s+damages\b',
+        r'\bpunitive\s+damages\b',
+        r'\baggravated\s+damages\b',
+        r'\bspecial\s+damages\b',
+        r'\bcosts\b'
+    ]
+
+    for pattern in exclude_patterns:
+        if re.search(pattern, desc, re.IGNORECASE):
+            return None
+
+    # Extract relationships using regex
+    relationship_patterns = {
+        'Spouse': r'\b(spouse|wife|husband|partner)\b',
+        'Child': r'\b(child|son|daughter|children)\b',
+        'Parent': r'\b(parent|mother|father|mom|dad)\b',
+        'Sibling': r'\b(sibling|brother|sister)\b',
+        'Grandparent': r'\b(grandparent|grandfather|grandmother|grandpa|grandma)\b',
+        'Grandchild': r'\b(grandchild|grandson|granddaughter)\b',
+        'Other Family': r'\b(family|relative|kin)\b'
+    }
+
+    desc_lower = desc.lower()
+
+    for relationship, pattern in relationship_patterns.items():
+        if re.search(pattern, desc_lower):
+            return relationship
+
+    # If no pattern matches but description exists and isn't excluded, return cleaned desc
+    # (up to first 50 chars, cleaned)
+    if len(desc) > 0:
+        cleaned = re.sub(r'\s+', ' ', desc).strip()
+        return cleaned[:50] if len(cleaned) <= 50 else cleaned[:47] + "..."
+
+    return None
 
 
 def get_fla_cases(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -47,7 +102,7 @@ def get_fla_cases(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def extract_fla_awards(case: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Extract FLA award information from a case.
+    Extract FLA award information from a case with normalized relationships.
 
     Args:
         case: Case dictionary
@@ -61,10 +116,17 @@ def extract_fla_awards(case: Dict[str, Any]) -> List[Dict[str, Any]]:
     awards = []
     for claim in fla_claims:
         amount = claim.get('amount')
-        if amount and amount > 0:
+        description = claim.get('description', 'FLA Claim')
+
+        # Normalize the relationship and filter out non-relationship damages
+        normalized_relationship = normalize_fla_relationship(description)
+
+        # Only include claims with valid relationships (excludes general/punitive damages)
+        if amount and amount > 0 and normalized_relationship:
             awards.append({
                 'amount': amount,
-                'description': claim.get('description', 'FLA Claim'),
+                'description': normalized_relationship,  # Use normalized relationship
+                'original_description': description,  # Keep original for reference
                 'category': claim.get('category', 'Family Law Act Claim'),
                 'case_name': case.get('case_name', 'Unknown'),
                 'year': case.get('year'),
@@ -74,18 +136,12 @@ def extract_fla_awards(case: Dict[str, Any]) -> List[Dict[str, Any]]:
     return awards
 
 
-def create_fla_cap_chart(
-    fla_awards: List[float],
-    reference_year: int = DEFAULT_REFERENCE_YEAR,
-    fla_cap: float = FLA_DAMAGES_CAP
-) -> Optional[go.Figure]:
+def create_fla_distribution_chart(fla_awards: List[float]) -> Optional[go.Figure]:
     """
-    Create a bar chart showing FLA award statistics relative to the FLA cap.
+    Create a bar chart showing FLA award statistics distribution.
 
     Args:
         fla_awards: List of FLA award amounts
-        reference_year: Year for inflation adjustment
-        fla_cap: FLA damages cap
 
     Returns:
         Plotly figure or None if insufficient data
@@ -94,31 +150,19 @@ def create_fla_cap_chart(
         return None
 
     min_val = np.min(fla_awards)
+    q25_val = np.percentile(fla_awards, 25)
     median_val = np.median(fla_awards)
+    q75_val = np.percentile(fla_awards, 75)
     max_val = np.max(fla_awards)
-
-    # Calculate proportions relative to cap
-    min_pct = (min_val / fla_cap) * 100
-    median_pct = (median_val / fla_cap) * 100
-    max_pct = (max_val / fla_cap) * 100
-
-    # Color based on proportion to cap
-    def get_color(pct):
-        if pct < 25:
-            return 'rgba(34, 197, 94, 0.7)'  # Green - low
-        elif pct < 50:
-            return 'rgba(59, 130, 246, 0.7)'  # Blue - moderate
-        elif pct < 75:
-            return 'rgba(251, 146, 60, 0.7)'  # Orange - high
-        else:
-            return 'rgba(239, 68, 68, 0.7)'  # Red - very high
 
     fig = go.Figure()
 
     bars_data = [
-        {'label': 'Minimum', 'value': min_val, 'pct': min_pct, 'color': get_color(min_pct)},
-        {'label': 'Median', 'value': median_val, 'pct': median_pct, 'color': get_color(median_pct)},
-        {'label': 'Maximum', 'value': max_val, 'pct': max_pct, 'color': get_color(max_pct)},
+        {'label': 'Minimum', 'value': min_val, 'color': 'rgba(34, 197, 94, 0.8)'},
+        {'label': '25th Percentile', 'value': q25_val, 'color': 'rgba(59, 130, 246, 0.8)'},
+        {'label': 'Median', 'value': median_val, 'color': 'rgba(99, 102, 241, 0.8)'},
+        {'label': '75th Percentile', 'value': q75_val, 'color': 'rgba(251, 146, 60, 0.8)'},
+        {'label': 'Maximum', 'value': max_val, 'color': 'rgba(239, 68, 68, 0.8)'},
     ]
 
     fig.add_trace(go.Bar(
@@ -126,33 +170,24 @@ def create_fla_cap_chart(
         y=[d['value'] for d in bars_data],
         marker=dict(
             color=[d['color'] for d in bars_data],
-            line=dict(color='rgba(0,0,0,0.3)', width=2)
+            line=dict(color='rgba(0,0,0,0.4)', width=2)
         ),
-        text=[f"${d['value']:,.0f}<br>({d['pct']:.1f}% of cap)" for d in bars_data],
+        text=[f"${d['value']:,.0f}" for d in bars_data],
         textposition='outside',
-        hovertemplate='<b>%{x}</b><br>Amount: $%{y:,.0f}<br>Percent of Cap: %{customdata:.1f}%<extra></extra>',
-        customdata=[d['pct'] for d in bars_data]
+        textfont=dict(size=14, color='#1f2937'),
+        hovertemplate='<b>%{x}</b><br>Amount: $%{y:,.0f}<extra></extra>'
     ))
 
-    # Add horizontal line for FLA cap
-    fig.add_hline(
-        y=fla_cap,
-        line_dash="dash",
-        line_color="red",
-        line_width=2,
-        annotation_text=f"FLA Cap: ${fla_cap:,.0f}",
-        annotation_position="right"
-    )
-
     fig.update_layout(
-        title=f'FLA Awards Relative to Ontario FLA Damages Cap ({reference_year})',
+        title='FLA Award Distribution',
         xaxis_title='Statistic',
-        yaxis_title=f'Award Amount ({reference_year}$)',
+        yaxis_title='Award Amount',
         yaxis=dict(tickformat='$,.0f'),
-        height=400,
+        height=450,
         showlegend=False,
         plot_bgcolor='rgba(0, 0, 0, 0)',
         paper_bgcolor='rgba(0, 0, 0, 0)',
+        font=dict(size=13, color='#374151')
     )
 
     return fig
@@ -283,13 +318,13 @@ def create_fla_timeline_chart(fla_awards_data: List[Dict[str, Any]]) -> Optional
 
 def display_fla_analytics_page(cases: List[Dict[str, Any]]) -> None:
     """
-    Main function to display the FLA analytics page.
+    Main function to display the FLA analytics page for fatal injury cases.
 
     Args:
         cases: List of all cases
     """
-    st.header("👨‍👩‍👧‍👦 Family Law Act (FLA) Damages")
-    st.markdown("Explore Family Law Act claims for loss of guidance, care, and companionship")
+    st.header("⚰️ Fatal Injuries - Family Law Act Claims by Relationship")
+    st.markdown("Analysis of Family Law Act claims in fatal injury cases, organized by relationship to the deceased")
 
     # Get FLA cases
     fla_cases = get_fla_cases(cases)
@@ -311,7 +346,7 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]]) -> None:
     # Display overview metrics
     st.subheader("📊 Overview")
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         st.metric("Cases with FLA Claims", len(fla_cases))
@@ -325,18 +360,15 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]]) -> None:
         else:
             st.metric("Median Award", "N/A")
 
-    with col4:
-        st.metric("FLA Cap", f"${FLA_DAMAGES_CAP:,.0f}")
-
     st.divider()
 
-    # FLA Cap Comparison Chart
+    # FLA Distribution Chart
     if fla_award_amounts:
-        st.subheader("💰 Awards Relative to FLA Damages Cap")
-        cap_fig = create_fla_cap_chart(fla_award_amounts, DEFAULT_REFERENCE_YEAR, FLA_DAMAGES_CAP)
-        if cap_fig:
-            st.plotly_chart(cap_fig, use_container_width=True)
-            st.caption("💡 Ontario FLA cap for loss of guidance, care, and companionship is indexed annually")
+        st.subheader("💰 FLA Award Distribution")
+        dist_fig = create_fla_distribution_chart(fla_award_amounts)
+        if dist_fig:
+            st.plotly_chart(dist_fig, use_container_width=True)
+            st.caption("💡 Distribution of Family Law Act awards across all cases")
 
         st.divider()
 
