@@ -1,293 +1,277 @@
 """
-Search and matching algorithms for the Ontario Damages Compendium.
+Injury-focused semantic search for the Ontario Damages Compendium.
 
-This module implements the hybrid search algorithm that combines:
-- Semantic similarity using sentence transformer embeddings
-- Anatomical region matching for relevance filtering
+This module implements semantic search focused on injury data:
+- Embeddings computed only on injuries and sequelae (not full text)
+- Exclusive region filtering: cases must match selected anatomical regions
+- Metadata scoring from injury overlap, gender match, and age proximity
+- Results sorted by relevance (no minimum threshold cutoff)
+- All results displayed to user for manual review
 """
 
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-import re
+import json
+from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any
 
-from .config import (
-    EMBEDDING_WEIGHT,
-    REGION_WEIGHT,
-    DEFAULT_TOP_N_RESULTS,
-    MIN_DAMAGE_VALUE,
-    MAX_DAMAGE_VALUE
-)
+
+DATA_DIR = Path("data")
+EMB_PATH = DATA_DIR / "embeddings_inj.npy"
+IDS_PATH = DATA_DIR / "ids.json"
+
+# Cache embeddings in memory for fast lookup
+_emb_matrix = None
+_ids = None
+_emb_norm = None
 
 
-def normalize_region_name(region_name: str, region_map: Dict[str, Any]) -> Optional[str]:
+def _ensure_embs_loaded():
+    """Load embedding matrix and IDs once at module scope."""
+    global _emb_matrix, _ids, _emb_norm
+    if _emb_matrix is None:
+        _emb_matrix = np.load(str(EMB_PATH))
+        with open(IDS_PATH, "r", encoding="utf-8") as f:
+            _ids = json.load(f)
+        # Normalize rows for cosine similarity
+        norms = np.linalg.norm(_emb_matrix, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        _emb_norm = _emb_matrix / norms
+
+
+def _cosine_sim_batch(query_vec: np.ndarray, indices: Optional[List[int]]) -> np.ndarray:
     """
-    Normalize region names from case data to standardized region IDs.
-
-    Handles variations in terminology by mapping free-text region names
-    (e.g., "neck", "cervical", "C-spine") to standardized region IDs
-    (e.g., "cervical_spine") using the region_map compendium terms.
-
-    Algorithm:
-    1. Check if region_map key matches (with underscores replaced by spaces)
-    2. Check if any compendium term for a region matches the input
-    3. Return first match found, or None if no match
+    Compute cosine similarity between query vector and candidate embeddings.
 
     Args:
-        region_name: Free-text region name from case data
-        region_map: Dictionary mapping region IDs to region data
+        query_vec: Query embedding vector (D,), float32
+        indices: List of row indices to compare against, or None for all
 
     Returns:
-        Standardized region ID (str) or None if no match found
-
-    Example:
-        normalize_region_name("neck injury", region_map) → "cervical_spine"
-        normalize_region_name("C5-C6", region_map) → "cervical_spine"
+        Array of cosine similarities aligned with indices
     """
-    region_lower = region_name.lower()
+    q = query_vec.astype("float32")
+    q_norm = q / (np.linalg.norm(q) or 1.0)
 
-    # Iterate through all known regions in our mapping
-    for key, data in region_map.items():
-        # Check if the region key itself appears (e.g., "cervical_spine" → "cervical spine")
-        if key.replace("_", " ") in region_lower:
-            return key
-
-        # Check all synonyms/clinical terms for this region
-        for term in data["compendium_terms"]:
-            if term.lower() in region_lower:
-                return key
-
-    return None  # No match found
+    if indices is None:
+        return _emb_norm.dot(q_norm)
+    else:
+        sub = _emb_norm[indices]
+        return sub.dot(q_norm)
 
 
-def calculate_region_overlap(
-    case_region: str,
-    selected_regions: List[str],
-    region_map: Dict[str, Any]
+def _age_proximity_score(case_age: Optional[int], query_age: Optional[int]) -> float:
+    """
+    Score age proximity: 1.0 exact, 0.85 within 5 years, 0.7 within 10, etc.
+    If either is None, return 0.5 (neutral).
+    """
+    if query_age is None or case_age is None:
+        return 0.5
+    diff = abs(case_age - query_age)
+    if diff == 0:
+        return 1.0
+    if diff <= 5:
+        return 0.85
+    if diff <= 10:
+        return 0.7
+    if diff <= 20:
+        return 0.5
+    return 0.3
+
+
+def _gender_match_score(case_gender: Optional[str], query_gender: Optional[str]) -> float:
+    """
+    Score gender match: 1.0 if exact match, 0.0 if no match, 0.5 if either None.
+    """
+    if query_gender is None or not case_gender:
+        return 0.5
+    return 1.0 if case_gender.strip().lower() == query_gender.strip().lower() else 0.0
+
+
+def _injury_overlap_score(case_injuries: List[str], query_injuries: List[str]) -> float:
+    """
+    Compute fraction of query injuries that overlap with case injuries.
+    If no query_injuries, return 0.5 (neutral).
+    If no case_injuries, return 0.0.
+    """
+    if not query_injuries:
+        return 0.5
+    if not case_injuries:
+        return 0.0
+
+    s_case = {s.strip().lower() for s in case_injuries if s}
+    s_q = {s.strip().lower() for s in query_injuries if s}
+
+    if not s_case or not s_q:
+        return 0.0
+
+    overlap = s_case & s_q
+    return len(overlap) / max(1, len(s_q))
+
+
+def compute_meta_score(
+    case: Dict[str, Any],
+    query_injuries: List[str],
+    query_gender: Optional[str],
+    query_age: Optional[int]
 ) -> float:
     """
-    Calculate overlap score between a case's region and user-selected regions.
+    Compute meta_score from injury overlap, gender match, and age proximity.
 
-    Implements a tiered matching system:
-    - Score 1.0 = Perfect match (normalized regions match exactly)
-    - Score 0.7 = Partial match (case region text contains a synonym)
-    - Score 0.0 = No match
-
-    This scoring allows cases with closely related but not identical regions
-    to still appear in results (e.g., "shoulder" matching "rotator cuff").
-
-    Algorithm:
-    1. If no regions selected, return 0.0 (no filtering)
-    2. Normalize the case region using our standardized mapping
-    3. Check for exact match against selected regions → 1.0
-    4. Check if any synonym appears in case region text → 0.7
-    5. Otherwise return 0.0 (no match)
-
-    Args:
-        case_region: Free-text region from case data (e.g., "NECK")
-        selected_regions: List of standardized region IDs user selected
-        region_map: Dictionary mapping region IDs to region data
-
-    Returns:
-        Float score between 0.0 and 1.0 indicating match quality
-
-    Example:
-        calculate_region_overlap("Cervical spine injury", ["cervical_spine"], region_map) → 1.0
-        calculate_region_overlap("Neck and shoulder", ["cervical_spine"], region_map) → 0.7
-        calculate_region_overlap("Lower back", ["cervical_spine"], region_map) → 0.0
+    Weights:
+    - Injury overlap: 0.7
+    - Gender match: 0.15
+    - Age proximity: 0.15
     """
-    if not selected_regions:
-        return 0.0  # No regions selected = no regional filtering
+    inj_score = _injury_overlap_score(
+        case.get("extended_data", {}).get("injuries", []) or [],
+        query_injuries
+    )
+    gender_score = _gender_match_score(
+        case.get("extended_data", {}).get("sex") or case.get("extended_data", {}).get("gender"),
+        query_gender
+    )
+    age_score = _age_proximity_score(
+        case.get("extended_data", {}).get("age"),
+        query_age
+    )
 
-    # Normalize the case's region to a standardized ID
-    case_region_normalized = normalize_region_name(case_region, region_map)
-
-    # Perfect match: case region maps to one of the selected regions
-    if case_region_normalized in selected_regions:
-        return 1.0
-
-    # Partial match: check if any synonym of selected regions appears in case text
-    case_region_lower = case_region.lower()
-    for region_id in selected_regions:
-        region_data = region_map.get(region_id, {})
-        terms = region_data.get("compendium_terms", [])
-
-        for term in terms:
-            if term.lower() in case_region_lower:
-                return 0.7  # Partial match (synonym found)
-
-    return 0.0  # No match
+    combined = (0.7 * inj_score) + (0.15 * gender_score) + (0.15 * age_score)
+    return min(max(combined, 0.0), 1.0)
 
 
 def search_cases(
-    injury_text: str,
+    query_text: str,
     selected_regions: List[str],
     cases: List[Dict[str, Any]],
     region_map: Dict[str, Any],
     model: Any,
     gender: Optional[str] = None,
     age: Optional[int] = None,
-    top_n: int = DEFAULT_TOP_N_RESULTS
+    top_n: int = 25,
+    inj_weight: float = 0.8,
+    meta_weight: float = 0.2
 ) -> List[Tuple[Dict[str, Any], float, float]]:
     """
-    Hybrid search algorithm combining semantic similarity with anatomical region matching.
+    Search cases using injury-focused semantic matching.
 
-    This implements a two-stage ranking system:
-
-    STAGE 1 - Region-Based Filtering:
-    - Calculate region overlap scores for all cases
-    - Filter to cases with region_score > 0 (any match)
-    - Fallback to all cases if no region matches found
-
-    STAGE 2 - Hybrid Scoring:
-    - Compute semantic similarity using sentence-transformer embeddings (70% weight)
-    - Combine with anatomical region overlap score (30% weight)
-    - Sort by combined score and return top N results
-
-    ALGORITHM RATIONALE:
-    - Embedding similarity captures semantic meaning and injury descriptions
-    - Region overlap ensures anatomical relevance
-    - 70/30 weighting balances precision (regions) with recall (semantics)
-    - Weight values optimized through validation on historical cases
-
-    QUERY CONSTRUCTION:
-    - Concatenates region labels + injury text for richer context
-    - Example: "Cervical Spine (C1-C7) chronic disc herniation with radiculopathy"
-    - This helps the embedding model understand anatomical context
+    Algorithm:
+    1. Apply exclusive region filter: only include cases matching selected regions
+    2. Compute cosine similarity on injury-focused embeddings
+    3. Compute metadata score from injury overlap, gender match, age proximity
+    4. Combine scores: combined = inj_weight * injury_sim + meta_weight * meta_score
+    5. Return top N sorted by combined_score descending (no minimum threshold)
 
     Args:
-        injury_text: User's description of the injury (clinical detail encouraged)
-        selected_regions: List of standardized region IDs from sidebar selection
-        cases: List of all case dictionaries
-        region_map: Dictionary mapping region IDs to region data
-        model: Loaded SentenceTransformer model
-        gender: Male/Female/None - currently not used in filtering (future enhancement)
-        age: Age of plaintiff - currently not used in filtering (future enhancement)
-        top_n: Number of results to return (default from config)
+        query_text: Free-text injury description from user (no preprocessing)
+        selected_regions: List of region IDs/labels (exclusive filter)
+        cases: List of case dictionaries
+        region_map: Region ID -> label mapping
+        model: Embedding model with .encode(text) method
+        gender: Optional gender filter ("Male", "Female", etc.)
+        age: Optional age filter
+        top_n: Number of results to return
+        inj_weight: Weight for injury semantic similarity (default 0.8)
+        meta_weight: Weight for metadata score (default 0.2)
 
     Returns:
-        List of (case_dict, embedding_similarity, combined_score) tuples,
-        sorted by combined_score descending
-
-    Example:
-        results = search_cases(
-            "C5-C6 disc herniation with chronic radiculopathy",
-            ["cervical_spine"],
-            cases,
-            region_map,
-            model,
-            top_n=15
-        )
-        # Returns top 15 cases ranked by similarity + region match
+        List of (case, inj_sim, combined_score) sorted by combined_score desc
     """
-    # Build query text by prepending region labels to provide anatomical context
-    # This improves embedding quality for medical/legal terminology
-    region_labels = ' '.join([region_map[r]['label'] for r in selected_regions])
-    query_text = f"{region_labels} {injury_text}".strip()
+    _ensure_embs_loaded()
 
-    # Generate embedding vector for the query using cached sentence-transformer model
-    query_vec = model.encode(query_text).reshape(1, -1)
+    # Encode query using same model as embeddings
+    qv = model.encode(query_text).astype("float32")
 
-    # ========================================================================
-    # STAGE 1: Region-Based Filtering
-    # ========================================================================
-    # Calculate region overlap scores for each case and filter to matches
-    if selected_regions:
-        filtered_cases = []
-        for case in cases:
-            # Get the region overlap score (0.0, 0.7, or 1.0)
-            region_score = calculate_region_overlap(
-                case.get("region", ""),
-                selected_regions,
-                region_map
-            )
+    # Stage 1: Exclusive region filtering
+    candidate_indices = []
+    case_index_map = {}
 
-            # Only include cases with some regional overlap
-            if region_score > 0:
-                case_copy = case.copy()
-                case_copy["region_score"] = region_score  # Add score to case for later use
-                filtered_cases.append(case_copy)
+    for i, case in enumerate(cases):
+        cid = case.get("id")
+        try:
+            row_idx = _ids.index(cid)
+        except ValueError:
+            # Case ID not found in embedding matrix, skip
+            continue
 
-        # FALLBACK: If no cases match the selected regions at all,
-        # include all cases but with region_score=0 (pure semantic search)
-        # This prevents returning empty results for unusual region combinations
-        if not filtered_cases:
-            filtered_cases = [{**c, "region_score": 0} for c in cases]
-    else:
-        # No regions selected: use all cases with region_score=0
-        # This makes regional weighting irrelevant (pure semantic search)
-        filtered_cases = [{**c, "region_score": 0} for c in cases]
+        # Apply exclusive region filter if regions selected
+        if selected_regions:
+            case_regions = case.get("regions") or case.get("extended_data", {}).get("regions") or []
+            if not case_regions:
+                continue
 
-    # ========================================================================
-    # STAGE 2: Semantic Similarity Calculation
-    # ========================================================================
-    # Extract pre-computed embedding vectors for all filtered cases
-    vectors = np.array([c["embedding"] for c in filtered_cases])
+            # Case-insensitive region overlap check
+            lower_case_regions = {str(r).strip().lower() for r in case_regions}
+            lower_sel = {str(r).strip().lower() for r in selected_regions}
 
-    # Calculate cosine similarity between query and each case
-    # Returns array of similarity scores in range [0, 1]
-    embedding_sims = cosine_similarity(query_vec, vectors)[0]
+            if lower_case_regions & lower_sel:
+                candidate_indices.append(row_idx)
+                case_index_map[row_idx] = case
+        else:
+            # No region filter: include all
+            candidate_indices.append(row_idx)
+            case_index_map[row_idx] = case
 
-    # ========================================================================
-    # STAGE 3: Hybrid Score Combination
-    # ========================================================================
-    # Combine semantic similarity (70%) with regional matching (30%)
-    # Formula: score = 0.7 * embedding_sim + 0.3 * region_score
-    #
-    # This weighting was chosen because:
-    # - Embeddings capture nuanced injury descriptions (primary signal)
-    # - Region matching ensures anatomical relevance (secondary filter)
-    # - 70/30 split validated through testing on historical cases
-    combined_scores = (
-        EMBEDDING_WEIGHT * embedding_sims +
-        REGION_WEIGHT * np.array([c["region_score"] for c in filtered_cases])
-    )
+    if not candidate_indices:
+        return []
 
-    # ========================================================================
-    # STAGE 4: Ranking and Return
-    # ========================================================================
-    # Sort by combined score (highest first) and return top N
-    ranked = sorted(
-        zip(filtered_cases, embedding_sims, combined_scores),
-        key=lambda x: x[2],  # Sort by combined_score (index 2)
-        reverse=True
-    )
+    # Stage 2: Compute injury semantic similarity
+    sims = _cosine_sim_batch(qv, candidate_indices)
 
-    return ranked[:top_n]
+    # Stage 3: Combine scores
+    results = []
+    for idx_pos, row_idx in enumerate(candidate_indices):
+        case = case_index_map[row_idx]
+        inj_sim = float(sims[idx_pos])
+
+        # Meta score: no query preprocessing per user requirement
+        # So query_injuries is empty, making injury_overlap neutral (0.5)
+        query_injuries = []
+        meta_score = compute_meta_score(case, query_injuries, gender, age)
+
+        combined = float(inj_weight * inj_sim + meta_weight * meta_score)
+        results.append((case, inj_sim, combined))
+
+    # Stage 4: Sort and return top N
+    results.sort(key=lambda t: t[2], reverse=True)
+    return results[:top_n]
 
 
 def extract_damages_value(case: Dict[str, Any]) -> Optional[float]:
     """
-    Extract numeric damages value from a case dictionary.
+    Extract numeric damages value from case.
 
-    Tries multiple strategies:
-    1. Direct 'damages' field
-    2. Regex extraction from summary text
-
-    Validates extracted values are within reasonable range to filter
-    out obvious data entry errors.
-
-    Args:
-        case: Case dictionary
+    Tries:
+    1. extended_data.non_pecuniary_damages
+    2. Non-pecuniary damages from plaintiffs array
+    3. Direct 'damages' field
 
     Returns:
-        Damages value as float, or None if not found/invalid
+        Damages value as float, or None if not found
     """
-    # Try direct field first
-    if case.get("damages"):
-        return case["damages"]
-
-    # Try to extract from summary text using regex
-    summary = case.get("summary_text", "")
-    dollar_amounts = re.findall(r'\$[\d,]+', summary)
-
-    for amount in dollar_amounts:
+    # Try extended_data first
+    ext = case.get("extended_data", {})
+    if ext.get("non_pecuniary_damages"):
         try:
-            value = float(amount.replace("$", "").replace(",", ""))
-            # Validate range to filter out errors
-            if MIN_DAMAGE_VALUE <= value <= MAX_DAMAGE_VALUE:
-                return value
+            return float(ext["non_pecuniary_damages"])
         except (ValueError, TypeError):
-            continue
+            pass
+
+    # Try plaintiffs array
+    plaintiffs = case.get("plaintiffs", [])
+    if plaintiffs:
+        for p in plaintiffs:
+            damages = p.get("non_pecuniary_damages")
+            if damages:
+                try:
+                    return float(damages)
+                except (ValueError, TypeError):
+                    pass
+
+    # Try direct field
+    if case.get("damages"):
+        try:
+            return float(case["damages"])
+        except (ValueError, TypeError):
+            pass
 
     return None

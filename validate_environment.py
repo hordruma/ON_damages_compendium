@@ -64,7 +64,6 @@ def check_dependencies() -> Tuple[List[str], List[str]]:
         'plotly',
         'anthropic',
         'openai',
-        'mcp',
         'dotenv'
     ]
 
@@ -84,8 +83,8 @@ def check_dependencies() -> Tuple[List[str], List[str]]:
             print_success(f"{package}")
         except ImportError:
             missing.append(package)
-            if package in ['anthropic', 'openai', 'mcp']:
-                print_warning(f"{package} (optional - for MCP/LLM features)")
+            if package in ['anthropic', 'openai']:
+                print_warning(f"{package} (optional - for LLM features)")
             else:
                 print_error(f"{package} (required)")
 
@@ -154,20 +153,6 @@ def check_environment_variables() -> Tuple[List[str], List[str]]:
 
     return configured, unconfigured
 
-def check_mcp_server() -> bool:
-    """Check MCP server can be imported"""
-    try:
-        sys.path.insert(0, str(Path(__file__).parent))
-        import mcp_server
-        print_success("MCP server module can be imported")
-        return True
-    except ImportError as e:
-        print_error(f"Cannot import MCP server: {e}")
-        return False
-    except Exception as e:
-        print_warning(f"MCP server import succeeded but initialization may fail: {e}")
-        return True
-
 def check_streamlit_app() -> bool:
     """Check Streamlit app can be imported"""
     try:
@@ -189,14 +174,13 @@ def print_summary(
     found_files: List[str],
     missing_files: List[str],
     configured_vars: List[str],
-    mcp_ok: bool,
     streamlit_ok: bool
 ):
     """Print validation summary"""
     print_header("VALIDATION SUMMARY")
 
     # Calculate status
-    critical_missing = [p for p in missing_packages if p not in ['anthropic', 'openai', 'mcp']]
+    critical_missing = [p for p in missing_packages if p not in ['anthropic', 'openai']]
     critical_files_missing = [f for f in missing_files if 'Optional' not in f and 'damages_with_embeddings' in f]
 
     if python_ok and not critical_missing and not critical_files_missing:
@@ -206,8 +190,6 @@ def print_summary(
         print()
         print("Next steps:")
         print("  • Run Streamlit app: streamlit run streamlit_app.py")
-        if mcp_ok:
-            print("  • Configure MCP server in Claude Desktop (see MCP_GUIDE.md)")
         print("  • Upload expert reports for analysis")
         print("  • Search for comparable cases")
     else:
@@ -270,10 +252,6 @@ def main():
     print_header("Environment Variables")
     configured_vars, unconfigured_vars = check_environment_variables()
 
-    # MCP server
-    print_header("MCP Server")
-    mcp_ok = check_mcp_server()
-
     # Streamlit app
     print_header("Streamlit App")
     streamlit_ok = check_streamlit_app()
@@ -286,12 +264,11 @@ def main():
         found_files,
         missing_files,
         configured_vars,
-        mcp_ok,
         streamlit_ok
     )
 
     # Exit code
-    critical_missing = [p for p in missing if p not in ['anthropic', 'openai', 'mcp']]
+    critical_missing = [p for p in missing if p not in ['anthropic', 'openai']]
     critical_files_missing = [f for f in missing_files if 'Optional' not in f and 'damages_with_embeddings' in f]
 
     if not python_ok or critical_missing or critical_files_missing:
