@@ -372,23 +372,35 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
         st.divider()
 
-    # Relationship distribution
-    if all_fla_awards:
-        st.subheader("👨‍👩‍👧 Claims by Relationship Type")
-        rel_fig = create_fla_relationship_chart(all_fla_awards)
-        if rel_fig:
-            st.plotly_chart(rel_fig, use_container_width=True)
-
-        st.divider()
-
-    # Timeline
+    # Timeline with relationship filter
     if all_fla_awards:
         st.subheader("📈 FLA Awards Over Time")
-        timeline_fig = create_fla_timeline_chart(all_fla_awards)
-        if timeline_fig:
-            st.plotly_chart(timeline_fig, use_container_width=True)
+
+        # Extract unique relationships for filter
+        unique_relationships = sorted(set(award['description'] for award in all_fla_awards))
+
+        # Relationship filter
+        selected_relationships = st.multiselect(
+            "Filter by Relationship Type:",
+            options=unique_relationships,
+            default=unique_relationships,
+            help="Select one or more relationship types to display in the timeline (e.g., select 'Spouse' to see all cases involving a spouse)"
+        )
+
+        # Filter awards based on selected relationships
+        filtered_awards = [
+            award for award in all_fla_awards
+            if award['description'] in selected_relationships
+        ]
+
+        if filtered_awards:
+            timeline_fig = create_fla_timeline_chart(filtered_awards)
+            if timeline_fig:
+                st.plotly_chart(timeline_fig, use_container_width=True)
+            else:
+                st.info("Insufficient data with year information to display timeline")
         else:
-            st.info("Insufficient data with year information to display timeline")
+            st.info("No awards match the selected relationship filters")
 
         st.divider()
 
