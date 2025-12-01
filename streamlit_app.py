@@ -529,7 +529,6 @@ with tab1:
                 'gender': gender,
                 'age': age,
                 'num_results': num_results,
-                'min_similarity': min_similarity,
                 'timestamp': datetime.now()
             }
 
