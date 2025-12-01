@@ -603,6 +603,12 @@ Return the JSON object:"""
                     row1_values = [str(cell).strip() for cell in df.iloc[1].tolist()]
                     num_filled_row1 = sum(1 for v in row1_values if v and v != 'nan')
 
+                    if self.verbose:
+                        print(f"\nDEBUG Type 3:")
+                        print(f"  row1_cell0: {repr(row1_cell0[:100])}")
+                        print(f"  num_filled_row1: {num_filled_row1}")
+                        print(f"  row1_values: {row1_values[:3]}")
+
                     if '\n' in row1_cell0 or '\\n' in row1_cell0:
                         # Headers newline-separated in row 1
                         headers_raw = row1_cell0.replace('\\n', '\n').split('\n')
