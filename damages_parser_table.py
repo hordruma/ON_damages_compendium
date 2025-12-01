@@ -98,7 +98,7 @@ Extract the following information and return as JSON:
   "year": year as integer or null,
   "citation": "Citation string" or null,
   "court": "Court name" or null,
-  "judge": "Judge's LAST NAME ONLY (e.g., 'Smith' not 'A. Smith J.')" or null,
+  "judge": "Judge's LAST NAME ONLY (e.g., 'Smith' not 'A. Smith J.'). For appeals with multiple judges, use a list like ['Smith', 'Jones', 'Brown']" or null,
   "sex": "M" or "F" or null,
   "age": age as integer or null,
   "non_pecuniary_damages": amount in dollars (number, no $ or commas) or null,
@@ -223,9 +223,10 @@ Return the JSON object:"""
         return None
 
     @staticmethod
-    def normalize_judge_name(judge_name) -> str:
+    def normalize_judge_name(judge_name):
         """
         Normalize judge names to last name only.
+        Preserves list structure for appeals cases with multiple judges.
 
         Examples:
             "Smith J." -> "Smith"
@@ -233,51 +234,64 @@ Return the JSON object:"""
             "Hon. John Smith J." -> "Smith"
             "Smith, J." -> "Smith"
             "Brown J.J.A." -> "Brown"
-            ["Smith J."] -> "Smith"
+            ["Smith J.", "Jones J.A."] -> ["Smith", "Jones"]
+            ["Brown J.J.A."] -> ["Brown"]
 
         Args:
-            judge_name: Raw judge name (string or list)
+            judge_name: Raw judge name (string) or list of names (for appeals)
 
         Returns:
-            Normalized last name only
+            Normalized last name(s) - string if input is string, list if input is list
         """
         if not judge_name:
+            return None
+
+        # Helper function to normalize a single judge name
+        def normalize_single(name):
+            if not name:
+                return ""
+
+            # Convert to string and strip whitespace
+            name = str(name).strip()
+
+            if not name:
+                return ""
+
+            # Remove trailing titles and suffixes (J., J.A., J.J.A., C.J., etc.)
+            name = re.sub(r',?\s*(J\.J\.A\.|J\.A\.|J\.|C\.J\.|C\.J\.O\.|C\.J\.C\.)$', '', name, flags=re.IGNORECASE)
+
+            # Remove "The Honourable", "Hon.", etc. at start
+            name = re.sub(r'^(The\s+)?(Hon\.?|Honourable)\s+', '', name, flags=re.IGNORECASE)
+
+            # Remove any remaining commas
+            name = name.replace(',', '')
+
+            # Standardize spacing
+            name = re.sub(r'\s+', ' ', name).strip()
+
+            # Extract last name (last word after splitting)
+            # This handles "A. Smith", "John Smith", "A.B. Smith" -> "Smith"
+            if name:
+                parts = name.split()
+                if parts:
+                    # Last part is the last name
+                    last_name = parts[-1]
+                    # Clean up any remaining periods
+                    last_name = last_name.rstrip('.')
+                    return last_name
+
             return ""
 
-        # Handle list input (in case LLM returns a list)
+        # Handle list input (appeals cases with multiple judges)
         if isinstance(judge_name, list):
-            if not judge_name:
-                return ""
-            # Take first judge if single element, otherwise join with comma
-            judge_name = judge_name[0] if len(judge_name) == 1 else ", ".join(str(j) for j in judge_name)
+            normalized = [normalize_single(j) for j in judge_name]
+            # Filter out empty strings
+            normalized = [j for j in normalized if j]
+            return normalized if normalized else None
 
-        # Convert to string and strip whitespace
-        name = str(judge_name).strip()
-
-        # Remove trailing titles and suffixes (J., J.A., J.J.A., C.J., etc.)
-        name = re.sub(r',?\s*(J\.J\.A\.|J\.A\.|J\.|C\.J\.|C\.J\.O\.|C\.J\.C\.)$', '', name, flags=re.IGNORECASE)
-
-        # Remove "The Honourable", "Hon.", etc. at start
-        name = re.sub(r'^(The\s+)?(Hon\.?|Honourable)\s+', '', name, flags=re.IGNORECASE)
-
-        # Remove any remaining commas
-        name = name.replace(',', '')
-
-        # Standardize spacing
-        name = re.sub(r'\s+', ' ', name).strip()
-
-        # Extract last name (last word after splitting)
-        # This handles "A. Smith", "John Smith", "A.B. Smith" -> "Smith"
-        if name:
-            parts = name.split()
-            if parts:
-                # Last part is the last name
-                last_name = parts[-1]
-                # Clean up any remaining periods
-                last_name = last_name.rstrip('.')
-                return last_name
-
-        return ""
+        # Handle string input (single judge)
+        result = normalize_single(judge_name)
+        return result if result else None
 
     def detect_section_header(self, page_text: str) -> str:
         """
