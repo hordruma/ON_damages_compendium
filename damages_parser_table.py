@@ -1,22 +1,26 @@
 """
-Ontario Damages Compendium Parser - Hybrid Camelot + LLM Approach
+Ontario Damages Compendium Parser - Hybrid Camelot Stream+Lattice + LLM Approach
 
-This is a more efficient alternative to damages_parser_azure.py that:
-- Extracts tables directly from PDF using Camelot (better table detection)
-- Processes rows one at a time with LLM (handles multi-plaintiff cases)
-- Uses column headers to pre-label data
-- Deterministically merges rows without citations into previous case
-- Tracks body region from section headers
+This parser uses a hybrid approach:
+- STREAM mode: Captures section headers (Forearm, General, etc.) from row 0
+- LATTICE mode: Extracts clean table structure with bordered cells
+- LLM: Parses each row to handle complex cases and multi-plaintiff scenarios
+
+Key features:
+- Hybrid section detection: Stream finds sections, lattice parses data
+- Row-by-row LLM processing (handles multi-plaintiff cases)
+- Pre-labeled columns from table headers
+- Deterministic continuation row merging
+- Accurate anatomical region tracking
 
 Advantages over full-page extraction:
 - 10-50x cheaper (sends only row text, not full pages)
-- Better table detection (Camelot lattice-based extraction)
+- More accurate section detection (no "General Damages" false positives)
+- Better table structure parsing (lattice mode for borders)
 - Handles complex cases (multiple plaintiffs in one cell)
 - Faster processing (smaller prompts)
-- More reliable (structured input)
-- Works better with lighter models (5-nano, 4o-mini)
+- Works with lighter models (gpt-4o-mini, gpt-5-nano)
 - Simpler merging logic (no fuzzy matching needed)
-- Pre-labeled columns (plaintiff, defendant, year, etc.)
 
 Usage:
     from damages_parser_table import parse_compendium_tables
@@ -25,7 +29,7 @@ Usage:
         "2024damagescompendium.pdf",
         endpoint="https://your-resource.openai.azure.com/",
         api_key="your-api-key",
-        model="gpt-5-nano"  # Cheaper models work fine!
+        model="gpt-5-nano"
     )
 """
 
@@ -316,6 +320,57 @@ Return the JSON object:"""
 
         return "UNKNOWN"
 
+    def extract_section_from_stream(self, pdf_path: str, page_spec: str) -> Dict[int, Optional[str]]:
+        """
+        Extract section headers from stream mode row 0.
+
+        Uses stream mode to capture section headers that lattice mode misses.
+        Returns a dict mapping page numbers to section headers.
+
+        Args:
+            pdf_path: Path to PDF file
+            page_spec: Page specification (e.g., "1-10" or "all")
+
+        Returns:
+            Dict mapping page number to section header (or None if not found)
+        """
+        # Known anatomical section keywords
+        section_keywords = {
+            'General', 'Cervical Spine', 'Thoracic Spine', 'Lumbar Spine',
+            'Shoulder', 'Elbow', 'Forearm', 'Wrist', 'Hand', 'Finger',
+            'Hip', 'Knee', 'Lower Leg', 'Ankle', 'Foot', 'Toe',
+            'Brain', 'Head', 'Face', 'Eye', 'Ear', 'Nose',
+            'Psychological', 'Chronic Pain', 'Multiple Injuries'
+        }
+
+        sections_by_page = {}
+
+        try:
+            # Use stream mode to capture section headers
+            tables_stream = camelot.read_pdf(pdf_path, pages=page_spec, flavor="stream")
+
+            for table in tables_stream:
+                page_num = table.page
+                df_stream = table.df
+
+                if len(df_stream) > 0:
+                    # Check row 0 for section keywords
+                    row0_values = df_stream.iloc[0].tolist()
+                    for cell in row0_values:
+                        cell_str = str(cell).strip()
+                        if cell_str in section_keywords:
+                            sections_by_page[page_num] = cell_str
+                            break
+
+                    # If not found, set to None for this page
+                    if page_num not in sections_by_page:
+                        sections_by_page[page_num] = None
+        except Exception as e:
+            if self.verbose:
+                print(f"  Stream mode section extraction warning: {e}")
+
+        return sections_by_page
+
     def extract_tables_from_pdf(self, pdf_path: str, page_spec: str) -> List[Any]:
         """
         Extract tables from PDF using Camelot.
@@ -469,14 +524,24 @@ Return the JSON object:"""
             print(f"Using Camelot table extraction + LLM row parsing")
             print(f"Model: {self.model}")
 
-        # Extract all tables using Camelot
+        # HYBRID APPROACH: Extract sections using stream mode
         if self.verbose:
-            print("\n📄 Extracting tables with Camelot...")
+            print("\n📄 Extracting section headers with stream mode...")
+
+        sections_from_stream = self.extract_section_from_stream(pdf_path, page_spec)
+
+        if self.verbose:
+            found_count = sum(1 for s in sections_from_stream.values() if s)
+            print(f"✅ Found {found_count} section headers from stream mode")
+
+        # Extract all tables using lattice mode
+        if self.verbose:
+            print("\n📄 Extracting tables with lattice mode...")
 
         tables = self.extract_tables_from_pdf(pdf_path, page_spec)
 
         if self.verbose:
-            print(f"✅ Extracted {len(tables)} tables")
+            print(f"✅ Extracted {len(tables)} tables from lattice mode")
 
         # Track current section per page
         section_by_page = {}
@@ -488,12 +553,17 @@ Return the JSON object:"""
             if self.verbose and (table_idx == 0 or table.page != tables[table_idx-1].page):
                 print(f"\nPage {page_number}...", end=" ")
 
-            # Detect section for this page (cache it)
+            # Use section from stream mode, fallback to table detection
             if page_number not in section_by_page:
-                # For Camelot, we need to extract page text separately
-                # Use a simple heuristic based on table content
-                section = self.detect_section_from_table(table)
-                section_by_page[page_number] = section
+                # Try stream mode section first
+                section = sections_from_stream.get(page_number)
+
+                # Fallback to table content detection if stream didn't find it
+                if not section:
+                    section = self.detect_section_from_table(table)
+
+                # Store uppercase version for consistency
+                section_by_page[page_number] = section.upper() if section else "UNKNOWN"
 
             section = section_by_page[page_number]
 
