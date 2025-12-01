@@ -1,22 +1,26 @@
 """
-Ontario Damages Compendium Parser - Hybrid Camelot + LLM Approach
+Ontario Damages Compendium Parser - Hybrid Camelot Stream+Lattice + LLM Approach
 
-This is a more efficient alternative to damages_parser_azure.py that:
-- Extracts tables directly from PDF using Camelot (better table detection)
-- Processes rows one at a time with LLM (handles multi-plaintiff cases)
-- Uses column headers to pre-label data
-- Deterministically merges rows without citations into previous case
-- Tracks body region from section headers
+This parser uses a hybrid approach:
+- STREAM mode: Captures section headers (Forearm, General, etc.) from row 0
+- LATTICE mode: Extracts clean table structure with bordered cells
+- LLM: Parses each row to handle complex cases and multi-plaintiff scenarios
+
+Key features:
+- Hybrid section detection: Stream finds sections, lattice parses data
+- Row-by-row LLM processing (handles multi-plaintiff cases)
+- Pre-labeled columns from table headers
+- Deterministic continuation row merging
+- Accurate anatomical region tracking
 
 Advantages over full-page extraction:
 - 10-50x cheaper (sends only row text, not full pages)
-- Better table detection (Camelot lattice-based extraction)
+- More accurate section detection (no "General Damages" false positives)
+- Better table structure parsing (lattice mode for borders)
 - Handles complex cases (multiple plaintiffs in one cell)
 - Faster processing (smaller prompts)
-- More reliable (structured input)
-- Works better with lighter models (5-nano, 4o-mini)
+- Works with lighter models (gpt-4o-mini, gpt-5-nano)
 - Simpler merging logic (no fuzzy matching needed)
-- Pre-labeled columns (plaintiff, defendant, year, etc.)
 
 Usage:
     from damages_parser_table import parse_compendium_tables
@@ -25,7 +29,7 @@ Usage:
         "2024damagescompendium.pdf",
         endpoint="https://your-resource.openai.azure.com/",
         api_key="your-api-key",
-        model="gpt-5-nano"  # Cheaper models work fine!
+        model="gpt-5-nano"
     )
 """
 
@@ -316,6 +320,57 @@ Return the JSON object:"""
 
         return "UNKNOWN"
 
+    def extract_section_from_stream(self, pdf_path: str, page_spec: str) -> Dict[int, Optional[str]]:
+        """
+        Extract section headers from stream mode row 0.
+
+        Uses stream mode to capture section headers that lattice mode misses.
+        Returns a dict mapping page numbers to section headers.
+
+        Args:
+            pdf_path: Path to PDF file
+            page_spec: Page specification (e.g., "1-10" or "all")
+
+        Returns:
+            Dict mapping page number to section header (or None if not found)
+        """
+        # Known anatomical section keywords
+        section_keywords = {
+            'General', 'Cervical Spine', 'Thoracic Spine', 'Lumbar Spine',
+            'Shoulder', 'Elbow', 'Forearm', 'Wrist', 'Hand', 'Finger',
+            'Hip', 'Knee', 'Lower Leg', 'Ankle', 'Foot', 'Toe',
+            'Brain', 'Head', 'Face', 'Eye', 'Ear', 'Nose',
+            'Psychological', 'Chronic Pain', 'Multiple Injuries'
+        }
+
+        sections_by_page = {}
+
+        try:
+            # Use stream mode to capture section headers
+            tables_stream = camelot.read_pdf(pdf_path, pages=page_spec, flavor="stream")
+
+            for table in tables_stream:
+                page_num = table.page
+                df_stream = table.df
+
+                if len(df_stream) > 0:
+                    # Check row 0 for section keywords
+                    row0_values = df_stream.iloc[0].tolist()
+                    for cell in row0_values:
+                        cell_str = str(cell).strip()
+                        if cell_str in section_keywords:
+                            sections_by_page[page_num] = cell_str
+                            break
+
+                    # If not found, set to None for this page
+                    if page_num not in sections_by_page:
+                        sections_by_page[page_num] = None
+        except Exception as e:
+            if self.verbose:
+                print(f"  Stream mode section extraction warning: {e}")
+
+        return sections_by_page
+
     def extract_tables_from_pdf(self, pdf_path: str, page_spec: str) -> List[Any]:
         """
         Extract tables from PDF using Camelot.
@@ -331,8 +386,8 @@ Return the JSON object:"""
             tables = camelot.read_pdf(
                 pdf_path,
                 pages=page_spec,
-                flavor="lattice",
-                strip_text="\n"
+                flavor="lattice"
+                # Don't strip newlines - we need them for header detection
             )
             return tables if tables else []
         except Exception as e:
@@ -469,14 +524,24 @@ Return the JSON object:"""
             print(f"Using Camelot table extraction + LLM row parsing")
             print(f"Model: {self.model}")
 
-        # Extract all tables using Camelot
+        # HYBRID APPROACH: Extract sections using stream mode
         if self.verbose:
-            print("\n📄 Extracting tables with Camelot...")
+            print("\n📄 Extracting section headers with stream mode...")
+
+        sections_from_stream = self.extract_section_from_stream(pdf_path, page_spec)
+
+        if self.verbose:
+            found_count = sum(1 for s in sections_from_stream.values() if s)
+            print(f"✅ Found {found_count} section headers from stream mode")
+
+        # Extract all tables using lattice mode
+        if self.verbose:
+            print("\n📄 Extracting tables with lattice mode...")
 
         tables = self.extract_tables_from_pdf(pdf_path, page_spec)
 
         if self.verbose:
-            print(f"✅ Extracted {len(tables)} tables")
+            print(f"✅ Extracted {len(tables)} tables from lattice mode")
 
         # Track current section per page
         section_by_page = {}
@@ -488,34 +553,91 @@ Return the JSON object:"""
             if self.verbose and (table_idx == 0 or table.page != tables[table_idx-1].page):
                 print(f"\nPage {page_number}...", end=" ")
 
-            # Detect section for this page (cache it)
+            # Use section from stream mode, fallback to table detection
             if page_number not in section_by_page:
-                # For Camelot, we need to extract page text separately
-                # Use a simple heuristic based on table content
-                section = self.detect_section_from_table(table)
-                section_by_page[page_number] = section
+                # Try stream mode section first
+                section = sections_from_stream.get(page_number)
+
+                # Fallback to table content detection if stream didn't find it
+                if not section:
+                    section = self.detect_section_from_table(table)
+
+                # Store uppercase version for consistency
+                section_by_page[page_number] = section.upper() if section else "UNKNOWN"
 
             section = section_by_page[page_number]
 
             # Get table data as DataFrame
             df = table.df
 
-            if len(df) < 2:  # Need header + at least 1 row
+            if len(df) < 2:  # Need at least header + data
                 continue
 
-            # First row is usually header
-            header = [str(cell).strip() if cell else "" for cell in df.iloc[0]]
+            # STRUCTURE DETECTION (from test notebook that worked)
+            # Type 1: Headers spread across row 0 (pages 91-95) - data starts row 1
+            # Type 2: Newline-separated headers in row 0 - data starts row 1
+            # Type 3: Section in row 0, headers in row 1 (pages 21-25) - data starts row 2
 
-            # Skip if header looks wrong
-            if not any(h.lower() in ['plaintiff', 'case', 'year'] for h in header):
+            row0_cell0 = str(df.iloc[0, 0]).strip() if len(df) > 0 else ""
+            row0_values = [str(cell).strip() for cell in df.iloc[0].tolist()] if len(df) > 0 else []
+            num_filled_cells = sum(1 for v in row0_values if v and v != 'nan')
+
+            header = []
+            data_start_row = 1
+
+            if num_filled_cells > 1:
+                # Type 1: Headers spread across columns (pages 91-95)
+                header = [v if v and v != 'nan' else f"Col_{i}" for i, v in enumerate(row0_values)]
+                data_start_row = 1
+
+            elif '\n' in row0_cell0 or '\\n' in row0_cell0:
+                # Type 2: Newline-separated headers in row 0, col 0
+                headers_raw = row0_cell0.replace('\\n', '\n').split('\n')
+                header = [h.strip() for h in headers_raw if h.strip()]
+                data_start_row = 1
+
+            else:
+                # Type 3: Section in row 0, headers in row 1 (pages 21-25)
+                if len(df) > 1:
+                    row1_cell0 = str(df.iloc[1, 0]).strip()
+                    row1_values = [str(cell).strip() for cell in df.iloc[1].tolist()]
+                    num_filled_row1 = sum(1 for v in row1_values if v and v != 'nan')
+
+                    if self.verbose:
+                        print(f"\nDEBUG Type 3:")
+                        print(f"  row1_cell0: {repr(row1_cell0[:100])}")
+                        print(f"  num_filled_row1: {num_filled_row1}")
+                        print(f"  row1_values: {row1_values[:3]}")
+
+                    if '\n' in row1_cell0 or '\\n' in row1_cell0:
+                        # Headers newline-separated in row 1
+                        headers_raw = row1_cell0.replace('\\n', '\n').split('\n')
+                        header = [h.strip() for h in headers_raw if h.strip()]
+                    elif num_filled_row1 > 1:
+                        # Headers spread across row 1
+                        header = [v if v and v != 'nan' else f"Col_{i}" for i, v in enumerate(row1_values)]
+                    else:
+                        header = [str(h).strip() for h in df.iloc[1].tolist() if str(h).strip()]
+
+                    data_start_row = 2
+                else:
+                    continue  # Not enough rows
+
+            # Validate headers
+            if not header or not any(h.lower() in ['plaintiff', 'case', 'year', 'defendant'] for h in header):
+                if self.verbose:
+                    print(f"SKIP - headers: {header[:5] if header else 'None'}")
                 continue
+
+            if self.verbose:
+                print(f"Headers: {header[:5] if len(header) > 5 else header}, data_start: {data_start_row}, df_len: {len(df)}")
 
             page_rows = 0
             page_new = 0
             page_merged = 0
 
-            # Process data rows
-            for idx in range(1, len(df)):
+            # Process data rows starting from correct row
+            for idx in range(data_start_row, len(df)):
                 row = df.iloc[idx]
                 row_cells = [str(cell).strip() if cell else "" for cell in row]
 
