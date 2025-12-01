@@ -619,7 +619,12 @@ Return the JSON object:"""
 
             # Validate headers
             if not header or not any(h.lower() in ['plaintiff', 'case', 'year', 'defendant'] for h in header):
+                if self.verbose:
+                    print(f"SKIP - headers: {header[:5] if header else 'None'}")
                 continue
+
+            if self.verbose:
+                print(f"Headers: {header[:5] if len(header) > 5 else header}, data_start: {data_start_row}, df_len: {len(df)}")
 
             page_rows = 0
             page_new = 0
