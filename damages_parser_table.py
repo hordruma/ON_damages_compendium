@@ -570,58 +570,34 @@ Return the JSON object:"""
             # Get table data as DataFrame
             df = table.df
 
-            if len(df) < 2:  # Need header + at least 1 row
+            if len(df) < 3:  # Need section (row 0) + headers (row 1) + at least 1 data row
                 continue
 
-            # STRUCTURE DETECTION: Determine table layout type
-            # Type 1: Headers spread across row 0 (multiple filled cells)
-            # Type 2: Newline-separated headers in row 0 cell 0
-            # Type 3: Section in row 0, headers in row 1
+            # SIMPLE STRUCTURE:
+            # Row 0: Section header (already extracted by stream mode)
+            # Row 1: Column headers (newline-separated like "Plaintiff\nDefendant\nYear...")
+            # Row 2+: Data rows
 
-            row0_cell0 = str(df.iloc[0, 0]).strip() if len(df) > 0 else ""
-            row0_values = [str(cell).strip() for cell in df.iloc[0].tolist()]
-            num_filled_cells = sum(1 for v in row0_values if v and v != 'nan')
+            # Extract headers from row 1
+            row1_cell0 = str(df.iloc[1, 0]).strip()
 
-            header = []
-            data_start_row = 1
-
-            if num_filled_cells > 1:
-                # Type 1: Headers spread across columns (pages 91-95)
-                header = [v if v and v != 'nan' else f"Col_{i}" for i, v in enumerate(row0_values)]
-                data_start_row = 1
-
-            elif '\n' in row0_cell0 or '\\n' in row0_cell0:
-                # Type 2: Newline-separated headers in row 0, col 0
-                headers_raw = row0_cell0.replace('\\n', '\n').split('\n')
+            # Headers are newline-separated in first cell
+            if '\n' in row1_cell0 or '\\n' in row1_cell0:
+                headers_raw = row1_cell0.replace('\\n', '\n').split('\n')
                 header = [h.strip() for h in headers_raw if h.strip()]
-                data_start_row = 1
-
             else:
-                # Type 3: Section in row 0, headers in row 1 (pages 21-25)
-                if len(df) > 1:
-                    row1_cell0 = str(df.iloc[1, 0]).strip()
-                    row1_values = [str(cell).strip() for cell in df.iloc[1].tolist()]
-                    num_filled_row1 = sum(1 for v in row1_values if v and v != 'nan')
+                # Fallback: headers spread across row 1
+                row1_values = [str(cell).strip() for cell in df.iloc[1].tolist()]
+                header = [v if v and v != 'nan' else f"Col_{i}" for i, v in enumerate(row1_values)]
 
-                    if '\n' in row1_cell0 or '\\n' in row1_cell0:
-                        # Headers newline-separated in row 1
-                        headers_raw = row1_cell0.replace('\\n', '\n').split('\n')
-                        header = [h.strip() for h in headers_raw if h.strip()]
-                    elif num_filled_row1 > 1:
-                        # Headers spread across row 1
-                        header = [v if v and v != 'nan' else f"Col_{i}" for i, v in enumerate(row1_values)]
-                    else:
-                        header = [str(h).strip() for h in df.iloc[1].tolist() if str(h).strip()]
-
-                    data_start_row = 2
-                else:
-                    continue  # Not enough rows
-
-            # Validate we found headers
+            # Validate headers
             if not header or not any(h.lower() in ['plaintiff', 'case', 'year', 'defendant'] for h in header):
                 if self.verbose:
-                    print(f"⚠️  Skipping table - no valid headers found")
+                    print(f"⚠️  Skipping table - no valid headers in row 1")
                 continue
+
+            # Data always starts at row 2
+            data_start_row = 2
 
             page_rows = 0
             page_new = 0
