@@ -223,7 +223,7 @@ Return the JSON object:"""
         return None
 
     @staticmethod
-    def normalize_judge_name(judge_name: str) -> str:
+    def normalize_judge_name(judge_name) -> str:
         """
         Normalize judge names to last name only.
 
@@ -233,9 +233,10 @@ Return the JSON object:"""
             "Hon. John Smith J." -> "Smith"
             "Smith, J." -> "Smith"
             "Brown J.J.A." -> "Brown"
+            ["Smith J."] -> "Smith"
 
         Args:
-            judge_name: Raw judge name
+            judge_name: Raw judge name (string or list)
 
         Returns:
             Normalized last name only
@@ -243,7 +244,15 @@ Return the JSON object:"""
         if not judge_name:
             return ""
 
-        name = judge_name.strip()
+        # Handle list input (in case LLM returns a list)
+        if isinstance(judge_name, list):
+            if not judge_name:
+                return ""
+            # Take first judge if single element, otherwise join with comma
+            judge_name = judge_name[0] if len(judge_name) == 1 else ", ".join(str(j) for j in judge_name)
+
+        # Convert to string and strip whitespace
+        name = str(judge_name).strip()
 
         # Remove trailing titles and suffixes (J., J.A., J.J.A., C.J., etc.)
         name = re.sub(r',?\s*(J\.J\.A\.|J\.A\.|J\.|C\.J\.|C\.J\.O\.|C\.J\.C\.)$', '', name, flags=re.IGNORECASE)
