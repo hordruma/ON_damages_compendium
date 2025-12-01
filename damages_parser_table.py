@@ -386,8 +386,8 @@ Return the JSON object:"""
             tables = camelot.read_pdf(
                 pdf_path,
                 pages=page_spec,
-                flavor="lattice",
-                strip_text="\n"
+                flavor="lattice"
+                # Don't strip newlines - we need them for header detection
             )
             return tables if tables else []
         except Exception as e:
