@@ -23,66 +23,6 @@ except ImportError:
         return None
 
 
-def normalize_fla_relationship(description: str) -> Optional[str]:
-    """
-    Normalize FLA relationship descriptions and exclude non-relationship damages.
-
-    Extracts relationship type from description and normalizes to singular forms:
-    - Wife/Husband/Spouse → Spouse
-    - Sister/Sisters/2 Sisters/Brother/Brothers → Sibling
-    - Son/Daughter/Children → Child
-    - Mother/Father/Mom/Dad → Parent
-
-    Args:
-        description: Raw FLA claim description
-
-    Returns:
-        Normalized relationship name or None if not a relationship claim
-    """
-    if not description:
-        return None
-
-    # Fix encoding errors (Euro sign and other mojibake)
-    desc = description.replace('€', '').replace('â', '').strip()
-
-    # Exclude general/punitive damages
-    exclude_patterns = [
-        r'\bgeneral\s+damages\b',
-        r'\bpunitive\s+damages\b',
-        r'\baggravated\s+damages\b',
-        r'\bspecial\s+damages\b',
-        r'\bcosts\b'
-    ]
-
-    for pattern in exclude_patterns:
-        if re.search(pattern, desc, re.IGNORECASE):
-            return None
-
-    # Extract relationships using regex - normalized to singular forms
-    # Order matters: check specific patterns before general ones
-    relationship_patterns = {
-        'Spouse': r'\b(spouse|wife|husband|partner)\b',
-        'Child': r'\b(\d+\s+)?(child|son|daughter|children)\b',  # handles "2 children", "child", etc.
-        'Parent': r'\b(parent|mother|father|mom|dad)\b',
-        'Sibling': r'\b(\d+\s+)?(sibling|brother|sister)(s)?\b',  # handles "2 sisters", "sister", "sisters", etc.
-        'Grandparent': r'\b(grandparent|grandfather|grandmother|grandpa|grandma)\b',
-        'Grandchild': r'\b(grandchild|grandson|granddaughter)\b',
-        'Other Family': r'\b(family|relative|kin)\b'
-    }
-
-    desc_lower = desc.lower()
-
-    for relationship, pattern in relationship_patterns.items():
-        if re.search(pattern, desc_lower):
-            return relationship
-
-    # If no pattern matches but description exists and isn't excluded, return cleaned desc
-    # (up to first 50 chars, cleaned)
-    if len(desc) > 0:
-        cleaned = re.sub(r'\s+', ' ', desc).strip()
-        return cleaned[:50] if len(cleaned) <= 50 else cleaned[:47] + "..."
-
-    return None
 
 
 def get_fla_cases(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -107,7 +47,10 @@ def get_fla_cases(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def extract_fla_awards(case: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Extract FLA award information from a case with normalized relationships.
+    Extract FLA award information from a case.
+
+    Relationships are normalized by the LLM during parsing.
+    Only includes awards marked as is_fla_award=true (excludes subrogation, insurance recovery, etc.)
 
     Args:
         case: Case dictionary
@@ -121,17 +64,15 @@ def extract_fla_awards(case: Dict[str, Any]) -> List[Dict[str, Any]]:
     awards = []
     for claim in fla_claims:
         amount = claim.get('amount')
-        description = claim.get('description', 'FLA Claim')
+        relationship = claim.get('relationship', 'FLA Claim')
+        is_fla_award = claim.get('is_fla_award', True)
 
-        # Normalize the relationship and filter out non-relationship damages
-        normalized_relationship = normalize_fla_relationship(description)
-
-        # Only include claims with valid relationships (excludes general/punitive damages)
-        if amount and amount > 0 and normalized_relationship:
+        # Only include true FLA awards (not subrogation or insurance recovery)
+        if amount and amount > 0 and is_fla_award:
             awards.append({
                 'amount': amount,
-                'description': normalized_relationship,  # Use normalized relationship
-                'original_description': description,  # Keep original for reference
+                'description': relationship,  # Use LLM-normalized relationship
+                'original_description': claim.get('description', relationship),  # Keep original for reference
                 'category': claim.get('category', 'Family Law Act Claim'),
                 'case_name': case.get('case_name', 'Unknown'),
                 'year': case.get('year'),
