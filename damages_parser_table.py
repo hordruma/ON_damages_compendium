@@ -97,7 +97,7 @@ Extract the following information and return as JSON:
   "defendant_name": "Defendant name only" or null,
   "year": year as integer or null,
   "citation": "Citation string" or null,
-  "court": "Court name" or null,
+  "court": "SCJ" (for Superior Court of Justice, including ONSC, SCJ, Ont. S.C.J., Superior Court) or "CA" (for Court of Appeal, including ONCA, C.A., Court of Appeal) or null,
   "judge": "Judge's LAST NAME ONLY (e.g., 'Smith' not 'A. Smith J.'). For appeals with multiple judges, use a list like ['Smith', 'Jones', 'Brown']. Preserve hyphenated surnames (e.g., 'Harrison-Young')" or null,
   "sex": "M" or "F" or null,
   "age": age as integer or null,
@@ -106,7 +106,7 @@ Extract the following information and return as JSON:
   "injuries": ["injury1", "injury2"] or [],
   "other_damages": [{{"type": "future_loss_of_income|past_loss_of_income|cost_of_future_care|housekeeping_capacity|other", "amount": number, "description": "text"}}] or [],
   "family_law_act_claims": [{{
-    "relationship": "father|mother|parent|spouse|son|daughter|child|brother|sister|sibling|grandfather|grandmother|grandparent|grandchild",
+    "relationship": "father|mother|parent|spouse|son|daughter|child|brother|sister|sibling|grandfather|grandmother|grandparent|grandchild|unknown",
     "amount": number,
     "description": "description text",
     "is_fla_award": true (false if this is a non-FLA award like subrogation or insurance reimbursement)
@@ -133,6 +133,7 @@ IMPORTANT:
   * Extract relationship-specific awards and normalize to specific gender-aware categories
   * Use gender-specific terms when gender is clear: "son" / "daughter" (not "child"), "father" / "mother" (not "parent"), "brother" / "sister" (not "sibling"), "grandfather" / "grandmother" (not "grandparent")
   * Use gender-neutral terms ONLY when explicitly stated as gender-neutral (e.g., "sibling claim") or gender is unspecified
+  * Use "unknown" for FLA claimants when ONLY a name is provided without any relationship information (e.g., "Mary Smith: $50,000" with no other context). This prevents polluting the relationship data.
   * Handle typos and variations through context (e.g., "2daughers" or "daugjters" in context of children -> "daughter")
   * Handle numeric prefixes and plurals (e.g., "2 sisters", "3 sons") -> normalize to singular form
   * Handle abbreviations and colloquialisms (e.g., "mom" -> "mother", "dad" -> "father", "spouse" -> "spouse")
