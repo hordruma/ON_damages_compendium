@@ -27,7 +27,11 @@ def normalize_fla_relationship(description: str) -> Optional[str]:
     """
     Normalize FLA relationship descriptions and exclude non-relationship damages.
 
-    Extracts relationship type from description and fixes encoding errors.
+    Extracts relationship type from description and normalizes to singular forms:
+    - Wife/Husband/Spouse → Spouse
+    - Sister/Sisters/2 Sisters/Brother/Brothers → Sibling
+    - Son/Daughter/Children → Child
+    - Mother/Father/Mom/Dad → Parent
 
     Args:
         description: Raw FLA claim description
@@ -54,12 +58,13 @@ def normalize_fla_relationship(description: str) -> Optional[str]:
         if re.search(pattern, desc, re.IGNORECASE):
             return None
 
-    # Extract relationships using regex
+    # Extract relationships using regex - normalized to singular forms
+    # Order matters: check specific patterns before general ones
     relationship_patterns = {
         'Spouse': r'\b(spouse|wife|husband|partner)\b',
-        'Child': r'\b(child|son|daughter|children)\b',
+        'Child': r'\b(\d+\s+)?(child|son|daughter|children)\b',  # handles "2 children", "child", etc.
         'Parent': r'\b(parent|mother|father|mom|dad)\b',
-        'Sibling': r'\b(sibling|brother|sister)\b',
+        'Sibling': r'\b(\d+\s+)?(sibling|brother|sister)(s)?\b',  # handles "2 sisters", "sister", "sisters", etc.
         'Grandparent': r'\b(grandparent|grandfather|grandmother|grandpa|grandma)\b',
         'Grandchild': r'\b(grandchild|grandson|granddaughter)\b',
         'Other Family': r'\b(family|relative|kin)\b'
