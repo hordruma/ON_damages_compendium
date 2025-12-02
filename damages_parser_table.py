@@ -93,19 +93,34 @@ Row Data: {row_data}
 Extract the following information and return as JSON:
 {{
   "case_name": "Full case name (plaintiff v. defendant)" or null,
-  "plaintiff_name": "Plaintiff name only" or null,
+  "plaintiff_name": "Plaintiff name only (primary plaintiff, or null if multiple)" or null,
   "defendant_name": "Defendant name only" or null,
   "year": year as integer or null,
   "citation": "Citation string" or null,
   "court": "Court name" or null,
-  "judge": "Judge's LAST NAME ONLY (e.g., 'Smith' not 'A. Smith J.'). For appeals with multiple judges, use a list like ['Smith', 'Jones', 'Brown']" or null,
+  "judge": "Judge's LAST NAME ONLY (e.g., 'Smith' not 'A. Smith J.'). For appeals with multiple judges, use a list like ['Smith', 'Jones', 'Brown']. Preserve hyphenated surnames (e.g., 'Harrison-Young')" or null,
   "sex": "M" or "F" or null,
   "age": age as integer or null,
   "non_pecuniary_damages": amount in dollars (number, no $ or commas) or null,
   "is_provisional": true/false or null,
   "injuries": ["injury1", "injury2"] or [],
   "other_damages": [{{"type": "future_loss_of_income|past_loss_of_income|cost_of_future_care|housekeeping_capacity|other", "amount": number, "description": "text"}}] or [],
-  "comments": "Additional notes" or null,
+  "family_law_act_claims": [{{
+    "relationship": "father|mother|parent|spouse|son|daughter|child|brother|sister|sibling|grandfather|grandmother|grandparent|grandchild",
+    "amount": number,
+    "description": "description text",
+    "is_fla_award": true (false if this is a non-FLA award like subrogation or insurance reimbursement)
+  }}] or [],
+  "comments": "Additional notes about primary plaintiff" or null,
+  "plaintiffs": [{{
+    "plaintiff_id": "p1|p2|p3|etc",
+    "plaintiff_name": "Name of this plaintiff",
+    "sex": "M" or "F" or null,
+    "age": age as integer or null,
+    "non_pecuniary_damages": amount or null,
+    "injuries": ["injury1", "injury2"] or [],
+    "comments": "Plaintiff-specific comments (p2, p3 for additional plaintiffs)"
+  }}] or null (only use if multiple plaintiffs; omit if single plaintiff),
   "is_continuation": true if this row lacks case_name/citation (continuation of previous case), false otherwise
 }}
 
@@ -113,6 +128,24 @@ IMPORTANT:
 - Set "is_continuation": true if this row has no case name or citation (it's continuing the previous case)
 - Judge names: Extract LAST NAME ONLY, no first initials, no titles (J., J.A., J.J.A., C.J., etc.)
   Examples: "Smith J." -> "Smith", "A. Brown J.A." -> "Brown", "Hon. Jones" -> "Jones"
+  PRESERVE HYPHENATED SURNAMES: "J.A. Harrison-Young J." -> "Harrison-Young"
+- FLA (Family Law Act) Claims Normalization:
+  * Extract relationship-specific awards and normalize to specific gender-aware categories
+  * Use gender-specific terms when gender is clear: "son" / "daughter" (not "child"), "father" / "mother" (not "parent"), "brother" / "sister" (not "sibling"), "grandfather" / "grandmother" (not "grandparent")
+  * Use gender-neutral terms ONLY when explicitly stated as gender-neutral (e.g., "sibling claim") or gender is unspecified
+  * Handle typos and variations through context (e.g., "2daughers" or "daugjters" in context of children -> "daughter")
+  * Handle numeric prefixes and plurals (e.g., "2 sisters", "3 sons") -> normalize to singular form
+  * Handle abbreviations and colloquialisms (e.g., "mom" -> "mother", "dad" -> "father", "spouse" -> "spouse")
+  * Mark as is_fla_award: false for non-FLA awards like:
+    - Subrogated insurance claims (OHIP, motor vehicle, workers comp)
+    - Reimbursement for third-party payments
+    - General/punitive damages (NOT family law relationship-based)
+    - Any award explicitly labeled as insurance recovery or subrogation
+  * Mark as is_fla_award: true only for true Family Law Act damages (spousal support, child support, family property division-related awards, etc.)
+- Multi-plaintiff cases: If multiple plaintiffs are identified in a single row:
+  * Return a "plaintiffs" array with separate objects for p2, p3, etc. (additional plaintiffs beyond primary)
+  * Include plaintiff-specific injuries, damages, sex, age, and comments for each plaintiff
+  * Omit "plaintiffs" array if only one plaintiff (use top-level fields instead)
 - Parse monetary amounts as numbers only (no $ or commas)
 - Return only valid JSON, no other text
 
