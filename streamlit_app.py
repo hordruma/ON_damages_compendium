@@ -18,7 +18,7 @@ from typing import Dict, List
 # Import custom modules (refactored into app/ package)
 from app.core.config import *
 from app.core.data_loader import initialize_data
-from app.core.search import search_cases, extract_damages_value
+from app.core.search import search_cases, extract_damages_value, boolean_search
 from app.ui.visualizations import create_inflation_chart, calculate_chart_statistics, create_damages_cap_chart
 from app.ui.fla_analytics import display_fla_analytics_page
 from app.ui.judge_analytics import display_judge_analytics_page
@@ -238,7 +238,7 @@ st.markdown('<div class="main-header">⚖️ Ontario Damages Compendium</div>', 
 st.markdown('<div class="sub-header">Visual search tool for comparable personal injury awards in Ontario</div>', unsafe_allow_html=True)
 
 # Create tabs for different pages
-tab1, tab2, tab3 = st.tabs(["🔍 Case Search", "⚰️ Fatal Injuries (FLA by Relationship)", "👨‍⚖️ Judge Analytics"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Case Search", "🔎 Boolean Search", "⚰️ Fatal Injuries (FLA by Relationship)", "👨‍⚖️ Judge Analytics"])
 
 # =============================================================================
 # TAB 1: CASE SEARCH
@@ -749,17 +749,260 @@ with tab1:
                         st.info("Please ensure all dependencies are installed: pip install reportlab")
 
 # =============================================================================
-# TAB 2: FLA DAMAGES
+# TAB 2: BOOLEAN SEARCH
 # =============================================================================
 
 with tab2:
-    display_fla_analytics_page(cases)
+    st.info("""
+    **Boolean Search:** Use logical operators to find specific cases with field-specific search and damage filters.
+
+    **Operators:**
+    - **AND**: Both terms must be present (e.g., `whiplash AND herniation`)
+    - **OR**: At least one term must be present (e.g., `fracture OR break`)
+    - **NOT**: Term must not be present (e.g., `spine NOT surgery`)
+    - **Quotes**: Exact phrase matching (e.g., `"disc herniation"`)
+
+    **💡 Examples:**
+    - Search for `MVA` in **Comments only** with awards over **$100,000**
+    - Search for `neck AND "disc herniation"` in **Injuries** field
+    - Search for `(fracture OR break) AND spine` across **all fields**
+    - Search for `brain NOT surgery` in **Comments** with awards between **$50k-$200k**
+    """)
+
+    # Boolean query input
+    st.subheader("Enter Boolean Query")
+    boolean_query = st.text_input(
+        "Boolean Query",
+        placeholder='e.g., MVA, neck AND herniation, (fracture OR break) AND spine',
+        help="Use AND, OR, NOT operators to combine search terms. Use quotes for exact phrases.",
+        label_visibility="collapsed"
+    )
+
+    # Field selection
+    st.subheader("🔍 Search In (select fields to search)")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        search_case_name = st.checkbox("Case Name", value=True, key="bool_search_case_name")
+    with col2:
+        search_injuries = st.checkbox("Injuries", value=True, key="bool_search_injuries")
+    with col3:
+        search_comments = st.checkbox("Comments", value=True, key="bool_search_comments")
+    with col4:
+        search_summary = st.checkbox("Summary", value=True, key="bool_search_summary")
+
+    # Build search_fields list
+    search_fields = []
+    if search_case_name:
+        search_fields.append('case_name')
+    if search_injuries:
+        search_fields.append('injuries')
+    if search_comments:
+        search_fields.append('comments')
+    if search_summary:
+        search_fields.append('summary')
+
+    # Damages filter
+    st.subheader("💰 Damages Filter")
+    col1, col2 = st.columns(2)
+    with col1:
+        min_damages_enabled = st.checkbox("Minimum Award", key="bool_min_damages_enabled")
+        min_damages = None
+        if min_damages_enabled:
+            min_damages = st.number_input(
+                "Min Amount ($)",
+                min_value=0,
+                max_value=10_000_000,
+                value=100_000,
+                step=10_000,
+                key="bool_min_damages"
+            )
+
+    with col2:
+        max_damages_enabled = st.checkbox("Maximum Award", key="bool_max_damages_enabled")
+        max_damages = None
+        if max_damages_enabled:
+            max_damages = st.number_input(
+                "Max Amount ($)",
+                min_value=0,
+                max_value=10_000_000,
+                value=500_000,
+                step=10_000,
+                key="bool_max_damages"
+            )
+
+    # Year range filter
+    st.subheader("📅 Year Range Filter")
+    year_filter_enabled = st.checkbox("Filter by year range", key="bool_year_filter_enabled")
+    min_year = None
+    max_year = None
+    if year_filter_enabled:
+        # Get min/max years from cases for slider range
+        all_years = [case.get('year') for case in cases if case.get('year')]
+        if all_years:
+            min_case_year = min(all_years)
+            max_case_year = max(all_years)
+            year_range = st.slider(
+                "Select year range",
+                min_value=min_case_year,
+                max_value=max_case_year,
+                value=(min_case_year, max_case_year),
+                key="bool_year_range"
+            )
+            min_year, max_year = year_range
+
+    # Sidebar filters
+    with st.sidebar:
+        st.header("Boolean Search Filters")
+
+        # Category filter
+        bool_selected_regions = []
+        with st.expander("🎯 Injury Categories (Optional)", expanded=False):
+            if region_map:
+                for category_id, category_data in region_map.items():
+                    if st.checkbox(
+                        category_data.get('label', category_id),
+                        key=f"bool_category_{category_id}"
+                    ):
+                        # Add main category
+                        bool_selected_regions.append(category_data.get('label', category_id))
+
+                        # Add subcategories if available
+                        subcats = category_data.get('subcategories', [])
+                        if subcats:
+                            bool_selected_regions.extend(subcats)
+
+        # Demographics
+        st.subheader("👤 Demographics (Optional)")
+        bool_gender = st.selectbox(
+            "Gender",
+            options=["Any", "Male", "Female"],
+            key="bool_gender"
+        )
+        if bool_gender == "Any":
+            bool_gender = None
+
+        bool_use_age = st.checkbox("Filter by age", key="bool_use_age")
+        bool_age = None
+        if bool_use_age:
+            bool_age = st.slider(
+                "Age (±5 years)",
+                min_value=0,
+                max_value=100,
+                value=40,
+                key="bool_age"
+            )
+
+    # Search button
+    if st.button("🔍 Search Cases", type="primary", key="bool_search_btn"):
+        if not boolean_query.strip():
+            st.warning("⚠️ Please enter a Boolean query to search.")
+        elif not search_fields:
+            st.warning("⚠️ Please select at least one field to search in.")
+        else:
+            with st.spinner("Searching cases..."):
+                # Perform Boolean search with field-specific, damage, and year filters
+                bool_results = boolean_search(
+                    query=boolean_query,
+                    cases=cases,
+                    selected_regions=bool_selected_regions if bool_selected_regions else None,
+                    gender=bool_gender,
+                    age=bool_age,
+                    search_fields=search_fields,
+                    min_damages=min_damages,
+                    max_damages=max_damages,
+                    min_year=min_year,
+                    max_year=max_year
+                )
+
+                st.divider()
+                st.header("Search Results")
+
+                # Display search info
+                st.info(f"🔍 Found {len(bool_results)} matching cases")
+
+                if bool_results:
+                    # Extract damages for charts
+                    bool_damages_values = []
+                    for case in bool_results:
+                        damage_val = extract_damages_value(case)
+                        if damage_val:
+                            bool_damages_values.append(damage_val)
+
+                    # Display charts if we have damages data
+                    if bool_damages_values:
+                        st.divider()
+
+                        # Damages Cap Comparison Chart
+                        st.subheader("📊 Awards Relative to Ontario Damages Cap")
+                        cap_fig = create_damages_cap_chart(bool_damages_values, DEFAULT_REFERENCE_YEAR)
+                        if cap_fig:
+                            st.plotly_chart(cap_fig, use_container_width=True)
+                            st.caption("💡 Bars are colored based on their proportion to the Ontario non-pecuniary damages cap")
+
+                    st.divider()
+                    st.subheader("📋 Case Results")
+
+                    # Display cases
+                    for idx, case in enumerate(bool_results, 1):
+                        with st.container():
+                            # Case header
+                            col1, col2 = st.columns([3, 1])
+
+                            with col1:
+                                case_name = case.get('case_name', 'Unknown Case')
+                                year = case.get('year', 'N/A')
+                                court = case.get('court', 'N/A')
+                                st.markdown(f"### {idx}. {case_name}")
+                                st.caption(f"📅 {year} | 🏛️ {court}")
+
+                            with col2:
+                                damage_val = extract_damages_value(case)
+                                if damage_val:
+                                    st.metric("💰 Award", f"${damage_val:,.0f}")
+
+                            # Case details
+                            ext = case.get('extended_data', {})
+
+                            # Injuries
+                            injuries = ext.get('injuries', [])
+                            if injuries:
+                                st.markdown("**🩹 Injuries:**")
+                                for injury in injuries[:5]:  # Show first 5 injuries
+                                    st.markdown(f"- {injury}")
+                                if len(injuries) > 5:
+                                    st.caption(f"... and {len(injuries) - 5} more")
+
+                            # Comments
+                            comments = ext.get('comments') or case.get('comments')
+                            if comments:
+                                st.markdown(f"**💬 Comments:** {comments}")
+
+                            # Categories
+                            regions = case.get('regions') or ext.get('regions', [])
+                            if regions:
+                                st.markdown(f"**📍 Categories:** {', '.join(regions[:5])}")
+
+                            # Citation
+                            citation = case.get('citation', '')
+                            if citation:
+                                st.caption(f"📖 Citation: {citation}")
+
+                            st.divider()
+                else:
+                    st.warning("No cases found matching your Boolean query. Try adjusting your search terms or operators.")
 
 # =============================================================================
-# TAB 3: JUDGE ANALYTICS
+# TAB 3: FLA DAMAGES
 # =============================================================================
 
 with tab3:
+    display_fla_analytics_page(cases)
+
+# =============================================================================
+# TAB 4: JUDGE ANALYTICS
+# =============================================================================
+
+with tab4:
     display_judge_analytics_page(cases)
 
 # =============================================================================

@@ -414,3 +414,227 @@ def extract_damages_value(case: Dict[str, Any]) -> Optional[float]:
                     pass
 
     return None
+
+
+def boolean_search(
+    query: str,
+    cases: List[Dict[str, Any]],
+    selected_regions: Optional[List[str]] = None,
+    gender: Optional[str] = None,
+    age: Optional[int] = None,
+    age_range: int = 5,
+    search_fields: Optional[List[str]] = None,
+    min_damages: Optional[float] = None,
+    max_damages: Optional[float] = None,
+    min_year: Optional[int] = None,
+    max_year: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """
+    Perform Boolean search on cases using AND, OR, NOT operators.
+
+    Supports:
+    - AND: All terms must be present (e.g., "whiplash AND herniation")
+    - OR: At least one term must be present (e.g., "fracture OR break")
+    - NOT: Term must not be present (e.g., "spine NOT surgery")
+    - Parentheses: Grouping (e.g., "(neck OR spine) AND herniation")
+    - Quoted phrases: Exact phrase matching (e.g., "disc herniation")
+    - Field-specific search: Search in specific fields only
+    - Damages filters: Filter by award amounts
+    - Year range filters: Filter by case year
+
+    Args:
+        query: Boolean query string
+        cases: List of case dictionaries
+        selected_regions: Optional list of category IDs to filter by
+        gender: Optional gender filter
+        age: Optional age filter
+        age_range: Age range tolerance for age filtering (default 5 years)
+        search_fields: List of fields to search in (default: all fields)
+                      Options: 'case_name', 'injuries', 'comments', 'summary'
+        min_damages: Minimum damages amount filter
+        max_damages: Maximum damages amount filter
+        min_year: Minimum case year filter
+        max_year: Maximum case year filter
+
+    Returns:
+        List of matching cases
+    """
+    if not query.strip():
+        return []
+
+    # Default to searching all fields if not specified
+    if search_fields is None:
+        search_fields = ['case_name', 'injuries', 'comments', 'summary']
+
+    # Parse and evaluate the Boolean expression
+    matching_cases = []
+
+    for case in cases:
+        # Apply year filter
+        if min_year is not None or max_year is not None:
+            case_year = case.get('year')
+            if case_year is None:
+                continue
+            if min_year is not None and case_year < min_year:
+                continue
+            if max_year is not None and case_year > max_year:
+                continue
+
+        # Apply damages filter
+        if min_damages is not None or max_damages is not None:
+            damage_val = extract_damages_value(case)
+            if damage_val is None:
+                continue
+            if min_damages is not None and damage_val < min_damages:
+                continue
+            if max_damages is not None and damage_val > max_damages:
+                continue
+
+        # Apply category filter if specified
+        if selected_regions:
+            case_categories = case.get("regions") or case.get("extended_data", {}).get("regions") or []
+            if not case_categories:
+                continue
+
+            lower_case_categories = {str(c).strip().lower() for c in case_categories}
+            lower_sel = {str(c).strip().lower() for c in selected_regions}
+
+            if not (lower_case_categories & lower_sel):
+                continue
+
+        # Apply gender filter
+        if gender:
+            ext = case.get("extended_data", {})
+            case_gender = ext.get("sex") or case.get("sex")
+            if case_gender and case_gender.upper() != gender.upper()[0]:
+                continue
+
+        # Apply age filter
+        if age is not None:
+            ext = case.get("extended_data", {})
+            case_age = ext.get("age") or case.get("age")
+            if case_age is not None:
+                age_diff = abs(case_age - age)
+                if age_diff > age_range:
+                    continue
+
+        # Get searchable text from case based on selected fields
+        text_parts = []
+        ext = case.get('extended_data', {})
+
+        if 'case_name' in search_fields:
+            case_name = case.get('case_name', '')
+            if case_name:
+                text_parts.append(case_name)
+
+        if 'injuries' in search_fields:
+            injuries = ext.get('injuries', [])
+            if injuries:
+                text_parts.extend([str(inj) for inj in injuries])
+
+        if 'comments' in search_fields:
+            comments = ext.get('comments') or case.get('comments')
+            if comments:
+                text_parts.append(str(comments))
+
+        if 'summary' in search_fields:
+            summary = case.get('summary_text', '')
+            if summary:
+                text_parts.append(summary)
+
+        # Combine all text
+        case_text = ' '.join(text_parts).lower()
+
+        # Evaluate Boolean expression
+        if _evaluate_boolean_query(query, case_text):
+            matching_cases.append(case)
+
+    return matching_cases
+
+
+def _evaluate_boolean_query(query: str, text: str) -> bool:
+    """
+    Evaluate a Boolean query against text.
+
+    Args:
+        query: Boolean query string
+        text: Text to search in (should be lowercase)
+
+    Returns:
+        True if query matches text, False otherwise
+    """
+    # Handle quoted phrases
+    phrase_pattern = r'"([^"]+)"'
+    phrases = re.findall(phrase_pattern, query)
+    phrase_map = {}
+
+    # Replace phrases with placeholders
+    modified_query = query
+    for i, phrase in enumerate(phrases):
+        placeholder = f"__PHRASE_{i}__"
+        phrase_map[placeholder] = phrase.lower()
+        modified_query = modified_query.replace(f'"{phrase}"', placeholder)
+
+    # Normalize query
+    modified_query = modified_query.upper()
+    text_lower = text.lower()
+
+    # Split by OR first (lowest precedence)
+    or_parts = re.split(r'\s+OR\s+', modified_query)
+
+    for or_part in or_parts:
+        # Split by AND (higher precedence), but keep NOT as part of the next term
+        # Treat consecutive terms without operators as implicitly ANDed
+        and_parts = []
+        tokens = or_part.split()
+
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            if token == "AND":
+                # Skip the AND operator itself
+                i += 1
+                continue
+            elif token == "NOT" and i + 1 < len(tokens):
+                # NOT term is treated as a single unit
+                and_parts.append(f"NOT {tokens[i + 1]}")
+                i += 2
+            else:
+                # Regular term
+                and_parts.append(token)
+                i += 1
+
+        all_and_matched = True
+        for and_part in and_parts:
+            and_part = and_part.strip()
+
+            # Handle NOT
+            if and_part.startswith('NOT '):
+                term = and_part[4:].strip()
+
+                # Check if it's a phrase placeholder
+                if term in phrase_map:
+                    if phrase_map[term] in text_lower:
+                        all_and_matched = False
+                        break
+                else:
+                    if term.lower() in text_lower:
+                        all_and_matched = False
+                        break
+            else:
+                # Regular term or phrase
+                if and_part in phrase_map:
+                    if phrase_map[and_part] not in text_lower:
+                        all_and_matched = False
+                        break
+                else:
+                    if and_part.lower() not in text_lower:
+                        all_and_matched = False
+                        break
+
+        # If all AND conditions matched in this OR branch, return True
+        if all_and_matched:
+            return True
+
+    # None of the OR branches matched
+    return False
