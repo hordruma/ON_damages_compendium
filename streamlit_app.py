@@ -158,11 +158,21 @@ def display_enhanced_data(case: Dict) -> None:
             demo.append(f"Age: {age}")
         st.markdown(f"**Demographics:** {', '.join(demo)}")
 
-    # Injuries
+    # Injuries (deduplicated)
     injuries = extended_data.get('injuries')
     if injuries:
         st.markdown("**Injuries:**")
+        # Deduplicate while preserving order
+        seen = set()
+        unique_injuries = []
         for injury in injuries:
+            # Normalize for comparison (case-insensitive, strip whitespace)
+            injury_normalized = injury.strip().lower()
+            if injury_normalized not in seen:
+                seen.add(injury_normalized)
+                unique_injuries.append(injury)
+
+        for injury in unique_injuries:
             st.markdown(f"- {injury}")
 
     # Other damages
@@ -237,7 +247,7 @@ tab1, tab2, tab3 = st.tabs(["🔍 Case Search", "⚰️ Fatal Injuries (FLA by R
 with tab1:
     # Instructions - Always visible
     st.info("""
-    **How to Search:** Describe the injury in detail below, optionally select demographics and body regions in the sidebar, then click "Find Comparable Cases" to see similar awards.
+    **How to Search:** Describe the injury in detail below, optionally select demographics and injury categories in the sidebar, then click "Find Comparable Cases" to see similar awards.
 
     **💡 Tips:** Use clinical terminology (e.g., "C5-C6 disc herniation"), include severity and chronicity, mention mechanism of injury if relevant.
     """)
@@ -284,7 +294,7 @@ with tab1:
                         st.subheader("Extracted Information")
 
                         if analysis.get('injured_regions'):
-                            st.write("**Detected Regions:**")
+                            st.write("**Detected Categories:**")
                             for region_id in analysis['injured_regions']:
                                 if region_id in region_map:
                                     st.write(f"• {region_map[region_id]['label']}")
@@ -632,14 +642,14 @@ with tab1:
 
                 with st.expander(
                     f"**Case {idx}** - {case.get('case_name', 'Unknown')}{title_suffix} | "
-                    f"Region: {case.get('region', 'Unknown')}{damage_display} | "
+                    f"Category: {case.get('region', 'Unknown')}{damage_display} | "
                     f"Match: {combined_score*100:.1f}%",
                     expanded=(idx <= EXPANDED_RESULTS_COUNT)
                 ):
                     col1, col2 = st.columns([2, 1])
 
                     with col1:
-                        st.markdown(f"**Region:** {case.get('region', 'Unknown')}")
+                        st.markdown(f"**Category:** {case.get('region', 'Unknown')}")
 
                         if case.get('year'):
                             st.markdown(f"**Year:** {case['year']}")
@@ -657,10 +667,10 @@ with tab1:
                         display_enhanced_data(case)
 
                     with col2:
-                        st.metric("Match Score", f"{combined_score*100:.1f}%", help="Overall similarity based on injury description and body regions")
+                        st.metric("Match Score", f"{combined_score*100:.1f}%", help="Overall similarity based on injury description and categories")
 
                         if case.get("region_score", 0) > 0:
-                            st.metric("Region Match", f"{case['region_score']*100:.0f}%")
+                            st.metric("Category Match", f"{case['region_score']*100:.0f}%")
 
     # =============================================================================
     # PDF REPORT GENERATION
