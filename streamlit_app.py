@@ -158,11 +158,21 @@ def display_enhanced_data(case: Dict) -> None:
             demo.append(f"Age: {age}")
         st.markdown(f"**Demographics:** {', '.join(demo)}")
 
-    # Injuries
+    # Injuries (deduplicated)
     injuries = extended_data.get('injuries')
     if injuries:
         st.markdown("**Injuries:**")
+        # Deduplicate while preserving order
+        seen = set()
+        unique_injuries = []
         for injury in injuries:
+            # Normalize for comparison (case-insensitive, strip whitespace)
+            injury_normalized = injury.strip().lower()
+            if injury_normalized not in seen:
+                seen.add(injury_normalized)
+                unique_injuries.append(injury)
+
+        for injury in unique_injuries:
             st.markdown(f"- {injury}")
 
     # Other damages

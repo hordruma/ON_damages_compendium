@@ -159,26 +159,23 @@ def load_cases_auto() -> Optional[List[Dict[str, Any]]]:
         if format_type == "dashboard":
             return data
         elif format_type == "ai_parsed":
-            # Auto-convert
-            st.info("🔄 Detected AI-parsed format, converting to dashboard format...")
+            # Auto-convert silently
             model = load_embedding_model()
             return convert_ai_to_dashboard_inline(data, model)
 
     # Try AI-parsed format
     if ai_parsed_path.exists():
-        st.info(f"📂 Loading from AI-parsed format: {ai_parsed_path}")
         with open(ai_parsed_path) as f:
             data = json.load(f)
 
         format_type = detect_json_format(data)
 
         if format_type == "ai_parsed":
-            st.info("🔄 Converting AI-parsed format to dashboard format...")
+            # Convert silently
             model = load_embedding_model()
             converted = convert_ai_to_dashboard_inline(data, model)
 
             # Save for future use
-            st.info(f"💾 Saving converted data to {DATA_FILE_PATH}...")
             data_path.parent.mkdir(parents=True, exist_ok=True)
             with open(data_path, 'w') as f:
                 json.dump(converted, f, indent=2)

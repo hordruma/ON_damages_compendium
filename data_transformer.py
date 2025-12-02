@@ -155,6 +155,18 @@ def convert_to_dashboard_format(
             if not isinstance(judges, list):
                 judges = [judges] if judges else []
 
+            # Get FLA claims from case level
+            fla_claims = case.get('family_law_act_claims', [])
+            if not isinstance(fla_claims, list):
+                fla_claims = []
+
+            # Get region for top-level field (first region or category)
+            top_level_region = None
+            if region:
+                top_level_region = region[0] if isinstance(region, list) else region
+            elif category != 'UNKNOWN':
+                top_level_region = category
+
             # Create dashboard case
             dashboard_case = {
                 'id': f"case_{case_counter:04d}",
@@ -165,6 +177,8 @@ def convert_to_dashboard_format(
                 'citation': citation,
                 'source_page': source_page,
                 'category': category,
+                'region': top_level_region,  # Add top-level region field for judge analytics
+                'damages': non_pecuniary,  # Add top-level damages field for judge analytics
                 'non_pecuniary_damages': non_pecuniary,
                 'pecuniary_damages': pecuniary,
                 'total_award': total_award,
@@ -175,7 +189,11 @@ def convert_to_dashboard_format(
                     'sex': sex,
                     'age': age,
                     'other_damages': other_damages if isinstance(other_damages, list) else [],
-                    'num_plaintiffs': len(plaintiffs) if plaintiffs else 1
+                    'num_plaintiffs': len(plaintiffs) if plaintiffs else 1,
+                    'plaintiff_id': plaintiff.get('plaintiff_id') if 'plaintiff_id' in plaintiff else None,
+                    'comments': comments,
+                    'judges': judges,  # Add judges to extended_data for judge analytics
+                    'family_law_act_claims': fla_claims  # Add FLA claims to extended_data
                 }
             }
 
