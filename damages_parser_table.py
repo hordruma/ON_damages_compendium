@@ -391,13 +391,17 @@ Return the JSON object:"""
         Returns:
             Dict mapping page number to section header (or None if not found)
         """
-        # Known anatomical section keywords
+        # Known anatomical section keywords (title case to match PDF headers)
+        # These should align with detect_section_header() method for consistency
         section_keywords = {
-            'General', 'Cervical Spine', 'Thoracic Spine', 'Lumbar Spine',
-            'Shoulder', 'Elbow', 'Forearm', 'Wrist', 'Hand', 'Finger',
-            'Hip', 'Knee', 'Lower Leg', 'Ankle', 'Foot', 'Toe',
-            'Brain', 'Head', 'Face', 'Eye', 'Ear', 'Nose',
-            'Psychological', 'Chronic Pain', 'Multiple Injuries'
+            'General',
+            'Brain', 'Brain & Skull', 'Brain and Skull', 'Head', 'Face', 'Eye', 'Ear', 'Nose',
+            'Neck',
+            'Cervical Spine', 'Thoracic Spine', 'Lumbar Spine', 'Spine',
+            'Shoulder', 'Arm', 'Arms', 'Elbow', 'Forearm', 'Wrist', 'Hand', 'Finger',
+            'Chest', 'Thorax', 'Abdomen', 'Pelvis',
+            'Hip', 'Knee', 'Leg', 'Legs', 'Lower Leg', 'Leg/Lower Leg', 'Ankle', 'Foot', 'Toe',
+            'Psychological', 'Psychiatric', 'Chronic Pain', 'Multiple Injuries', 'Soft Tissue'
         }
 
         sections_by_page = {}
