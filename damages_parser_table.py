@@ -11,7 +11,7 @@ Key features:
 - Row-by-row LLM processing (handles multi-plaintiff cases)
 - Pre-labeled columns from table headers
 - Deterministic continuation row merging
-- Accurate anatomical region tracking
+- Accurate anatomical category tracking
 
 Advantages over full-page extraction:
 - 10-50x cheaper (sends only row text, not full pages)
@@ -86,7 +86,7 @@ class TableBasedParser:
     # Row parsing prompt - much simpler and cheaper than full-page
     ROW_PROMPT = """Parse this table row from a legal damages compendium.
 
-Body Region/Category: {section}
+Anatomical Category: {section}
 Table Columns: {columns}
 Row Data: {row_data}
 

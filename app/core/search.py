@@ -2,10 +2,10 @@
 Hybrid search for the Ontario Damages Compendium.
 
 This module implements hybrid search combining:
-- Semantic search: Embeddings from injuries, comments, and case details
+- Semantic search: Embeddings from injuries, category, and comments
 - Keyword search: BM25-style keyword matching on case text
 - Metadata scoring: Injury overlap, gender match, age proximity
-- Exclusive region filtering: Cases must match selected anatomical regions
+- Exclusive category filtering: Cases must match selected anatomical categories
 - Results sorted by combined relevance score
 """
 
@@ -273,8 +273,8 @@ def search_cases(
     Search cases using hybrid search (semantic + keyword + metadata).
 
     Algorithm:
-    1. Apply exclusive region filter: only include cases matching selected regions
-    2. Compute semantic similarity on embeddings (injuries + comments)
+    1. Apply exclusive category filter: only include cases matching selected categories
+    2. Compute semantic similarity on embeddings (injuries + category + comments)
     3. Compute keyword match score using BM25
     4. Compute metadata score from injury overlap, gender match, age proximity
     5. Combine scores: combined = sem_weight*semantic + kw_weight*keyword + meta_weight*meta
@@ -282,9 +282,9 @@ def search_cases(
 
     Args:
         query_text: Free-text injury description from user
-        selected_regions: List of region IDs/labels (exclusive filter)
+        selected_regions: List of category IDs/labels (exclusive filter) - kept as 'regions' for API compat
         cases: List of case dictionaries
-        region_map: Region ID -> label mapping
+        region_map: Category ID -> label mapping (kept as 'region_map' for API compat)
         model: Embedding model with .encode(text) method
         gender: Optional gender filter ("Male", "Female", etc.)
         age: Optional age filter
@@ -301,7 +301,7 @@ def search_cases(
     # Encode query using same model as embeddings
     qv = model.encode(query_text).astype("float32")
 
-    # Stage 1: Exclusive region filtering
+    # Stage 1: Exclusive category filtering
     candidate_indices = []
     case_index_map = {}
 
@@ -313,21 +313,22 @@ def search_cases(
             # Case ID not found in embedding matrix, skip
             continue
 
-        # Apply exclusive region filter if regions selected
-        if selected_regions:
-            case_regions = case.get("regions") or case.get("extended_data", {}).get("regions") or []
-            if not case_regions:
+        # Apply exclusive category filter if categories selected
+        if selected_regions:  # kept as 'selected_regions' for API compat
+            # Check both 'regions' field (legacy) and category-based fields
+            case_categories = case.get("regions") or case.get("extended_data", {}).get("regions") or []
+            if not case_categories:
                 continue
 
-            # Case-insensitive region overlap check
-            lower_case_regions = {str(r).strip().lower() for r in case_regions}
-            lower_sel = {str(r).strip().lower() for r in selected_regions}
+            # Case-insensitive category overlap check
+            lower_case_categories = {str(c).strip().lower() for c in case_categories}
+            lower_sel = {str(c).strip().lower() for c in selected_regions}
 
-            if lower_case_regions & lower_sel:
+            if lower_case_categories & lower_sel:
                 candidate_indices.append(row_idx)
                 case_index_map[row_idx] = case
         else:
-            # No region filter: include all
+            # No category filter: include all
             candidate_indices.append(row_idx)
             case_index_map[row_idx] = case
 

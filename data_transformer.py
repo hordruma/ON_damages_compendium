@@ -198,13 +198,12 @@ def convert_to_dashboard_format(
             }
 
             # Generate summary text for embedding
+            # Use category for anatomical classification (injuries + category + comments)
             summary_parts = []
             if injuries:
                 summary_parts.append(f"Injuries: {', '.join(injuries)}")
             if category and category != 'UNKNOWN':
                 summary_parts.append(f"Category: {category}")
-            if region:
-                summary_parts.append(f"Region: {', '.join(region)}")
             if comments:
                 summary_parts.append(f"Comments: {comments}")
 
