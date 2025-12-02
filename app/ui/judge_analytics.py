@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
 from collections import Counter
+import re
 
 # Import inflation adjustment
 try:
@@ -23,15 +24,70 @@ except ImportError:
         return None
 
 
+def normalize_judge_name(judge_name: str) -> str:
+    """
+    Normalize judge names to handle variations with initials.
+
+    Handles cases like:
+    - "J.A.Harrison-Young" → "Harrison-Young"
+    - "J.Harrison-Young" → "Harrison-Young"
+    - "Harrison-Young" → "Harrison-Young"
+    - "Smith J." → "Smith"
+    - "J. Smith" → "Smith"
+
+    Args:
+        judge_name: Raw judge name
+
+    Returns:
+        Normalized judge name (last name, preserving hyphens)
+    """
+    if not judge_name:
+        return ""
+
+    name = judge_name.strip()
+
+    # Remove trailing " J." or " JJ." suffixes (for Justice/Justices)
+    name = re.sub(r'\s+J\.?J?\.?$', '', name, flags=re.IGNORECASE)
+
+    # Pattern to match initials at the start: one or more initials with dots
+    # e.g., "J.", "J.A.", "J.A.B."
+    initial_pattern = r'^([A-Z]\.\s*)+\s*'
+
+    # Remove leading initials
+    normalized = re.sub(initial_pattern, '', name)
+
+    # If nothing left after removing initials, return original
+    if not normalized.strip():
+        return name
+
+    # Split by spaces to get parts
+    parts = normalized.split()
+
+    # If we have multiple parts, take the last one (the surname)
+    # This handles cases like "John Smith" → "Smith"
+    # But preserves hyphenated names like "Harrison-Young"
+    if len(parts) > 1:
+        # Check if last part contains hyphen (hyphenated surname)
+        if '-' in parts[-1]:
+            return parts[-1]
+        # Otherwise return the last part
+        return parts[-1]
+
+    return normalized.strip()
+
+
 def get_all_judges(cases: List[Dict[str, Any]]) -> List[str]:
     """
-    Extract all unique judge names from cases.
+    Extract all unique judge names from cases with normalization.
+
+    Normalizes judge names to handle variations with initials:
+    - "J.A.Harrison-Young", "J.Harrison-Young", "Harrison-Young" → "Harrison-Young"
 
     Args:
         cases: List of case dictionaries
 
     Returns:
-        Sorted list of unique judge names
+        Sorted list of unique normalized judge names
     """
     judges = set()
     for case in cases:
@@ -40,28 +96,41 @@ def get_all_judges(cases: List[Dict[str, Any]]) -> List[str]:
         if case_judges:
             for judge in case_judges:
                 if judge and judge.strip():
-                    judges.add(judge.strip())
+                    normalized = normalize_judge_name(judge.strip())
+                    if normalized:
+                        judges.add(normalized)
 
     return sorted(list(judges))
 
 
 def get_judge_cases(cases: List[Dict[str, Any]], judge_name: str) -> List[Dict[str, Any]]:
     """
-    Filter cases decided by a specific judge.
+    Filter cases decided by a specific judge with name normalization.
+
+    Matches the judge name after normalizing both the search name and case judges.
+    This ensures that "J.A.Harrison-Young", "J.Harrison-Young", and "Harrison-Young"
+    all match the same judge.
 
     Args:
         cases: List of all cases
-        judge_name: Name of the judge to filter by
+        judge_name: Name of the judge to filter by (will be normalized)
 
     Returns:
         List of cases decided by this judge
     """
+    # Normalize the search judge name
+    normalized_search_name = normalize_judge_name(judge_name)
+
     judge_cases = []
     for case in cases:
         extended_data = case.get('extended_data', {})
         case_judges = extended_data.get('judges', [])
-        if judge_name in case_judges:
-            judge_cases.append(case)
+        if case_judges:
+            # Check if any normalized case judge matches the search name
+            for case_judge in case_judges:
+                if case_judge and normalize_judge_name(case_judge.strip()) == normalized_search_name:
+                    judge_cases.append(case)
+                    break  # Don't add the same case multiple times
 
     return judge_cases
 

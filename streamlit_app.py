@@ -830,6 +830,26 @@ with tab2:
                 key="bool_max_damages"
             )
 
+    # Year range filter
+    st.subheader("📅 Year Range Filter")
+    year_filter_enabled = st.checkbox("Filter by year range", key="bool_year_filter_enabled")
+    min_year = None
+    max_year = None
+    if year_filter_enabled:
+        # Get min/max years from cases for slider range
+        all_years = [case.get('year') for case in cases if case.get('year')]
+        if all_years:
+            min_case_year = min(all_years)
+            max_case_year = max(all_years)
+            year_range = st.slider(
+                "Select year range",
+                min_value=min_case_year,
+                max_value=max_case_year,
+                value=(min_case_year, max_case_year),
+                key="bool_year_range"
+            )
+            min_year, max_year = year_range
+
     # Sidebar filters
     with st.sidebar:
         st.header("Boolean Search Filters")
@@ -880,7 +900,7 @@ with tab2:
             st.warning("⚠️ Please select at least one field to search in.")
         else:
             with st.spinner("Searching cases..."):
-                # Perform Boolean search with field-specific and damage filters
+                # Perform Boolean search with field-specific, damage, and year filters
                 bool_results = boolean_search(
                     query=boolean_query,
                     cases=cases,
@@ -889,7 +909,9 @@ with tab2:
                     age=bool_age,
                     search_fields=search_fields,
                     min_damages=min_damages,
-                    max_damages=max_damages
+                    max_damages=max_damages,
+                    min_year=min_year,
+                    max_year=max_year
                 )
 
                 st.divider()

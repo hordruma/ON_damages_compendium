@@ -425,7 +425,9 @@ def boolean_search(
     age_range: int = 5,
     search_fields: Optional[List[str]] = None,
     min_damages: Optional[float] = None,
-    max_damages: Optional[float] = None
+    max_damages: Optional[float] = None,
+    min_year: Optional[int] = None,
+    max_year: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Perform Boolean search on cases using AND, OR, NOT operators.
@@ -438,6 +440,7 @@ def boolean_search(
     - Quoted phrases: Exact phrase matching (e.g., "disc herniation")
     - Field-specific search: Search in specific fields only
     - Damages filters: Filter by award amounts
+    - Year range filters: Filter by case year
 
     Args:
         query: Boolean query string
@@ -450,6 +453,8 @@ def boolean_search(
                       Options: 'case_name', 'injuries', 'comments', 'summary'
         min_damages: Minimum damages amount filter
         max_damages: Maximum damages amount filter
+        min_year: Minimum case year filter
+        max_year: Maximum case year filter
 
     Returns:
         List of matching cases
@@ -465,6 +470,16 @@ def boolean_search(
     matching_cases = []
 
     for case in cases:
+        # Apply year filter
+        if min_year is not None or max_year is not None:
+            case_year = case.get('year')
+            if case_year is None:
+                continue
+            if min_year is not None and case_year < min_year:
+                continue
+            if max_year is not None and case_year > max_year:
+                continue
+
         # Apply damages filter
         if min_damages is not None or max_damages is not None:
             damage_val = extract_damages_value(case)
