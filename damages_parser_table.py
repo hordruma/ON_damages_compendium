@@ -382,7 +382,8 @@ Return the JSON object:"""
         Extract section headers from stream mode row 0.
 
         Uses stream mode to capture section headers that lattice mode misses.
-        Returns a dict mapping page numbers to section headers.
+        Since the PDF is pre-sectioned, we extract any text that appears in row 0
+        that doesn't look like a column header.
 
         Args:
             pdf_path: Path to PDF file
@@ -391,17 +392,12 @@ Return the JSON object:"""
         Returns:
             Dict mapping page number to section header (or None if not found)
         """
-        # Known anatomical section keywords (title case to match PDF headers)
-        # These should align with detect_section_header() method for consistency
-        section_keywords = {
-            'General',
-            'Brain', 'Brain & Skull', 'Brain and Skull', 'Head', 'Face', 'Eye', 'Ear', 'Nose',
-            'Neck',
-            'Cervical Spine', 'Thoracic Spine', 'Lumbar Spine', 'Spine',
-            'Shoulder', 'Arm', 'Arms', 'Elbow', 'Forearm', 'Wrist', 'Hand', 'Finger',
-            'Chest', 'Thorax', 'Abdomen', 'Pelvis',
-            'Hip', 'Knee', 'Leg', 'Legs', 'Lower Leg', 'Leg/Lower Leg', 'Ankle', 'Foot', 'Toe',
-            'Psychological', 'Psychiatric', 'Chronic Pain', 'Multiple Injuries', 'Soft Tissue'
+        # Common column header terms (used to filter out non-section text)
+        # These are typical table column headers, not section headers
+        column_header_terms = {
+            'Plaintiff', 'Defendant', 'Year', 'Citation', 'Court', 'Judge',
+            'Sex', 'Age', 'Non-Pecuniary', 'General Damages', 'Other Damages',
+            'Comments', 'Damages', 'Case', 'Date', 'Injury', 'Award'
         }
 
         sections_by_page = {}
@@ -415,17 +411,26 @@ Return the JSON object:"""
                 df_stream = table.df
 
                 if len(df_stream) > 0:
-                    # Check row 0 for section keywords
+                    # Check row 0 for section headers (any non-header text)
                     row0_values = df_stream.iloc[0].tolist()
+                    section_found = None
+
                     for cell in row0_values:
                         cell_str = str(cell).strip()
-                        if cell_str in section_keywords:
-                            sections_by_page[page_num] = cell_str
-                            break
 
-                    # If not found, set to None for this page
-                    if page_num not in sections_by_page:
-                        sections_by_page[page_num] = None
+                        # Skip empty cells and 'nan'
+                        if not cell_str or cell_str == 'nan':
+                            continue
+
+                        # Skip if it looks like a column header
+                        if cell_str in column_header_terms:
+                            continue
+
+                        # Found a non-header text - assume it's the section
+                        section_found = cell_str
+                        break
+
+                    sections_by_page[page_num] = section_found
         except Exception as e:
             if self.verbose:
                 print(f"  Stream mode section extraction warning: {e}")
