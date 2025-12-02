@@ -467,6 +467,7 @@ Return the JSON object:"""
                 data = json.loads(response)
                 data['source_page'] = page_number
                 data['category'] = section
+                data['region'] = [section] if section else []  # Save section as region too
 
                 # Normalize judge name to last name only
                 if data.get('judge'):
