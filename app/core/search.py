@@ -240,15 +240,30 @@ def extract_damages_value(case: Dict[str, Any]) -> Optional[float]:
     """
     Extract numeric damages value from case.
 
-    Tries:
-    1. extended_data.non_pecuniary_damages
-    2. Non-pecuniary damages from plaintiffs array
-    3. Direct 'damages' field
+    Tries multiple fields to support both old and new data formats:
+    1. Direct 'damages' field (new format)
+    2. Top-level 'non_pecuniary_damages' field
+    3. extended_data.non_pecuniary_damages
+    4. Non-pecuniary damages from plaintiffs array
 
     Returns:
         Damages value as float, or None if not found
     """
-    # Try extended_data first
+    # Try direct damages field first (new format)
+    if case.get("damages"):
+        try:
+            return float(case["damages"])
+        except (ValueError, TypeError):
+            pass
+
+    # Try top-level non_pecuniary_damages (current format)
+    if case.get("non_pecuniary_damages"):
+        try:
+            return float(case["non_pecuniary_damages"])
+        except (ValueError, TypeError):
+            pass
+
+    # Try extended_data
     ext = case.get("extended_data", {})
     if ext.get("non_pecuniary_damages"):
         try:
@@ -266,12 +281,5 @@ def extract_damages_value(case: Dict[str, Any]) -> Optional[float]:
                     return float(damages)
                 except (ValueError, TypeError):
                     pass
-
-    # Try direct field
-    if case.get("damages"):
-        try:
-            return float(case["damages"])
-        except (ValueError, TypeError):
-            pass
 
     return None
