@@ -308,33 +308,14 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
     st.info(f"📊 Dataset contains {len(injury_categories)} injury categories and {len(fla_relationships)} FLA relationship types ({len(all_categories)} total)")
 
-    # Category selector - multi-select with grouping
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("**Injury Categories:**")
-        selected_injury = st.multiselect(
-            "Select injury categories:",
-            options=injury_categories,
-            default=[],
-            max_selections=8,
-            help="Select up to 8 injury categories to compare. Each category is shown in a different color.",
-            label_visibility="collapsed"
-        )
-
-    with col2:
-        st.markdown("**FLA Relationship Types:**")
-        selected_fla = st.multiselect(
-            "Select FLA relationships:",
-            options=fla_relationships,
-            default=[],
-            max_selections=8,
-            help="Select up to 8 FLA relationship types to compare (fatal injury cases). Each type is shown in a different color.",
-            label_visibility="collapsed"
-        )
-
-    # Combine selections
-    selected_categories = selected_injury + selected_fla
+    # Universal category selector - combines injury categories and FLA relationships
+    selected_categories = st.multiselect(
+        "Select Categories (Injury Types or FLA Relationships):",
+        options=all_categories,
+        default=[],
+        max_selections=8,
+        help="Select up to 8 categories to compare (injury categories or FLA relationship types). Each category is shown in a different color."
+    )
 
     if not selected_categories:
         st.info("👆 Select one or more categories above to view their analytics")
