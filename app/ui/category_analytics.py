@@ -317,7 +317,8 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
             "Select injury categories:",
             options=injury_categories,
             default=[],
-            help="Select one or more injury categories",
+            max_selections=8,
+            help="Select up to 8 injury categories to compare. Each category is shown in a different color.",
             label_visibility="collapsed"
         )
 
@@ -327,7 +328,8 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
             "Select FLA relationships:",
             options=fla_relationships,
             default=[],
-            help="Select one or more FLA relationship types (fatal injury cases)",
+            max_selections=8,
+            help="Select up to 8 FLA relationship types to compare (fatal injury cases). Each type is shown in a different color.",
             label_visibility="collapsed"
         )
 
@@ -336,6 +338,11 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
     if not selected_categories:
         st.info("👆 Select one or more categories above to view their analytics")
+        return
+
+    # Warn if too many total selections (max 8 combined for legibility)
+    if len(selected_categories) > 8:
+        st.warning("⚠️ You've selected more than 8 categories total. For better chart legibility, please reduce your selection to 8 or fewer.")
         return
 
     # Check if we're comparing multiple categories

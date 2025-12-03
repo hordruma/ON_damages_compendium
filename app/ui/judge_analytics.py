@@ -339,12 +339,13 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
     st.info(f"📊 Dataset contains {len(all_judges)} unique judges")
 
-    # Judge selector - now with multi-select
+    # Judge selector - now with multi-select (max 8 for legibility)
     selected_judges = st.multiselect(
         "Select Judge(s) to Compare:",
         options=all_judges,
         default=[all_judges[0]] if all_judges else [],
-        help="Choose one or more judges to view and compare their award statistics and patterns"
+        max_selections=8,
+        help="Choose up to 8 judges to view and compare their award statistics and patterns. Each judge is shown in a different color."
     )
 
     if not selected_judges:
