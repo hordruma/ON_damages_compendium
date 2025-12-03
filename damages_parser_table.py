@@ -328,58 +328,132 @@ Return the JSON object:"""
         return result if result else None
 
     @staticmethod
-    def _combine_multiline_headers(headers_list: List[str]) -> List[str]:
+    def _map_headers_to_columns(headers_list: List[str], num_columns: int) -> List[str]:
         """
-        Combine multi-line headers that were incorrectly split.
+        Map split headers to actual table columns intelligently.
 
-        The PDF has some column headers that span multiple lines within a single cell:
-        - "Sex" and "Age" are in the same cell (two lines)
-        - "Non-Pecuniary", "General", and "Damages" are in the same cell (three lines)
+        The PDF has column headers where some cells contain multiple lines:
+        - "Sex" and "Age" are on separate lines in ONE cell (one column)
+        - "Non-Pecuniary", "General", and "Damages" are on separate lines in ONE cell (one column)
 
-        When Camelot extracts these and they're split by newlines, we get:
+        When Camelot extracts these as newline-separated text and we split on newlines, we get:
         ['Plaintiff', 'Defendant', ..., 'Sex', 'Non-Pecuniary', 'Other Damages', 'Comments', 'Age', 'General', 'Damages']
 
-        This method combines them back into proper columns:
-        ['Plaintiff', 'Defendant', ..., 'Sex', 'Non-Pecuniary', 'Other Damages', 'Comments']
+        This method intelligently maps these to the actual columns by:
+        1. Checking if header count matches column count (if so, use as-is)
+        2. If not, combining known multi-line patterns to match column count:
+           - "Sex" + "Age" → "Sex/Age" (combined header preserves context for LLM)
+           - "Non-Pecuniary" + "General" + "Damages" → "Non-Pecuniary Damages"
 
-        The issue is that Camelot reads multi-line cells in a weird order:
-        - First pass: reads first line of all cells
-        - Second/third pass: reads subsequent lines
-
-        So we need to detect and skip standalone "Age", "General", and "Damages"
-        if their primary headers ("Sex", "Non-Pecuniary") already appeared.
+        This preserves information for the LLM so it understands:
+        - "Sex/Age" column can have values like "2 male", "M, 35", "F 28"
+        - LLM can correctly interpret "2 male" as "2 males" (not age=2, sex=M)
 
         Args:
             headers_list: List of header strings (after splitting on newlines)
+            num_columns: Actual number of columns in the table
 
         Returns:
-            Cleaned list with multi-line headers combined
+            List of headers mapped to match column count
         """
         if not headers_list:
             return []
 
+        # If header count matches column count, no grouping needed
+        if len(headers_list) == num_columns:
+            return headers_list
+
+        # If we have fewer headers than columns, pad with generic names
+        if len(headers_list) < num_columns:
+            padded = headers_list.copy()
+            for i in range(len(headers_list), num_columns):
+                padded.append(f"Col_{i}")
+            return padded
+
+        # If we have more headers than columns, we need to combine some
+        # This is the common case where multi-line headers were split
+
         # Convert to lowercase for checking
         headers_lower = [h.lower() for h in headers_list]
 
-        # Check if certain headers appear in the list
-        has_sex = 'sex' in headers_lower
-        has_non_pecuniary = any('non-pecuniary' in h or 'non pecuniary' in h for h in headers_lower)
-
+        # Track which headers to group together
+        skip_indices = set()
         combined = []
 
-        for i, header in enumerate(headers_list):
+        i = 0
+        while i < len(headers_list):
+            if i in skip_indices:
+                i += 1
+                continue
+
+            header = headers_list[i]
             header_lower = header.lower()
 
-            # Skip standalone "Age" if "Sex" appears in the list
-            if header_lower == 'age' and has_sex:
-                continue
+            # Check if this is "Sex" followed by "Age"
+            if header_lower == 'sex':
+                # Look ahead for "Age"
+                age_idx = None
+                for j in range(i + 1, len(headers_list)):
+                    if headers_list[j].lower() == 'age' and j not in skip_indices:
+                        age_idx = j
+                        break
 
-            # Skip standalone "General" or "Damages" if "Non-Pecuniary" appears in the list
-            if (header_lower in ['general', 'damages']) and has_non_pecuniary:
-                continue
+                if age_idx is not None:
+                    # Combine Sex and Age into one column
+                    combined.append("Sex/Age")
+                    skip_indices.add(age_idx)
+                else:
+                    combined.append(header)
 
-            # Keep all other headers
-            combined.append(header)
+            # Check if this is "Non-Pecuniary" followed by "General" and/or "Damages"
+            elif 'non-pecuniary' in header_lower or 'non pecuniary' in header_lower:
+                # Look ahead for "General" and "Damages"
+                general_idx = None
+                damages_idx = None
+
+                for j in range(i + 1, len(headers_list)):
+                    if headers_list[j].lower() == 'general' and j not in skip_indices and general_idx is None:
+                        general_idx = j
+                    elif headers_list[j].lower() == 'damages' and j not in skip_indices and damages_idx is None:
+                        damages_idx = j
+
+                # Combine them
+                if general_idx is not None:
+                    skip_indices.add(general_idx)
+                if damages_idx is not None:
+                    skip_indices.add(damages_idx)
+
+                combined.append("Non-Pecuniary Damages")
+
+            # Skip standalone "Age" if it wasn't already grouped with "Sex"
+            elif header_lower == 'age':
+                # Check if we already combined it
+                if i not in skip_indices:
+                    # This is a standalone Age that wasn't grouped - skip it
+                    # (It was likely part of a multi-line cell we couldn't detect)
+                    pass
+
+            # Skip standalone "General" or "Damages" if not already grouped
+            elif header_lower in ['general', 'damages']:
+                # Check if we already combined it
+                if i not in skip_indices:
+                    # This is standalone - skip it
+                    pass
+
+            else:
+                # Keep all other headers as-is
+                combined.append(header)
+
+            i += 1
+
+        # If we still have more headers than columns, take first N
+        if len(combined) > num_columns:
+            return combined[:num_columns]
+
+        # If we have fewer, pad with generic names
+        if len(combined) < num_columns:
+            for i in range(len(combined), num_columns):
+                combined.append(f"Col_{i}")
 
         return combined
 
@@ -700,8 +774,9 @@ Return the JSON object:"""
                 headers_raw = row0_cell0.replace('\\n', '\n').split('\n')
                 headers_split = [h.strip() for h in headers_raw if h.strip()]
 
-                # Combine multi-line headers (e.g., "Sex \n Age" -> "Sex", "Non-Pecuniary \n General \n Damages" -> "Non-Pecuniary")
-                header = self._combine_multiline_headers(headers_split)
+                # Map multi-line headers to actual columns (e.g., "Sex \n Age" -> "Sex/Age", "Non-Pecuniary \n General \n Damages" -> "Non-Pecuniary Damages")
+                num_columns = len(df.columns)
+                header = self._map_headers_to_columns(headers_split, num_columns)
                 data_start_row = 1
 
             else:
@@ -722,9 +797,15 @@ Return the JSON object:"""
                         headers_raw = row1_cell0.replace('\\n', '\n').split('\n')
                         headers_split = [h.strip() for h in headers_raw if h.strip()]
 
-                        # Combine multi-line headers (e.g., "Sex \n Age" -> "Sex", "Non-Pecuniary \n General \n Damages" -> "Non-Pecuniary")
+                        # Map multi-line headers to actual columns (e.g., "Sex \n Age" -> "Sex/Age", "Non-Pecuniary \n General \n Damages" -> "Non-Pecuniary Damages")
                         # The PDF has some cells with 2-3 lines that represent a single column
-                        header = self._combine_multiline_headers(headers_split)
+                        num_columns = len(df.columns)
+                        if self.verbose:
+                            print(f"  headers_split ({len(headers_split)}): {headers_split}")
+                            print(f"  num_columns: {num_columns}")
+                        header = self._map_headers_to_columns(headers_split, num_columns)
+                        if self.verbose:
+                            print(f"  mapped_headers ({len(header)}): {header}")
                     elif num_filled_row1 > 1:
                         # Headers spread across row 1
                         header = [v if v and v != 'nan' else f"Col_{i}" for i, v in enumerate(row1_values)]
