@@ -112,12 +112,12 @@ def calculate_judge_statistics(judge_cases: List[Dict[str, Any]]) -> Dict[str, A
         if year:
             years.append(year)
 
-    # Region distribution
+    # Region distribution (normalize to uppercase for consistency)
     regions = []
     for case in judge_cases:
         region = case.get('region')
         if region:
-            regions.append(region)
+            regions.append(region.strip().upper() if isinstance(region, str) else region)
 
     # Court distribution
     courts = []
@@ -181,7 +181,8 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         year = case.get('year')
         damage = case.get('damages')
         case_name = case.get('case_name', 'Unknown')
-        region = case.get('region', 'Unknown')
+        region_raw = case.get('region', 'Unknown')
+        region = region_raw.strip().upper() if isinstance(region_raw, str) and region_raw != 'Unknown' else region_raw
         court = case.get('court', 'N/A')
 
         if year and damage and damage > 0:
@@ -414,7 +415,8 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
                         year = case.get('year')
                         damage = case.get('damages')
                         case_name = case.get('case_name', 'Unknown')
-                        region = case.get('region', 'Unknown')
+                        region_raw = case.get('region', 'Unknown')
+                        region = region_raw.strip().upper() if isinstance(region_raw, str) and region_raw != 'Unknown' else region_raw
                         court = case.get('court', 'N/A')
 
                         if year and damage and damage > 0:
@@ -581,10 +583,12 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
     with st.expander(f"📋 View All {len(judge_cases)} Cases"):
         case_list = []
         for case in judge_cases:
+            region_raw = case.get('region', 'Unknown')
+            region = region_raw.strip().upper() if isinstance(region_raw, str) and region_raw != 'Unknown' else region_raw
             case_list.append({
                 'Case Name': case.get('case_name', 'Unknown'),
                 'Year': case.get('year', 'N/A'),
-                'Region': case.get('region', 'Unknown'),
+                'Region': region,
                 'Court': case.get('court', 'N/A'),
                 'Award': f"${case.get('damages', 0):,.0f}" if case.get('damages') else 'N/A'
             })
