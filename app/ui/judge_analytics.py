@@ -166,7 +166,8 @@ def calculate_judge_statistics(judge_cases: List[Dict[str, Any]]) -> Dict[str, A
 
 def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[go.Figure]:
     """
-    Create a timeline chart showing award amounts over years with inflation adjustment.
+    Create a timeline scatter plot showing award amounts over years with inflation adjustment.
+    Includes region and court information in tooltips.
 
     Args:
         judge_cases: List of cases decided by the judge
@@ -181,6 +182,7 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         damage = case.get('damages')
         case_name = case.get('case_name', 'Unknown')
         region = case.get('region', 'Unknown')
+        court = case.get('court', 'N/A')
 
         if year and damage and damage > 0:
             # Calculate inflation-adjusted value
@@ -191,7 +193,8 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
                 'damages': damage,
                 'adjusted_damages': adjusted_damage if adjusted_damage else damage,
                 'case_name': case_name,
-                'region': region
+                'region': region,
+                'court': court
             })
 
     if not data_points:
@@ -214,6 +217,7 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         inflation_pct = ((row['adjusted_damages'] / row['damages']) - 1) * 100 if row['damages'] > 0 else 0
         text = (f"<b>{row['case_name']}</b><br>"
                 f"Region: {row['region']}<br>"
+                f"Court: {row['court']}<br>"
                 f"Original Award: ${row['damages']:,.0f}<br>"
                 f"Adjusted ({DEFAULT_REFERENCE_YEAR}$): ${row['adjusted_damages']:,.0f}<br>"
                 f"Inflation Impact: +{inflation_pct:.1f}%")
@@ -223,197 +227,44 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         x=df['year'],
         y=df['adjusted_damages'],
         mode='markers',
-        name=f'Individual Awards ({DEFAULT_REFERENCE_YEAR}$)',
+        name=f'Individual Awards',
         marker=dict(
-            size=8,
+            size=10,
             color=df['adjusted_damages'],
             colorscale='Viridis',
             showscale=True,
             colorbar=dict(title=f"Award ({DEFAULT_REFERENCE_YEAR}$)"),
-            line=dict(width=1, color='white')
+            line=dict(width=1, color='white'),
+            opacity=0.7
         ),
         text=hover_text,
         hovertemplate='%{text}<br>Year: %{x}<extra></extra>'
     ))
 
-    # Add median trend line (adjusted values)
+    # Add median trend line (adjusted values) - shows volume via count in tooltip
     fig.add_trace(go.Scatter(
         x=yearly_stats['year'],
         y=yearly_stats['median'],
         mode='lines+markers',
-        name=f'Yearly Median ({DEFAULT_REFERENCE_YEAR}$)',
-        line=dict(color='red', width=3),
-        marker=dict(size=10, symbol='diamond'),
-        text=[f"Median: ${val:,.0f}<br>Cases: {int(count)}"
+        name=f'Yearly Median',
+        line=dict(color='red', width=3, dash='dot'),
+        marker=dict(size=12, symbol='diamond', line=dict(width=2, color='darkred')),
+        text=[f"Median: ${val:,.0f}<br>Cases that year: {int(count)}"
               for val, count in zip(yearly_stats['median'], yearly_stats['count'])],
         hovertemplate='Year: %{x}<br>%{text}<extra></extra>'
     ))
 
     fig.update_layout(
-        title=f'Award Amounts Over Time (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
+        title=f'Awards Over Time (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
         xaxis_title='Year',
         yaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
         hovermode='closest',
         showlegend=True,
-        height=500,
+        height=600,
         template='plotly_white'
     )
 
     fig.update_yaxes(tickformat='$,.0f')
-
-    return fig
-
-
-def create_region_distribution_chart(stats: Dict[str, Any]) -> Optional[go.Figure]:
-    """
-    Create a bar chart showing distribution of cases by body region.
-
-    Args:
-        stats: Statistics dictionary from calculate_judge_statistics
-
-    Returns:
-        Plotly figure or None if insufficient data
-    """
-    region_dist = stats['regions']['distribution']
-
-    if not region_dist:
-        return None
-
-    # Sort by count
-    sorted_regions = sorted(region_dist.items(), key=lambda x: x[1], reverse=True)
-    regions, counts = zip(*sorted_regions)
-
-    fig = go.Figure(data=[
-        go.Bar(
-            x=list(counts),
-            y=list(regions),
-            orientation='h',
-            marker=dict(
-                color=list(counts),
-                colorscale='Blues',
-                showscale=False
-            ),
-            text=[f"{count} case{'s' if count != 1 else ''}" for count in counts],
-            textposition='auto',
-        )
-    ])
-
-    fig.update_layout(
-        title='Cases by Body Region',
-        xaxis_title='Number of Cases',
-        yaxis_title='Body Region',
-        height=max(400, len(regions) * 25),
-        template='plotly_white',
-        showlegend=False
-    )
-
-    return fig
-
-
-def create_damages_distribution_chart(judge_cases: List[Dict[str, Any]]) -> Optional[go.Figure]:
-    """
-    Create a histogram showing distribution of inflation-adjusted damage awards.
-
-    Args:
-        judge_cases: List of cases decided by the judge
-
-    Returns:
-        Plotly figure or None if insufficient data
-    """
-    # Collect inflation-adjusted damages
-    adjusted_damages = []
-    for case in judge_cases:
-        year = case.get('year')
-        damage = case.get('damages')
-
-        if damage and damage > 0:
-            if year:
-                adjusted = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
-                adjusted_damages.append(adjusted if adjusted else damage)
-            else:
-                # If no year, use original value
-                adjusted_damages.append(damage)
-
-    if not adjusted_damages:
-        return None
-
-    median = np.median(adjusted_damages)
-
-    fig = go.Figure(data=[
-        go.Histogram(
-            x=adjusted_damages,
-            nbinsx=30,
-            marker=dict(
-                color='rgba(54, 162, 235, 0.7)',
-                line=dict(color='rgba(54, 162, 235, 1)', width=1)
-            ),
-            hovertemplate=f'Award Range ({DEFAULT_REFERENCE_YEAR}$): $%{{x}}<br>Count: %{{y}}<extra></extra>'
-        )
-    ])
-
-    # Add median line
-    fig.add_vline(
-        x=median,
-        line_dash="dash",
-        line_color="red",
-        annotation_text=f"Median: ${median:,.0f}",
-        annotation_position="top"
-    )
-
-    fig.update_layout(
-        title=f'Distribution of Award Amounts (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
-        xaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
-        yaxis_title='Number of Cases',
-        height=400,
-        template='plotly_white',
-        showlegend=False
-    )
-
-    fig.update_xaxes(tickformat='$,.0f')
-
-    return fig
-
-
-def create_yearly_case_volume_chart(stats: Dict[str, Any]) -> Optional[go.Figure]:
-    """
-    Create a bar chart showing case volume by year.
-
-    Args:
-        stats: Statistics dictionary from calculate_judge_statistics
-
-    Returns:
-        Plotly figure or None if insufficient data
-    """
-    year_dist = stats['years']['distribution']
-
-    if not year_dist:
-        return None
-
-    # Sort by year
-    sorted_years = sorted(year_dist.items())
-    years, counts = zip(*sorted_years)
-
-    fig = go.Figure(data=[
-        go.Bar(
-            x=list(years),
-            y=list(counts),
-            marker=dict(
-                color='rgba(75, 192, 192, 0.7)',
-                line=dict(color='rgba(75, 192, 192, 1)', width=1)
-            ),
-            text=list(counts),
-            textposition='auto',
-        )
-    ])
-
-    fig.update_layout(
-        title='Case Volume by Year',
-        xaxis_title='Year',
-        yaxis_title='Number of Cases',
-        height=400,
-        template='plotly_white',
-        showlegend=False
-    )
 
     return fig
 
@@ -461,15 +312,11 @@ def _display_individual_judge_details(judge_name: str, judge_cases: List[Dict[st
         with col3:
             st.metric("Std. Deviation", f"${stats['adjusted_damages']['std']:,.0f}")
 
-    # Charts
+    # Timeline scatter plot
+    st.markdown("**📈 Awards Over Time**")
     timeline_fig = create_awards_timeline_chart(judge_cases)
     if timeline_fig:
         st.plotly_chart(timeline_fig, use_container_width=True)
-
-    # Region distribution
-    region_fig = create_region_distribution_chart(stats)
-    if region_fig:
-        st.plotly_chart(region_fig, use_container_width=True)
 
 
 def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
@@ -536,45 +383,8 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
             st.divider()
 
-            # Comparison charts
-            st.subheader("📊 Comparative Analysis")
-
-            # Create comparison bar chart for median awards
-            fig_comparison = go.Figure()
-
-            for judge_name in selected_judges:
-                judge_cases = get_judge_cases(cases, judge_name)
-                if judge_cases:
-                    stats = calculate_judge_statistics(judge_cases)
-                    fig_comparison.add_trace(go.Bar(
-                        name=judge_name,
-                        x=['Median Award', 'Mean Award', 'Max Award'],
-                        y=[stats['adjusted_damages']['median'],
-                           stats['adjusted_damages']['mean'],
-                           stats['adjusted_damages']['max']],
-                        text=[f"${stats['adjusted_damages']['median']:,.0f}",
-                              f"${stats['adjusted_damages']['mean']:,.0f}",
-                              f"${stats['adjusted_damages']['max']:,.0f}"],
-                        textposition='auto',
-                    ))
-
-            fig_comparison.update_layout(
-                title=f'Award Comparison (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
-                xaxis_title='Metric',
-                yaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
-                yaxis=dict(tickformat='$,.0f'),
-                barmode='group',
-                height=500,
-                template='plotly_white',
-                showlegend=True
-            )
-
-            st.plotly_chart(fig_comparison, use_container_width=True)
-
-            st.divider()
-
-            # Combined timeline for all selected judges
-            st.subheader("📈 Awards Timeline Comparison")
+            # Combined timeline scatter plot for all selected judges
+            st.subheader("📈 Awards Over Time - Judge Comparison")
 
             fig_timeline = go.Figure()
 
@@ -587,6 +397,8 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
                         year = case.get('year')
                         damage = case.get('damages')
                         case_name = case.get('case_name', 'Unknown')
+                        region = case.get('region', 'Unknown')
+                        court = case.get('court', 'N/A')
 
                         if year and damage and damage > 0:
                             adjusted_damage = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
@@ -594,14 +406,20 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
                                 'year': year,
                                 'adjusted_damages': adjusted_damage if adjusted_damage else damage,
                                 'case_name': case_name,
-                                'judge': judge_name
+                                'judge': judge_name,
+                                'region': region,
+                                'court': court
                             })
 
                     if data_points:
                         df = pd.DataFrame(data_points)
 
                         # Add scatter plot for this judge
-                        hover_text = [f"<b>{row['case_name']}</b><br>Judge: {row['judge']}<br>Award ({DEFAULT_REFERENCE_YEAR}$): ${row['adjusted_damages']:,.0f}"
+                        hover_text = [f"<b>{row['case_name']}</b><br>"
+                                      f"Judge: {row['judge']}<br>"
+                                      f"Region: {row['region']}<br>"
+                                      f"Court: {row['court']}<br>"
+                                      f"Award ({DEFAULT_REFERENCE_YEAR}$): ${row['adjusted_damages']:,.0f}"
                                       for _, row in df.iterrows()]
 
                         fig_timeline.add_trace(go.Scatter(
@@ -609,7 +427,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
                             y=df['adjusted_damages'],
                             mode='markers',
                             name=judge_name,
-                            marker=dict(size=8, line=dict(width=1, color='white')),
+                            marker=dict(size=10, line=dict(width=1, color='white'), opacity=0.7),
                             text=hover_text,
                             hovertemplate='%{text}<br>Year: %{x}<extra></extra>'
                         ))
@@ -719,46 +537,15 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
         st.divider()
 
-    # Timeline chart
-    st.subheader("📈 Awards Timeline")
+    # Timeline scatter plot (includes volume info in median trend tooltips)
+    st.subheader("📈 Awards Over Time")
+    st.caption("💡 Hover over points to see case details including region and court. The red median trend line shows case volume per year in its tooltip.")
     timeline_fig = create_awards_timeline_chart(judge_cases)
 
     if timeline_fig:
-        st.plotly_chart(timeline_fig, width='stretch')
+        st.plotly_chart(timeline_fig, use_container_width=True)
     else:
         st.info("Insufficient data with both year and damages information to display timeline")
-
-    st.divider()
-
-    # Two column layout for distributions
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("📊 Award Distribution")
-        dist_fig = create_damages_distribution_chart(judge_cases)
-        if dist_fig:
-            st.plotly_chart(dist_fig, width='stretch')
-        else:
-            st.info("No damages data available")
-
-    with col2:
-        st.subheader("📅 Case Volume by Year")
-        volume_fig = create_yearly_case_volume_chart(stats)
-        if volume_fig:
-            st.plotly_chart(volume_fig, width='stretch')
-        else:
-            st.info("No year data available")
-
-    st.divider()
-
-    # Region distribution
-    st.subheader("🏥 Cases by Body Region")
-    region_fig = create_region_distribution_chart(stats)
-
-    if region_fig:
-        st.plotly_chart(region_fig, width='stretch')
-    else:
-        st.info("No region data available")
 
     st.divider()
 
