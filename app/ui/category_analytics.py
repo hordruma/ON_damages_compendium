@@ -22,6 +22,9 @@ except ImportError:
     def adjust_for_inflation(amount, from_year, to_year):
         return None
 
+# Import outlier filtering
+from app.core.search import filter_outliers
+
 
 def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     """
@@ -290,15 +293,24 @@ def create_category_timeline_chart(category_cases: List[Dict[str, Any]], categor
     return fig
 
 
-def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
+def display_category_analytics_page(cases: List[Dict[str, Any]], include_outliers: bool = True) -> None:
     """
     Main function to display the category analytics page.
 
     Args:
         cases: List of all cases
+        include_outliers: Whether to include statistical outliers in calculations (default True)
     """
     st.header("🩺 Category Statistics")
     st.markdown("Explore award patterns and statistics by injury category or FLA relationship type. Compare different types of losses (e.g., injury categories vs. FLA claims).")
+
+    # Helper function to get category cases with optional outlier filtering
+    def get_filtered_category_cases(category_name: str) -> List[Dict[str, Any]]:
+        """Get cases for a category, optionally filtering outliers."""
+        category_cases = get_category_cases(cases, category_name)
+        if not include_outliers and category_cases:
+            category_cases = filter_outliers(category_cases)
+        return category_cases
 
     # Get all categories (injury and FLA)
     categories_dict = get_all_categories(cases)
@@ -342,7 +354,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
         # Create comparison table
         comparison_data = []
         for category_name in selected_categories:
-            category_cases = get_category_cases(cases, category_name)
+            category_cases = get_filtered_category_cases(category_name)
             if category_cases:
                 stats = calculate_category_statistics(category_cases, category_name)
                 comparison_data.append({
@@ -369,7 +381,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
             fig_comparison = go.Figure()
 
             for category_name in selected_categories:
-                category_cases = get_category_cases(cases, category_name)
+                category_cases = get_filtered_category_cases(category_name)
                 if category_cases:
                     stats = calculate_category_statistics(category_cases, category_name)
                     fig_comparison.add_trace(go.Bar(
@@ -405,7 +417,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
             fig_timeline = go.Figure()
 
             for category_name in selected_categories:
-                category_cases = get_category_cases(cases, category_name)
+                category_cases = get_filtered_category_cases(category_name)
                 if category_cases:
                     # Prepare data
                     data_points = []
@@ -460,7 +472,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
         st.subheader("📋 Individual Category Details & Cases")
 
         for category_name in selected_categories:
-            category_cases = get_category_cases(cases, category_name)
+            category_cases = get_filtered_category_cases(category_name)
             if category_cases:
                 stats = calculate_category_statistics(category_cases, category_name)
 
@@ -521,7 +533,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
     selected_category = selected_categories[0]
 
     # Get cases for this category
-    category_cases = get_category_cases(cases, selected_category)
+    category_cases = get_filtered_category_cases(selected_category)
 
     if not category_cases:
         st.warning(f"No cases found for {selected_category}")
