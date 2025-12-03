@@ -264,6 +264,16 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         yaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
         hovermode='closest',
         showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.2,
+            xanchor="center",
+            x=0.5,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor="lightgray",
+            borderwidth=1
+        ),
         height=600,
         template='plotly_white'
     )
