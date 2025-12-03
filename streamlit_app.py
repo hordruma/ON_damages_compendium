@@ -593,34 +593,25 @@ with tab1:
                     if chart_data:
                         stats = calculate_chart_statistics(chart_data)
 
-                        col1, col2, col3 = st.columns(3)
+                        col1, col2 = st.columns(2)
 
                         with col1:
                             st.metric(
-                                "Median (Original)",
-                                f"${stats['median_original']:,.0f}",
-                                help="Median of original award amounts"
+                                f"Median Award ({DEFAULT_REFERENCE_YEAR}$)",
+                                f"${stats['median_adjusted']:,.0f}",
+                                help=f"Median of all awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
                             )
 
                         with col2:
                             st.metric(
-                                f"Median ({DEFAULT_REFERENCE_YEAR}$)",
-                                f"${stats['median_adjusted']:,.0f}",
-                                delta=f"+${stats['median_adjusted'] - stats['median_original']:,.0f}",
-                                help=f"Median adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
-                            )
-
-                        with col3:
-                            st.metric(
                                 "Avg. Inflation Impact",
                                 f"+{stats['avg_inflation_impact']:.1f}%",
-                                help="Average percentage increase due to inflation"
+                                help="Average percentage increase from original award year to current dollars"
                             )
 
                         st.caption(
-                            f"💡 **Note:** Awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
-                            "Canadian Consumer Price Index (Statistics Canada). "
-                            "Hover over bars for detailed case information."
+                            f"💡 All awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
+                            "Canadian CPI. Original amounts are not shown as they are not comparable across different years."
                         )
                 else:
                     st.info("Inflation adjustment requires case year information. Some cases may not have dates.")
