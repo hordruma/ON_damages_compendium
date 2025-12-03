@@ -382,7 +382,7 @@ Return the JSON object:"""
         Extract section headers from stream mode row 0.
 
         Uses stream mode to capture section headers that lattice mode misses.
-        Returns a dict mapping page numbers to section headers.
+        The PDF is predictably formatted with section headers always in row 0.
 
         Args:
             pdf_path: Path to PDF file
@@ -391,15 +391,6 @@ Return the JSON object:"""
         Returns:
             Dict mapping page number to section header (or None if not found)
         """
-        # Known anatomical section keywords
-        section_keywords = {
-            'General', 'Cervical Spine', 'Thoracic Spine', 'Lumbar Spine',
-            'Shoulder', 'Elbow', 'Forearm', 'Wrist', 'Hand', 'Finger',
-            'Hip', 'Knee', 'Lower Leg', 'Ankle', 'Foot', 'Toe',
-            'Brain', 'Head', 'Face', 'Eye', 'Ear', 'Nose',
-            'Psychological', 'Chronic Pain', 'Multiple Injuries'
-        }
-
         sections_by_page = {}
 
         try:
@@ -411,17 +402,17 @@ Return the JSON object:"""
                 df_stream = table.df
 
                 if len(df_stream) > 0:
-                    # Check row 0 for section keywords
+                    # Extract first non-empty cell from row 0 as section header
                     row0_values = df_stream.iloc[0].tolist()
+                    section_found = None
+
                     for cell in row0_values:
                         cell_str = str(cell).strip()
-                        if cell_str in section_keywords:
-                            sections_by_page[page_num] = cell_str
+                        if cell_str and cell_str != 'nan':
+                            section_found = cell_str
                             break
 
-                    # If not found, set to None for this page
-                    if page_num not in sections_by_page:
-                        sections_by_page[page_num] = None
+                    sections_by_page[page_num] = section_found
         except Exception as e:
             if self.verbose:
                 print(f"  Stream mode section extraction warning: {e}")
