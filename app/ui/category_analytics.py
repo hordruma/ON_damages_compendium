@@ -37,10 +37,10 @@ def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     fla_relationships = set()
 
     for case in cases:
-        # Injury categories
+        # Injury categories (normalize to uppercase for consistency)
         region = case.get('region')
         if region and region.strip():
-            injury_categories.add(region.strip())
+            injury_categories.add(region.strip().upper())
 
         # Also check extended_data for additional regions
         extended_data = case.get('extended_data', {})
@@ -48,7 +48,7 @@ def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
         if regions:
             for r in regions:
                 if r and r.strip():
-                    injury_categories.add(r.strip())
+                    injury_categories.add(r.strip().upper())
 
         # FLA relationship types
         fla_claims = extended_data.get('family_law_act_claims', [])
@@ -82,29 +82,35 @@ def get_category_cases(cases: List[Dict[str, Any]], category_name: str) -> List[
     is_fla_category = category_name.startswith("FLA: ")
 
     if is_fla_category:
-        # Extract the relationship name (remove "FLA: " prefix)
-        relationship_name = category_name[5:]  # Remove "FLA: "
+        # Extract the relationship name (remove "FLA: " prefix, case-insensitive)
+        relationship_name = category_name[5:].strip().lower()
 
         for case in cases:
             extended_data = case.get('extended_data', {})
             fla_claims = extended_data.get('family_law_act_claims', [])
 
-            # Check if this case has this FLA relationship
+            # Check if this case has this FLA relationship (case-insensitive)
             for claim in fla_claims:
-                if claim.get('relationship', '').strip() == relationship_name:
+                if claim.get('relationship', '').strip().lower() == relationship_name:
                     is_fla_award = claim.get('is_fla_award', True)
                     if is_fla_award:
                         category_cases.append(case)
                         break  # Don't add the same case multiple times
     else:
-        # Regular injury category
+        # Regular injury category (case-insensitive matching)
+        category_name_upper = category_name.upper()
+
         for case in cases:
             region = case.get('region', '')
             extended_data = case.get('extended_data', {})
             regions = extended_data.get('regions', [])
 
+            # Normalize region and regions list for comparison
+            region_upper = region.upper() if region else ''
+            regions_upper = [r.upper() if isinstance(r, str) else r for r in regions]
+
             # Check if case belongs to this category
-            if region == category_name or category_name in regions:
+            if region_upper == category_name_upper or category_name_upper in regions_upper:
                 category_cases.append(case)
 
     return category_cases
@@ -129,8 +135,8 @@ def calculate_category_statistics(category_cases: List[Dict[str, Any]], category
     adjusted_damages_values = []
 
     if is_fla_category:
-        # For FLA categories, get the specific FLA claim amounts
-        relationship_name = category_name[5:]  # Remove "FLA: "
+        # For FLA categories, get the specific FLA claim amounts (case-insensitive)
+        relationship_name = category_name[5:].strip().lower()
 
         for case in category_cases:
             year = case.get('year')
@@ -138,7 +144,7 @@ def calculate_category_statistics(category_cases: List[Dict[str, Any]], category
             fla_claims = extended_data.get('family_law_act_claims', [])
 
             for claim in fla_claims:
-                if claim.get('relationship', '').strip() == relationship_name:
+                if claim.get('relationship', '').strip().lower() == relationship_name:
                     damage = claim.get('amount')
                     is_fla_award = claim.get('is_fla_award', True)
 
