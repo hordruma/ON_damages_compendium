@@ -18,7 +18,7 @@ from typing import Dict, List
 # Import custom modules (refactored into app/ package)
 from app.core.config import *
 from app.core.data_loader import initialize_data
-from app.core.search import search_cases, extract_damages_value, boolean_search
+from app.core.search import search_cases, extract_damages_value, boolean_search, filter_outliers
 from app.ui.visualizations import create_inflation_chart, calculate_chart_statistics, create_damages_cap_chart
 from app.ui.judge_analytics import display_judge_analytics_page
 from app.ui.category_analytics import display_category_analytics_page
@@ -500,9 +500,16 @@ with st.sidebar:
         "Number of results:",
         min_value=5,
         max_value=50,
-        value=15,
+        value=10,
         step=5,
         help="Maximum number of cases to return"
+    )
+
+    include_outliers = st.checkbox(
+        "Include outliers",
+        value=False,
+        help="Include statistical outliers (very high or very low awards). "
+             "When unchecked, cases outside 1.5×IQR from the median are excluded to improve statistical accuracy."
     )
 
     # Wire injury categories to selected_regions for exclusive filtering
@@ -530,6 +537,15 @@ with tab1:
                     age=age,
                     top_n=num_results
                 )
+
+                # Apply outlier filtering if requested
+                if not include_outliers:
+                    result_cases = [case for case, _, _ in results]
+                    filtered_cases = filter_outliers(result_cases)
+                    # Rebuild results with only non-outlier cases
+                    filtered_case_ids = {case.get('id') for case in filtered_cases}
+                    results = [(case, emb_sim, score) for case, emb_sim, score in results
+                               if case.get('id') in filtered_case_ids]
 
             # Store results in session state
             st.session_state.search_results = {
@@ -744,14 +760,14 @@ with tab1:
 # =============================================================================
 
 with tab2:
-    display_judge_analytics_page(cases)
+    display_judge_analytics_page(cases, include_outliers)
 
 # =============================================================================
 # TAB 3: CATEGORY STATISTICS (includes injury categories and FLA relationships)
 # =============================================================================
 
 with tab3:
-    display_category_analytics_page(cases)
+    display_category_analytics_page(cases, include_outliers)
 
 # =============================================================================
 # TAB 4: BOOLEAN SEARCH
@@ -918,6 +934,10 @@ with tab4:
                     min_year=min_year,
                     max_year=max_year
                 )
+
+                # Apply outlier filtering if requested
+                if not include_outliers:
+                    bool_results = filter_outliers(bool_results)
 
                 st.divider()
                 st.header("Search Results")

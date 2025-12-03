@@ -256,6 +256,67 @@ def compute_meta_score(
     return min(max(combined, 0.0), 1.0)
 
 
+def filter_outliers(
+    cases: List[Dict[str, Any]],
+    threshold: float = 1.5
+) -> List[Dict[str, Any]]:
+    """
+    Filter out statistical outliers from cases based on damages awards.
+
+    Uses the IQR (Interquartile Range) method:
+    - Outliers are values below Q1 - threshold*IQR or above Q3 + threshold*IQR
+    - Standard threshold is 1.5 (moderate outliers)
+
+    Args:
+        cases: List of case dictionaries
+        threshold: IQR multiplier for outlier detection (default 1.5)
+
+    Returns:
+        List of cases with outliers removed
+    """
+    if not cases:
+        return []
+
+    # Extract damages values
+    damages_values = []
+    cases_with_damages = []
+
+    for case in cases:
+        damage_val = extract_damages_value(case)
+        if damage_val is not None and damage_val > 0:
+            damages_values.append(damage_val)
+            cases_with_damages.append(case)
+
+    # Need at least 4 values for meaningful quartile calculation
+    if len(damages_values) < 4:
+        return cases
+
+    # Calculate quartiles and IQR
+    damages_array = np.array(damages_values)
+    q1 = np.percentile(damages_array, 25)
+    q3 = np.percentile(damages_array, 75)
+    iqr = q3 - q1
+
+    # Define outlier bounds
+    lower_bound = q1 - threshold * iqr
+    upper_bound = q3 + threshold * iqr
+
+    # Filter cases
+    filtered_cases = []
+    for case in cases_with_damages:
+        damage_val = extract_damages_value(case)
+        if damage_val is not None and lower_bound <= damage_val <= upper_bound:
+            filtered_cases.append(case)
+
+    # Also include cases without damages (they're not outliers, just missing data)
+    for case in cases:
+        damage_val = extract_damages_value(case)
+        if damage_val is None or damage_val <= 0:
+            filtered_cases.append(case)
+
+    return filtered_cases
+
+
 def search_cases(
     query_text: str,
     selected_regions: List[str],

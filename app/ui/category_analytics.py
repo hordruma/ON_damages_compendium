@@ -22,10 +22,46 @@ except ImportError:
     def adjust_for_inflation(amount, from_year, to_year):
         return None
 
+# Import outlier filtering
+from app.core.search import filter_outliers
+
+
+def _load_valid_compendium_categories() -> set:
+    """
+    Load valid categories from compendium_regions.json.
+
+    Returns:
+        Set of valid category names (case-insensitive, uppercased)
+    """
+    import json
+    from pathlib import Path
+
+    valid_categories = set()
+
+    try:
+        compendium_path = Path("compendium_regions.json")
+        with open(compendium_path, 'r') as f:
+            compendium_data = json.load(f)
+
+        # Extract all subcategories from injury_categories
+        injury_categories = compendium_data.get('injury_categories', {})
+        for category_id, category_info in injury_categories.items():
+            subcategories = category_info.get('subcategories', [])
+            for subcat in subcategories:
+                # Normalize to uppercase for matching
+                valid_categories.add(subcat.strip().upper())
+
+    except Exception as e:
+        # If we can't load the compendium, return empty set (will show all categories)
+        st.warning(f"Could not load compendium categories: {e}")
+
+    return valid_categories
+
 
 def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     """
-    Extract all unique categories/regions from cases, including FLA relationship types.
+    Extract all unique categories/regions from cases that match the compendium structure,
+    including FLA relationship types.
 
     Args:
         cases: List of case dictionaries
@@ -33,6 +69,9 @@ def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     Returns:
         Dictionary with 'injury_categories' and 'fla_relationships' lists
     """
+    # Load valid categories from compendium
+    valid_categories = _load_valid_compendium_categories()
+
     injury_categories = set()
     fla_relationships = set()
 
@@ -40,7 +79,10 @@ def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
         # Injury categories (normalize to uppercase for consistency)
         region = case.get('region')
         if region and region.strip():
-            injury_categories.add(region.strip().upper())
+            region_upper = region.strip().upper()
+            # Only add if it matches a valid compendium category
+            if not valid_categories or region_upper in valid_categories:
+                injury_categories.add(region_upper)
 
         # Also check extended_data for additional regions
         extended_data = case.get('extended_data', {})
@@ -48,7 +90,10 @@ def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
         if regions:
             for r in regions:
                 if r and r.strip():
-                    injury_categories.add(r.strip().upper())
+                    r_upper = r.strip().upper()
+                    # Only add if it matches a valid compendium category
+                    if not valid_categories or r_upper in valid_categories:
+                        injury_categories.add(r_upper)
 
         # FLA relationship types
         fla_claims = extended_data.get('family_law_act_claims', [])
@@ -290,15 +335,24 @@ def create_category_timeline_chart(category_cases: List[Dict[str, Any]], categor
     return fig
 
 
-def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
+def display_category_analytics_page(cases: List[Dict[str, Any]], include_outliers: bool = True) -> None:
     """
     Main function to display the category analytics page.
 
     Args:
         cases: List of all cases
+        include_outliers: Whether to include statistical outliers in calculations (default True)
     """
     st.header("🩺 Category Statistics")
     st.markdown("Explore award patterns and statistics by injury category or FLA relationship type. Compare different types of losses (e.g., injury categories vs. FLA claims).")
+
+    # Helper function to get category cases with optional outlier filtering
+    def get_filtered_category_cases(category_name: str) -> List[Dict[str, Any]]:
+        """Get cases for a category, optionally filtering outliers."""
+        category_cases = get_category_cases(cases, category_name)
+        if not include_outliers and category_cases:
+            category_cases = filter_outliers(category_cases)
+        return category_cases
 
     # Get all categories (injury and FLA)
     categories_dict = get_all_categories(cases)
@@ -320,7 +374,8 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
         options=all_categories,
         default=[],
         max_selections=8,
-        help="Select up to 8 categories to compare (injury categories or FLA relationship types). Each category is shown in a different color."
+        help="Select up to 8 categories to compare (injury categories or FLA relationship types). Each category is shown in a different color.",
+        key="category_selector"
     )
 
     if not selected_categories:
@@ -342,7 +397,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
         # Create comparison table
         comparison_data = []
         for category_name in selected_categories:
-            category_cases = get_category_cases(cases, category_name)
+            category_cases = get_filtered_category_cases(category_name)
             if category_cases:
                 stats = calculate_category_statistics(category_cases, category_name)
                 comparison_data.append({
@@ -369,7 +424,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
             fig_comparison = go.Figure()
 
             for category_name in selected_categories:
-                category_cases = get_category_cases(cases, category_name)
+                category_cases = get_filtered_category_cases(category_name)
                 if category_cases:
                     stats = calculate_category_statistics(category_cases, category_name)
                     fig_comparison.add_trace(go.Bar(
@@ -405,7 +460,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
             fig_timeline = go.Figure()
 
             for category_name in selected_categories:
-                category_cases = get_category_cases(cases, category_name)
+                category_cases = get_filtered_category_cases(category_name)
                 if category_cases:
                     # Prepare data
                     data_points = []
@@ -460,7 +515,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
         st.subheader("📋 Individual Category Details & Cases")
 
         for category_name in selected_categories:
-            category_cases = get_category_cases(cases, category_name)
+            category_cases = get_filtered_category_cases(category_name)
             if category_cases:
                 stats = calculate_category_statistics(category_cases, category_name)
 
@@ -521,7 +576,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]]) -> None:
     selected_category = selected_categories[0]
 
     # Get cases for this category
-    category_cases = get_category_cases(cases, selected_category)
+    category_cases = get_filtered_category_cases(selected_category)
 
     if not category_cases:
         st.warning(f"No cases found for {selected_category}")

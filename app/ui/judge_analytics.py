@@ -23,6 +23,9 @@ except ImportError:
     def adjust_for_inflation(amount, from_year, to_year):
         return None
 
+# Import outlier filtering
+from app.core.search import filter_outliers
+
 
 def get_all_judges(cases: List[Dict[str, Any]]) -> List[str]:
     """
@@ -261,6 +264,16 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         yaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
         hovermode='closest',
         showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.2,
+            xanchor="center",
+            x=0.5,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor="lightgray",
+            borderwidth=1
+        ),
         height=600,
         template='plotly_white'
     )
@@ -320,15 +333,24 @@ def _display_individual_judge_details(judge_name: str, judge_cases: List[Dict[st
         st.plotly_chart(timeline_fig, use_container_width=True)
 
 
-def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
+def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: bool = True) -> None:
     """
     Main function to display the judge analytics page.
 
     Args:
         cases: List of all cases
+        include_outliers: Whether to include statistical outliers in calculations (default True)
     """
     st.header("👨‍⚖️ Judge Analytics")
     st.markdown("Explore award patterns and statistics for individual judges")
+
+    # Helper function to get judge cases with optional outlier filtering
+    def get_filtered_judge_cases(judge_name: str) -> List[Dict[str, Any]]:
+        """Get cases for a judge, optionally filtering outliers."""
+        judge_cases = get_judge_cases(cases, judge_name)
+        if not include_outliers and judge_cases:
+            judge_cases = filter_outliers(judge_cases)
+        return judge_cases
 
     # Get all judges
     all_judges = get_all_judges(cases)
@@ -343,7 +365,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
     # Calculate case counts for each judge
     judge_case_counts = {}
     for judge_name in all_judges:
-        judge_cases = get_judge_cases(cases, judge_name)
+        judge_cases = get_filtered_judge_cases(judge_name)
         judge_case_counts[judge_name] = len(judge_cases)
 
     # Create judge options with case counts
@@ -379,7 +401,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
         # Create comparison table
         comparison_data = []
         for judge_name in selected_judges:
-            judge_cases = get_judge_cases(cases, judge_name)
+            judge_cases = get_filtered_judge_cases(judge_name)
             if judge_cases:
                 stats = calculate_judge_statistics(judge_cases)
                 comparison_data.append({
@@ -407,7 +429,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
             fig_timeline = go.Figure()
 
             for judge_name in selected_judges:
-                judge_cases = get_judge_cases(cases, judge_name)
+                judge_cases = get_filtered_judge_cases(judge_name)
                 if judge_cases:
                     # Prepare data
                     data_points = []
@@ -472,7 +494,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
         for judge_name in selected_judges:
             with st.expander(f"View details for {judge_name}", expanded=False):
-                judge_cases = get_judge_cases(cases, judge_name)
+                judge_cases = get_filtered_judge_cases(judge_name)
                 if judge_cases:
                     stats = calculate_judge_statistics(judge_cases)
                     _display_individual_judge_details(judge_name, judge_cases, stats)
@@ -485,7 +507,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
     selected_judge = selected_judges[0]
 
     # Get cases for this judge
-    judge_cases = get_judge_cases(cases, selected_judge)
+    judge_cases = get_filtered_judge_cases(selected_judge)
 
     if not judge_cases:
         st.warning(f"No cases found for {selected_judge}")
