@@ -327,6 +327,62 @@ Return the JSON object:"""
         result = normalize_single(judge_name)
         return result if result else None
 
+    @staticmethod
+    def _combine_multiline_headers(headers_list: List[str]) -> List[str]:
+        """
+        Combine multi-line headers that were incorrectly split.
+
+        The PDF has some column headers that span multiple lines within a single cell:
+        - "Sex" and "Age" are in the same cell (two lines)
+        - "Non-Pecuniary", "General", and "Damages" are in the same cell (three lines)
+
+        When Camelot extracts these and they're split by newlines, we get:
+        ['Plaintiff', 'Defendant', ..., 'Sex', 'Non-Pecuniary', 'Other Damages', 'Comments', 'Age', 'General', 'Damages']
+
+        This method combines them back into proper columns:
+        ['Plaintiff', 'Defendant', ..., 'Sex', 'Non-Pecuniary', 'Other Damages', 'Comments']
+
+        The issue is that Camelot reads multi-line cells in a weird order:
+        - First pass: reads first line of all cells
+        - Second/third pass: reads subsequent lines
+
+        So we need to detect and skip standalone "Age", "General", and "Damages"
+        if their primary headers ("Sex", "Non-Pecuniary") already appeared.
+
+        Args:
+            headers_list: List of header strings (after splitting on newlines)
+
+        Returns:
+            Cleaned list with multi-line headers combined
+        """
+        if not headers_list:
+            return []
+
+        # Convert to lowercase for checking
+        headers_lower = [h.lower() for h in headers_list]
+
+        # Check if certain headers appear in the list
+        has_sex = 'sex' in headers_lower
+        has_non_pecuniary = any('non-pecuniary' in h or 'non pecuniary' in h for h in headers_lower)
+
+        combined = []
+
+        for i, header in enumerate(headers_list):
+            header_lower = header.lower()
+
+            # Skip standalone "Age" if "Sex" appears in the list
+            if header_lower == 'age' and has_sex:
+                continue
+
+            # Skip standalone "General" or "Damages" if "Non-Pecuniary" appears in the list
+            if (header_lower in ['general', 'damages']) and has_non_pecuniary:
+                continue
+
+            # Keep all other headers
+            combined.append(header)
+
+        return combined
+
     def detect_section_header(self, page_text: str) -> str:
         """
         Detect body region section from page text.
@@ -642,7 +698,10 @@ Return the JSON object:"""
             elif '\n' in row0_cell0 or '\\n' in row0_cell0:
                 # Type 2: Newline-separated headers in row 0, col 0
                 headers_raw = row0_cell0.replace('\\n', '\n').split('\n')
-                header = [h.strip() for h in headers_raw if h.strip()]
+                headers_split = [h.strip() for h in headers_raw if h.strip()]
+
+                # Combine multi-line headers (e.g., "Sex \n Age" -> "Sex", "Non-Pecuniary \n General \n Damages" -> "Non-Pecuniary")
+                header = self._combine_multiline_headers(headers_split)
                 data_start_row = 1
 
             else:
@@ -661,7 +720,11 @@ Return the JSON object:"""
                     if '\n' in row1_cell0 or '\\n' in row1_cell0:
                         # Headers newline-separated in row 1
                         headers_raw = row1_cell0.replace('\\n', '\n').split('\n')
-                        header = [h.strip() for h in headers_raw if h.strip()]
+                        headers_split = [h.strip() for h in headers_raw if h.strip()]
+
+                        # Combine multi-line headers (e.g., "Sex \n Age" -> "Sex", "Non-Pecuniary \n General \n Damages" -> "Non-Pecuniary")
+                        # The PDF has some cells with 2-3 lines that represent a single column
+                        header = self._combine_multiline_headers(headers_split)
                     elif num_filled_row1 > 1:
                         # Headers spread across row 1
                         header = [v if v and v != 'nan' else f"Col_{i}" for i, v in enumerate(row1_values)]
