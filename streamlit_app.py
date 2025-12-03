@@ -20,8 +20,8 @@ from app.core.config import *
 from app.core.data_loader import initialize_data
 from app.core.search import search_cases, extract_damages_value, boolean_search
 from app.ui.visualizations import create_inflation_chart, calculate_chart_statistics, create_damages_cap_chart
-from app.ui.fla_analytics import display_fla_analytics_page
 from app.ui.judge_analytics import display_judge_analytics_page
+from app.ui.category_analytics import display_category_analytics_page
 
 # Import other application modules
 from expert_report_analyzer import analyze_expert_report
@@ -238,7 +238,7 @@ st.markdown('<div class="main-header">⚖️ Ontario Damages Compendium</div>', 
 st.markdown('<div class="sub-header">Visual search tool for comparable personal injury awards in Ontario</div>', unsafe_allow_html=True)
 
 # Create tabs for different pages
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Case Search", "🔎 Boolean Search", "⚰️ Fatal Injuries (FLA by Relationship)", "👨‍⚖️ Judge Analytics"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔍 Case Search", "👨‍⚖️ Judge Analytics", "🩺 Category Statistics", "🕵️ Boolean Search"])
 
 # =============================================================================
 # TAB 1: CASE SEARCH
@@ -749,10 +749,24 @@ with tab1:
                         st.info("Please ensure all dependencies are installed: pip install reportlab")
 
 # =============================================================================
-# TAB 2: BOOLEAN SEARCH
+# TAB 2: JUDGE ANALYTICS
 # =============================================================================
 
 with tab2:
+    display_judge_analytics_page(cases)
+
+# =============================================================================
+# TAB 3: CATEGORY STATISTICS (includes injury categories and FLA relationships)
+# =============================================================================
+
+with tab3:
+    display_category_analytics_page(cases)
+
+# =============================================================================
+# TAB 4: BOOLEAN SEARCH
+# =============================================================================
+
+with tab4:
     st.info("""
     **Boolean Search:** Use logical operators to find specific cases with field-specific search and damage filters.
 
@@ -990,20 +1004,6 @@ with tab2:
                             st.divider()
                 else:
                     st.warning("No cases found matching your Boolean query. Try adjusting your search terms or operators.")
-
-# =============================================================================
-# TAB 3: FLA DAMAGES
-# =============================================================================
-
-with tab3:
-    display_fla_analytics_page(cases)
-
-# =============================================================================
-# TAB 4: JUDGE ANALYTICS
-# =============================================================================
-
-with tab4:
-    display_judge_analytics_page(cases)
 
 # =============================================================================
 # FOOTER

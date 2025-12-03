@@ -418,6 +418,60 @@ def create_yearly_case_volume_chart(stats: Dict[str, Any]) -> Optional[go.Figure
     return fig
 
 
+def _display_individual_judge_details(judge_name: str, judge_cases: List[Dict[str, Any]], stats: Dict[str, Any]) -> None:
+    """
+    Display detailed analytics for an individual judge.
+    Helper function used in both single and comparison views.
+
+    Args:
+        judge_name: Name of the judge
+        judge_cases: List of cases for this judge
+        stats: Pre-calculated statistics dictionary
+    """
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Total Cases", stats['total_cases'])
+
+    with col2:
+        st.metric("Cases with Awards", stats['cases_with_damages'])
+
+    with col3:
+        if stats['years']['min'] and stats['years']['max']:
+            year_range = f"{stats['years']['min']}-{stats['years']['max']}"
+            st.metric("Year Range", year_range)
+        else:
+            st.metric("Year Range", "N/A")
+
+    with col4:
+        st.metric("Body Regions", stats['regions']['unique_count'])
+
+    # Damages statistics
+    if stats['cases_with_damages'] > 0:
+        st.markdown(f"**💰 Award Statistics (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})**")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(f"Median ({DEFAULT_REFERENCE_YEAR}$)", f"${stats['adjusted_damages']['median']:,.0f}")
+
+        with col2:
+            st.metric(f"Mean ({DEFAULT_REFERENCE_YEAR}$)", f"${stats['adjusted_damages']['mean']:,.0f}")
+
+        with col3:
+            st.metric("Std. Deviation", f"${stats['adjusted_damages']['std']:,.0f}")
+
+    # Charts
+    timeline_fig = create_awards_timeline_chart(judge_cases)
+    if timeline_fig:
+        st.plotly_chart(timeline_fig, use_container_width=True)
+
+    # Region distribution
+    region_fig = create_region_distribution_chart(stats)
+    if region_fig:
+        st.plotly_chart(region_fig, use_container_width=True)
+
+
 def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
     """
     Main function to display the judge analytics page.
@@ -438,16 +492,160 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
     st.info(f"📊 Dataset contains {len(all_judges)} unique judges")
 
-    # Judge selector
-    selected_judge = st.selectbox(
-        "Select a Judge:",
+    # Judge selector - now with multi-select
+    selected_judges = st.multiselect(
+        "Select Judge(s) to Compare:",
         options=all_judges,
-        help="Choose a judge to view their award statistics and patterns"
+        default=[all_judges[0]] if all_judges else [],
+        help="Choose one or more judges to view and compare their award statistics and patterns"
     )
 
-    if not selected_judge:
-        st.info("👆 Select a judge above to view their analytics")
+    if not selected_judges:
+        st.info("👆 Select one or more judges above to view their analytics")
         return
+
+    # Check if we're comparing multiple judges
+    is_comparison = len(selected_judges) > 1
+
+    if is_comparison:
+        # Display comparison view for multiple judges
+        st.subheader(f"Comparing {len(selected_judges)} Judges")
+
+        # Create comparison table
+        comparison_data = []
+        for judge_name in selected_judges:
+            judge_cases = get_judge_cases(cases, judge_name)
+            if judge_cases:
+                stats = calculate_judge_statistics(judge_cases)
+                comparison_data.append({
+                    'Judge': judge_name,
+                    'Total Cases': stats['total_cases'],
+                    'Cases with Awards': stats['cases_with_damages'],
+                    f'Median Award ({DEFAULT_REFERENCE_YEAR}$)': f"${stats['adjusted_damages']['median']:,.0f}",
+                    f'Mean Award ({DEFAULT_REFERENCE_YEAR}$)': f"${stats['adjusted_damages']['mean']:,.0f}",
+                    'Std. Deviation': f"${stats['adjusted_damages']['std']:,.0f}",
+                    'Min Award': f"${stats['adjusted_damages']['min']:,.0f}",
+                    'Max Award': f"${stats['adjusted_damages']['max']:,.0f}",
+                    'Year Range': f"{stats['years']['min']}-{stats['years']['max']}" if stats['years']['min'] and stats['years']['max'] else "N/A",
+                    'Body Regions': stats['regions']['unique_count']
+                })
+
+        if comparison_data:
+            comparison_df = pd.DataFrame(comparison_data)
+            st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+
+            st.divider()
+
+            # Comparison charts
+            st.subheader("📊 Comparative Analysis")
+
+            # Create comparison bar chart for median awards
+            fig_comparison = go.Figure()
+
+            for judge_name in selected_judges:
+                judge_cases = get_judge_cases(cases, judge_name)
+                if judge_cases:
+                    stats = calculate_judge_statistics(judge_cases)
+                    fig_comparison.add_trace(go.Bar(
+                        name=judge_name,
+                        x=['Median Award', 'Mean Award', 'Max Award'],
+                        y=[stats['adjusted_damages']['median'],
+                           stats['adjusted_damages']['mean'],
+                           stats['adjusted_damages']['max']],
+                        text=[f"${stats['adjusted_damages']['median']:,.0f}",
+                              f"${stats['adjusted_damages']['mean']:,.0f}",
+                              f"${stats['adjusted_damages']['max']:,.0f}"],
+                        textposition='auto',
+                    ))
+
+            fig_comparison.update_layout(
+                title=f'Award Comparison (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
+                xaxis_title='Metric',
+                yaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
+                yaxis=dict(tickformat='$,.0f'),
+                barmode='group',
+                height=500,
+                template='plotly_white',
+                showlegend=True
+            )
+
+            st.plotly_chart(fig_comparison, use_container_width=True)
+
+            st.divider()
+
+            # Combined timeline for all selected judges
+            st.subheader("📈 Awards Timeline Comparison")
+
+            fig_timeline = go.Figure()
+
+            for judge_name in selected_judges:
+                judge_cases = get_judge_cases(cases, judge_name)
+                if judge_cases:
+                    # Prepare data
+                    data_points = []
+                    for case in judge_cases:
+                        year = case.get('year')
+                        damage = case.get('damages')
+                        case_name = case.get('case_name', 'Unknown')
+
+                        if year and damage and damage > 0:
+                            adjusted_damage = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
+                            data_points.append({
+                                'year': year,
+                                'adjusted_damages': adjusted_damage if adjusted_damage else damage,
+                                'case_name': case_name,
+                                'judge': judge_name
+                            })
+
+                    if data_points:
+                        df = pd.DataFrame(data_points)
+
+                        # Add scatter plot for this judge
+                        hover_text = [f"<b>{row['case_name']}</b><br>Judge: {row['judge']}<br>Award ({DEFAULT_REFERENCE_YEAR}$): ${row['adjusted_damages']:,.0f}"
+                                      for _, row in df.iterrows()]
+
+                        fig_timeline.add_trace(go.Scatter(
+                            x=df['year'],
+                            y=df['adjusted_damages'],
+                            mode='markers',
+                            name=judge_name,
+                            marker=dict(size=8, line=dict(width=1, color='white')),
+                            text=hover_text,
+                            hovertemplate='%{text}<br>Year: %{x}<extra></extra>'
+                        ))
+
+            if fig_timeline.data:
+                fig_timeline.update_layout(
+                    title=f'Awards Timeline Comparison (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
+                    xaxis_title='Year',
+                    yaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
+                    hovermode='closest',
+                    showlegend=True,
+                    height=500,
+                    template='plotly_white'
+                )
+                fig_timeline.update_yaxes(tickformat='$,.0f')
+                st.plotly_chart(fig_timeline, use_container_width=True)
+            else:
+                st.info("Insufficient data with both year and damages information to display timeline")
+
+        # Individual judge details in expanders
+        st.divider()
+        st.subheader("📋 Individual Judge Details")
+
+        for judge_name in selected_judges:
+            with st.expander(f"View details for {judge_name}", expanded=False):
+                judge_cases = get_judge_cases(cases, judge_name)
+                if judge_cases:
+                    stats = calculate_judge_statistics(judge_cases)
+                    _display_individual_judge_details(judge_name, judge_cases, stats)
+                else:
+                    st.warning(f"No cases found for {judge_name}")
+
+        return
+
+    # Single judge view (original behavior)
+    selected_judge = selected_judges[0]
 
     # Get cases for this judge
     judge_cases = get_judge_cases(cases, selected_judge)
