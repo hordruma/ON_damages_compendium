@@ -339,14 +339,30 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]]) -> None:
 
     st.info(f"📊 Dataset contains {len(all_judges)} unique judges")
 
+    # Calculate case counts for each judge
+    judge_case_counts = {}
+    for judge_name in all_judges:
+        judge_cases = get_judge_cases(cases, judge_name)
+        judge_case_counts[judge_name] = len(judge_cases)
+
+    # Create judge options with case counts
+    judge_options = [f"{judge_name} ({judge_case_counts[judge_name]} cases)" for judge_name in all_judges]
+
     # Judge selector - now with multi-select (max 8 for legibility)
-    selected_judges = st.multiselect(
+    selected_judge_options = st.multiselect(
         "Select Judge(s) to Compare:",
-        options=all_judges,
-        default=[all_judges[0]] if all_judges else [],
+        options=judge_options,
+        default=[judge_options[0]] if judge_options else [],
         max_selections=8,
         help="Choose up to 8 judges to view and compare their award statistics and patterns. Each judge is shown in a different color."
     )
+
+    # Extract judge names from selections (remove the case count suffix)
+    selected_judges = []
+    for option in selected_judge_options:
+        # Extract judge name by removing the " (X cases)" suffix
+        judge_name = option.rsplit(' (', 1)[0]
+        selected_judges.append(judge_name)
 
     if not selected_judges:
         st.info("👆 Select one or more judges above to view their analytics")
