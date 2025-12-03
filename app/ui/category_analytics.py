@@ -26,9 +26,42 @@ except ImportError:
 from app.core.search import filter_outliers
 
 
+def _load_valid_compendium_categories() -> set:
+    """
+    Load valid categories from compendium_regions.json.
+
+    Returns:
+        Set of valid category names (case-insensitive, uppercased)
+    """
+    import json
+    from pathlib import Path
+
+    valid_categories = set()
+
+    try:
+        compendium_path = Path("compendium_regions.json")
+        with open(compendium_path, 'r') as f:
+            compendium_data = json.load(f)
+
+        # Extract all subcategories from injury_categories
+        injury_categories = compendium_data.get('injury_categories', {})
+        for category_id, category_info in injury_categories.items():
+            subcategories = category_info.get('subcategories', [])
+            for subcat in subcategories:
+                # Normalize to uppercase for matching
+                valid_categories.add(subcat.strip().upper())
+
+    except Exception as e:
+        # If we can't load the compendium, return empty set (will show all categories)
+        st.warning(f"Could not load compendium categories: {e}")
+
+    return valid_categories
+
+
 def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     """
-    Extract all unique categories/regions from cases, including FLA relationship types.
+    Extract all unique categories/regions from cases that match the compendium structure,
+    including FLA relationship types.
 
     Args:
         cases: List of case dictionaries
@@ -36,6 +69,9 @@ def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
     Returns:
         Dictionary with 'injury_categories' and 'fla_relationships' lists
     """
+    # Load valid categories from compendium
+    valid_categories = _load_valid_compendium_categories()
+
     injury_categories = set()
     fla_relationships = set()
 
@@ -43,7 +79,10 @@ def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
         # Injury categories (normalize to uppercase for consistency)
         region = case.get('region')
         if region and region.strip():
-            injury_categories.add(region.strip().upper())
+            region_upper = region.strip().upper()
+            # Only add if it matches a valid compendium category
+            if not valid_categories or region_upper in valid_categories:
+                injury_categories.add(region_upper)
 
         # Also check extended_data for additional regions
         extended_data = case.get('extended_data', {})
@@ -51,7 +90,10 @@ def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
         if regions:
             for r in regions:
                 if r and r.strip():
-                    injury_categories.add(r.strip().upper())
+                    r_upper = r.strip().upper()
+                    # Only add if it matches a valid compendium category
+                    if not valid_categories or r_upper in valid_categories:
+                        injury_categories.add(r_upper)
 
         # FLA relationship types
         fla_claims = extended_data.get('family_law_act_claims', [])
@@ -332,7 +374,8 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
         options=all_categories,
         default=[],
         max_selections=8,
-        help="Select up to 8 categories to compare (injury categories or FLA relationship types). Each category is shown in a different color."
+        help="Select up to 8 categories to compare (injury categories or FLA relationship types). Each category is shown in a different color.",
+        key="category_selector"
     )
 
     if not selected_categories:
