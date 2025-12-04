@@ -158,7 +158,7 @@ def display_enhanced_data(case: Dict) -> None:
             demo.append(f"Age: {age}")
         st.markdown(f"**Demographics:** {', '.join(demo)}")
 
-    # Injuries (deduplicated)
+    # Injuries (deduplicated, displayed in 2 columns)
     injuries = extended_data.get('injuries')
     if injuries:
         st.markdown("**Injuries:**")
@@ -172,8 +172,17 @@ def display_enhanced_data(case: Dict) -> None:
                 seen.add(injury_normalized)
                 unique_injuries.append(injury)
 
-        for injury in unique_injuries:
-            st.markdown(f"- {injury}")
+        # Display injuries in 2 columns
+        col1, col2 = st.columns(2)
+        mid_point = (len(unique_injuries) + 1) // 2
+
+        with col1:
+            for injury in unique_injuries[:mid_point]:
+                st.markdown(f"- {injury}")
+
+        with col2:
+            for injury in unique_injuries[mid_point:]:
+                st.markdown(f"- {injury}")
 
     # Other damages
     other_damages = extended_data.get('other_damages')
@@ -346,8 +355,8 @@ with tab1:
         "Injury details",
         value=default_injury_text,
         height=180,
-        placeholder="Example: C5-C6 disc herniation with chronic radicular pain radiating to right upper extremity. Failed conservative management. MRI shows central disc protrusion with nerve root impingement. Ongoing neurological deficits including weakness and paresthesias...",
-        help="Include: mechanism, anatomical structures, severity, chronicity, and functional impact",
+        placeholder="Example: diffuse axonal injury, traumatic brain injury, post-concussion syndrome\n\nOr describe in detail: C5-C6 disc herniation with chronic radicular pain radiating to right upper extremity...",
+        help="For best results, use comma-separated injuries (e.g., 'diffuse axonal injury, traumatic brain injury'). You can also describe injuries in detail with their mechanism, anatomical structures, severity, chronicity, and functional impact.",
         label_visibility="collapsed"
     )
 
