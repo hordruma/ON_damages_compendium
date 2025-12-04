@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a professional visual search tool for the Ontario Damages Compendium, designed for personal injury and insurance lawyers. It combines:
+This is a professional AI search tool for the Ontario Damages Compendium, designed for personal injury and insurance lawyers. It combines:
 
 - **Visual body mapping** - Click on anatomical regions to select injury locations
 - **AI-powered search** - Semantic similarity matching using embeddings

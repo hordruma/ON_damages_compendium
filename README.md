@@ -1,6 +1,6 @@
-# Ontario Damages Compendium - Visual Search Tool
+# Ontario Damages Compendium - AI Search Tool
 
-A professional legal tool for searching comparable personal injury awards in Ontario using visual body mapping and AI-powered similarity search.
+A professional legal tool for searching comparable personal injury awards in Ontario using AI-powered similarity search.
 
 ## Features
 
