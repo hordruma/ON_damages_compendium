@@ -522,6 +522,125 @@ with st.sidebar:
         help="Maximum number of cases to return"
     )
 
+    st.divider()
+
+    # Search Weighting Controls
+    st.subheader("Search Weighting")
+    st.caption("Adjust how different aspects of cases are weighted in search results")
+
+    # Preset options
+    weight_preset = st.selectbox(
+        "Preset:",
+        options=[
+            "Balanced (Default)",
+            "Story/Narrative Focus",
+            "Injury Name Focus",
+            "Similar Cases (Semantic)",
+            "Custom"
+        ],
+        help="Choose a preset or select 'Custom' to manually adjust weights"
+    )
+
+    # Define preset values
+    presets = {
+        "Balanced (Default)": {
+            "injury_list": 0.40,
+            "keyword": 0.35,
+            "semantic": 0.15,
+            "meta": 0.10
+        },
+        "Story/Narrative Focus": {
+            "injury_list": 0.20,
+            "keyword": 0.50,
+            "semantic": 0.20,
+            "meta": 0.10
+        },
+        "Injury Name Focus": {
+            "injury_list": 0.60,
+            "keyword": 0.20,
+            "semantic": 0.10,
+            "meta": 0.10
+        },
+        "Similar Cases (Semantic)": {
+            "injury_list": 0.25,
+            "keyword": 0.25,
+            "semantic": 0.40,
+            "meta": 0.10
+        }
+    }
+
+    # Initialize weights based on preset or use custom
+    if weight_preset != "Custom":
+        preset_values = presets[weight_preset]
+        injury_list_weight = preset_values["injury_list"]
+        keyword_weight = preset_values["keyword"]
+        semantic_weight = preset_values["semantic"]
+        meta_weight = preset_values["meta"]
+
+        # Display current preset weights (read-only)
+        st.info(
+            f"**Current weights:**\n\n"
+            f"• Injury Name Matching: {injury_list_weight:.0%}\n\n"
+            f"• Keyword/Text Matching: {keyword_weight:.0%}\n\n"
+            f"• Semantic Similarity: {semantic_weight:.0%}\n\n"
+            f"• Demographics/Metadata: {meta_weight:.0%}"
+        )
+    else:
+        # Custom sliders
+        st.caption("💡 Adjust individual weights (will be normalized to sum to 100%)")
+
+        injury_list_weight = st.slider(
+            "Injury Name Matching",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.40,
+            step=0.05,
+            help="Weight for direct matching of injury names (e.g., 'TBI', 'fracture'). Increase for searches with specific injury terms."
+        )
+
+        keyword_weight = st.slider(
+            "Keyword/Text Matching",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.35,
+            step=0.05,
+            help="Weight for keyword matching in comments, case names, and summaries. Increase for narrative descriptions and functional limitations."
+        )
+
+        semantic_weight = st.slider(
+            "Semantic Similarity",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.15,
+            step=0.05,
+            help="Weight for AI-based similarity using embeddings. Increase to find conceptually similar cases even with different wording."
+        )
+
+        meta_weight = st.slider(
+            "Demographics/Metadata",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.10,
+            step=0.05,
+            help="Weight for gender, age, and injury overlap matching. Increase to prioritize cases with similar demographics."
+        )
+
+        # Normalize weights to sum to 1.0
+        total_weight = injury_list_weight + keyword_weight + semantic_weight + meta_weight
+        if total_weight > 0:
+            injury_list_weight = injury_list_weight / total_weight
+            keyword_weight = keyword_weight / total_weight
+            semantic_weight = semantic_weight / total_weight
+            meta_weight = meta_weight / total_weight
+
+            st.caption(
+                f"**Normalized weights:** "
+                f"Injury: {injury_list_weight:.0%}, "
+                f"Keyword: {keyword_weight:.0%}, "
+                f"Semantic: {semantic_weight:.0%}, "
+                f"Meta: {meta_weight:.0%}"
+            )
+
     # Wire injury categories to selected_regions for exclusive filtering
     # selected_regions is used as an exclusive filter: only cases with at least one selected region
     selected_regions = selected_injury_categories
@@ -545,7 +664,11 @@ with tab1:
                     model,
                     gender=gender if gender != "Not Specified" else None,
                     age=age,
-                    top_n=num_results
+                    top_n=num_results,
+                    semantic_weight=semantic_weight,
+                    keyword_weight=keyword_weight,
+                    meta_weight=meta_weight,
+                    injury_list_weight=injury_list_weight
                 )
 
                 # Apply outlier filtering if requested
