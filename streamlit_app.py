@@ -1,5 +1,5 @@
 """
-Ontario Damages Compendium - Visual Search Tool
+Ontario Damages Compendium - AI Search Tool
 A professional legal tool for searching comparable personal injury awards
 
 Main application file - handles UI and user interactions only.
@@ -235,7 +235,7 @@ if 'analysis_data' not in st.session_state:
 
 # Header
 st.markdown('<div class="main-header">⚖️ Ontario Damages Compendium</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Visual search tool for comparable personal injury awards in Ontario</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">AI search tool for comparable personal injury awards in Ontario</div>', unsafe_allow_html=True)
 
 # Create tabs for different pages
 tab1, tab2, tab3, tab4 = st.tabs(["🔍 Case Search", "👨‍⚖️ Judge Analytics", "🩺 Category Statistics", "🕵️ Boolean Search"])
@@ -385,6 +385,14 @@ with tab1:
                             key=f"status_{filter_id}"
                         )
 
+    # Outliers filter - moved from sidebar
+    include_outliers = st.checkbox(
+        "Include outliers",
+        value=False,
+        help="Include statistical outliers (very high or very low awards). "
+             "When unchecked, cases outside 1.5×IQR from the median are excluded to improve statistical accuracy."
+    )
+
     st.markdown("<br>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -503,13 +511,6 @@ with st.sidebar:
         value=10,
         step=5,
         help="Maximum number of cases to return"
-    )
-
-    include_outliers = st.checkbox(
-        "Include outliers",
-        value=False,
-        help="Include statistical outliers (very high or very low awards). "
-             "When unchecked, cases outside 1.5×IQR from the median are excluded to improve statistical accuracy."
     )
 
     # Wire injury categories to selected_regions for exclusive filtering
