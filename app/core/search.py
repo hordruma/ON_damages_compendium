@@ -111,6 +111,67 @@ def _injury_overlap_score(case_injuries: List[str], query_injuries: List[str]) -
     return len(overlap) / max(1, len(s_q))
 
 
+def _parse_comma_separated_injuries(text: str) -> List[str]:
+    """
+    Parse comma-separated injury phrases from query text.
+
+    Args:
+        text: Input text with comma-separated injuries
+
+    Returns:
+        List of normalized injury phrases (stripped, lowercased)
+    """
+    if not text:
+        return []
+    # Split by comma and normalize each phrase
+    phrases = [phrase.strip().lower() for phrase in text.split(',') if phrase.strip()]
+    return phrases
+
+
+def _injury_list_match_score(query_injuries: List[str], case: Dict[str, Any]) -> float:
+    """
+    Compute direct match score against case's injury list.
+
+    This checks for exact phrase matches (or substring matches) between
+    query injuries and the case's injury list. This score should predominate
+    when injuries are found in the list.
+
+    Args:
+        query_injuries: List of normalized injury phrases from query
+        case: Case dictionary
+
+    Returns:
+        Match score (0-1), higher when query injuries match case injuries
+    """
+    if not query_injuries:
+        return 0.0
+
+    # Get case injuries
+    ext = case.get('extended_data', {})
+    case_injuries = ext.get('injuries', [])
+    if not case_injuries:
+        return 0.0
+
+    # Normalize case injuries
+    normalized_case_injuries = [inj.strip().lower() for inj in case_injuries]
+
+    # Count matches: check both exact match and substring match
+    matches = 0
+    for query_inj in query_injuries:
+        # Check for exact match first
+        if query_inj in normalized_case_injuries:
+            matches += 1
+        else:
+            # Check for substring match (query injury contains or is contained in case injury)
+            for case_inj in normalized_case_injuries:
+                if query_inj in case_inj or case_inj in query_inj:
+                    matches += 1
+                    break
+
+    # Return proportion of query injuries that matched
+    return matches / len(query_injuries)
+
+
 def _tokenize(text: str) -> List[str]:
     """
     Tokenize text into normalized keywords.
@@ -328,27 +389,31 @@ def search_cases(
     top_n: int = 25,
     semantic_weight: float = 0.15,
     keyword_weight: float = 0.55,
-    meta_weight: float = 0.3
+    meta_weight: float = 0.3,
+    injury_list_weight: float = 0.4
 ) -> List[Tuple[Dict[str, Any], float, float]]:
     """
-    Search cases using hybrid search (semantic + keyword + metadata).
+    Search cases using hybrid search (semantic + keyword + metadata + injury list match).
 
     Algorithm:
     1. Apply exclusive category filter: only include cases matching selected categories
-    2. Compute semantic similarity on embeddings (injuries + category + comments)
-    3. Compute keyword match score using BM25
-    4. Compute metadata score from injury overlap, gender match, age proximity
-    5. Combine scores: combined = sem_weight*semantic + kw_weight*keyword + meta_weight*meta
-    6. If no categories selected, redistribute metadata weight proportionally to semantic and keyword
-    7. Return top N sorted by combined_score descending
+    2. Parse comma-separated injuries from query
+    3. Compute semantic similarity on embeddings (injuries + category + comments)
+    4. Compute keyword match score using BM25
+    5. Compute injury list match score (direct matching of query injuries to case injury list)
+    6. Compute metadata score from injury overlap, gender match, age proximity
+    7. Combine scores with weights
+    8. If no categories selected, adjust weight distribution
+    9. Return top N sorted by combined_score descending
 
     Weight Distribution:
-    - Default (with injury categories): Keyword 0.55, Metadata 0.3, Semantic 0.15
-    - Without categories: Metadata weight redistributed proportionally to Semantic and Keyword
-      (Semantic 0.214, Keyword 0.786)
+    - Default (with injury categories):
+      Injury List: 0.4, Keyword: 0.35, Semantic: 0.15, Metadata: 0.1
+    - Without categories (metadata weight redistributed):
+      Injury List: 0.5, Keyword: 0.35, Semantic: 0.15
 
     Args:
-        query_text: Free-text injury description from user
+        query_text: Free-text injury description from user (comma-separated)
         selected_regions: List of category IDs/labels (exclusive filter) - kept as 'regions' for API compat
         cases: List of case dictionaries
         region_map: Category ID -> label mapping (kept as 'region_map' for API compat)
@@ -357,13 +422,17 @@ def search_cases(
         age: Optional age filter
         top_n: Number of results to return
         semantic_weight: Weight for semantic similarity (default 0.15)
-        keyword_weight: Weight for keyword matching (default 0.55)
-        meta_weight: Weight for metadata score (default 0.3)
+        keyword_weight: Weight for keyword matching (default 0.55, adjusted to 0.35 internally)
+        meta_weight: Weight for metadata score (default 0.3, adjusted to 0.1 internally)
+        injury_list_weight: Weight for injury list matching (default 0.4)
 
     Returns:
         List of (case, semantic_sim, combined_score) sorted by combined_score desc
     """
     _ensure_embs_loaded()
+
+    # Parse comma-separated injuries from query
+    query_injuries = _parse_comma_separated_injuries(query_text)
 
     # Encode query using same model as embeddings
     qv = model.encode(query_text).astype("float32")
@@ -402,23 +471,20 @@ def search_cases(
     if not candidate_indices:
         return []
 
-    # Adjust weights if no injury categories selected (no injury overlap to score)
+    # Adjust weights for new 4-component system
+    # Default weights (with categories): injury_list=0.4, keyword=0.35, semantic=0.15, meta=0.1
+    adjusted_injury_list_weight = injury_list_weight
+    adjusted_keyword_weight = 0.35  # Reduced from 0.55 to accommodate injury list weight
     adjusted_semantic_weight = semantic_weight
-    adjusted_keyword_weight = keyword_weight
-    adjusted_meta_weight = meta_weight
+    adjusted_meta_weight = 0.1  # Reduced from 0.3 to accommodate injury list weight
 
     if not selected_regions:
-        # No category filter: redistribute metadata weight proportionally to semantic and keyword
-        # Maintain the ratio of semantic : keyword = 0.15 : 0.55
-        # Calculate what portion of weights we have without metadata
-        non_meta_total = semantic_weight + keyword_weight
-        if non_meta_total > 0:
-            semantic_ratio = semantic_weight / non_meta_total
-            keyword_ratio = keyword_weight / non_meta_total
-            # Add proportional share of metadata weight to each
-            adjusted_semantic_weight = semantic_weight + (meta_weight * semantic_ratio)
-            adjusted_keyword_weight = keyword_weight + (meta_weight * keyword_ratio)
-            adjusted_meta_weight = 0.0
+        # No category filter: redistribute metadata weight to injury list matching
+        # Adjusted weights: injury_list=0.5, keyword=0.35, semantic=0.15, meta=0.0
+        adjusted_injury_list_weight = injury_list_weight + 0.1  # 0.4 + 0.1 = 0.5
+        adjusted_keyword_weight = 0.35
+        adjusted_semantic_weight = 0.15
+        adjusted_meta_weight = 0.0
 
     # Stage 2: Compute semantic similarity
     semantic_sims = _cosine_sim_batch(qv, candidate_indices)
@@ -434,14 +500,17 @@ def search_cases(
         # Keyword score from BM25
         keyword_score = _keyword_search_score(query_text, case)
 
+        # Injury list match score (predominates when injuries match)
+        injury_list_score = _injury_list_match_score(query_injuries, case)
+
         # Metadata score
-        query_injuries = []
         meta_score = compute_meta_score(case, query_injuries, gender, age)
 
-        # Combine all three scores with adjusted weights
+        # Combine all four scores with adjusted weights
         combined = float(
             adjusted_semantic_weight * semantic_sim +
             adjusted_keyword_weight * keyword_score +
+            adjusted_injury_list_weight * injury_list_score +
             adjusted_meta_weight * meta_score
         )
 
