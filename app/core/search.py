@@ -326,9 +326,9 @@ def search_cases(
     gender: Optional[str] = None,
     age: Optional[int] = None,
     top_n: int = 25,
-    semantic_weight: float = 0.5,
-    keyword_weight: float = 0.3,
-    meta_weight: float = 0.2
+    semantic_weight: float = 0.22,
+    keyword_weight: float = 0.55,
+    meta_weight: float = 0.33
 ) -> List[Tuple[Dict[str, Any], float, float]]:
     """
     Search cases using hybrid search (semantic + keyword + metadata).
@@ -339,7 +339,13 @@ def search_cases(
     3. Compute keyword match score using BM25
     4. Compute metadata score from injury overlap, gender match, age proximity
     5. Combine scores: combined = sem_weight*semantic + kw_weight*keyword + meta_weight*meta
-    6. Return top N sorted by combined_score descending
+    6. If no categories selected, redistribute metadata weight proportionally to semantic and keyword
+    7. Return top N sorted by combined_score descending
+
+    Weight Distribution:
+    - Default (with injury categories): Semantic 0.22, Keyword 0.55, Metadata 0.33
+    - Without categories: Metadata weight redistributed proportionally to Semantic and Keyword
+      (Semantic 0.314, Keyword 0.786)
 
     Args:
         query_text: Free-text injury description from user
@@ -350,9 +356,9 @@ def search_cases(
         gender: Optional gender filter ("Male", "Female", etc.)
         age: Optional age filter
         top_n: Number of results to return
-        semantic_weight: Weight for semantic similarity (default 0.5)
-        keyword_weight: Weight for keyword matching (default 0.3)
-        meta_weight: Weight for metadata score (default 0.2)
+        semantic_weight: Weight for semantic similarity (default 0.22)
+        keyword_weight: Weight for keyword matching (default 0.55)
+        meta_weight: Weight for metadata score (default 0.33)
 
     Returns:
         List of (case, semantic_sim, combined_score) sorted by combined_score desc
@@ -396,6 +402,24 @@ def search_cases(
     if not candidate_indices:
         return []
 
+    # Adjust weights if no injury categories selected (no injury overlap to score)
+    adjusted_semantic_weight = semantic_weight
+    adjusted_keyword_weight = keyword_weight
+    adjusted_meta_weight = meta_weight
+
+    if not selected_regions:
+        # No category filter: redistribute metadata weight proportionally to semantic and keyword
+        # Maintain the ratio of semantic : keyword = 0.22 : 0.55
+        # Calculate what portion of weights we have without metadata
+        non_meta_total = semantic_weight + keyword_weight
+        if non_meta_total > 0:
+            semantic_ratio = semantic_weight / non_meta_total
+            keyword_ratio = keyword_weight / non_meta_total
+            # Add proportional share of metadata weight to each
+            adjusted_semantic_weight = semantic_weight + (meta_weight * semantic_ratio)
+            adjusted_keyword_weight = keyword_weight + (meta_weight * keyword_ratio)
+            adjusted_meta_weight = 0.0
+
     # Stage 2: Compute semantic similarity
     semantic_sims = _cosine_sim_batch(qv, candidate_indices)
 
@@ -414,11 +438,11 @@ def search_cases(
         query_injuries = []
         meta_score = compute_meta_score(case, query_injuries, gender, age)
 
-        # Combine all three scores
+        # Combine all three scores with adjusted weights
         combined = float(
-            semantic_weight * semantic_sim +
-            keyword_weight * keyword_score +
-            meta_weight * meta_score
+            adjusted_semantic_weight * semantic_sim +
+            adjusted_keyword_weight * keyword_score +
+            adjusted_meta_weight * meta_score
         )
 
         results.append((case, semantic_sim, combined))
