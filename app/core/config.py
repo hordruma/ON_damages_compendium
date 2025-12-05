@@ -53,12 +53,14 @@ CASE_SUMMARY_MAX_LENGTH = 400   # Max characters for case summary display
 # MODEL CONFIGURATION
 # ============================================================================
 
-# Embedding model
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+# Embedding model - upgraded for better semantic understanding
+EMBEDDING_MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
 
 # Model info:
-# - Lightweight and fast (only 80MB)
-# - Good balance of performance and speed
+# - Higher quality than all-MiniLM-L6-v2 (420MB vs 80MB)
+# - Significantly better semantic understanding of medical terminology
+# - Improved accuracy for domain-specific queries (e.g., "diffuse axonal injury" → "brain damage")
+# - Based on Microsoft's MPNet architecture
 # - Well-suited for semantic search in legal/medical text
 
 # ============================================================================

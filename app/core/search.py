@@ -17,6 +17,8 @@ from typing import Optional, List, Dict, Tuple, Any
 from collections import Counter
 import math
 
+from .medical_terms import expand_query_terms, get_expanded_query_text
+
 
 DATA_DIR = Path("data")
 EMB_PATH = DATA_DIR / "embeddings_inj.npy"
@@ -230,9 +232,10 @@ def _bm25_score(query_tokens: List[str], doc_tokens: List[str], avg_doc_len: flo
 
 def _keyword_search_score(query_text: str, case: Dict[str, Any]) -> float:
     """
-    Compute keyword match score for a case.
+    Compute keyword match score for a case with medical term expansion.
 
     Searches in: injuries, comments, case name, summary text
+    Expands query with related medical terms for better matching.
 
     Args:
         query_text: User's search query
@@ -241,8 +244,14 @@ def _keyword_search_score(query_text: str, case: Dict[str, Any]) -> float:
     Returns:
         Keyword match score (0-1)
     """
-    # Tokenize query
-    query_tokens = _tokenize(query_text)
+    # Expand query with medical term synonyms
+    expanded_terms = expand_query_terms(query_text)
+
+    # Tokenize all expanded terms
+    query_tokens = []
+    for term in expanded_terms:
+        query_tokens.extend(_tokenize(term))
+
     if not query_tokens:
         return 0.0
 
@@ -255,10 +264,12 @@ def _keyword_search_score(query_text: str, case: Dict[str, Any]) -> float:
     if injuries:
         text_parts.extend(injuries * 2)  # Double weight for injuries
 
-    # Add comments (also important)
+    # Add comments (also important) - if no injuries, comments may contain injury info
     comments = ext.get('comments') or case.get('comments')
     if comments:
-        text_parts.append(comments)
+        # Weight comments more if no injuries listed (may contain injury descriptions)
+        weight = 3 if not injuries else 1
+        text_parts.extend([comments] * weight)
 
     # Add case name
     case_name = case.get('case_name', '')
@@ -277,7 +288,7 @@ def _keyword_search_score(query_text: str, case: Dict[str, Any]) -> float:
     if not doc_tokens:
         return 0.0
 
-    # Compute BM25 score
+    # Compute BM25 score with expanded query
     bm25_raw = _bm25_score(query_tokens, doc_tokens)
 
     # Normalize to 0-1 range (typical BM25 scores are 0-10)
@@ -437,14 +448,16 @@ def search_cases(
     # Parse comma-separated injuries from query
     query_injuries = _parse_comma_separated_injuries(query_text)
 
-    # Dual embedding system:
-    # 1. Full-text query embedding (for semantic search)
-    qv_full = model.encode(query_text).astype("float32")
+    # Dual embedding system with medical term expansion:
+    # 1. Full-text query embedding (for semantic search) - use expanded terms
+    expanded_query_text = get_expanded_query_text(query_text)
+    qv_full = model.encode(expanded_query_text).astype("float32")
 
     # 2. Injury-specific query embedding (for injury-focused search)
-    # If we have parsed injuries, use them; otherwise use full text
+    # If we have parsed injuries, use them with expansion; otherwise use full text
     injury_query_text = ", ".join(query_injuries) if query_injuries else query_text
-    qv_injury = model.encode(injury_query_text).astype("float32")
+    expanded_injury_text = get_expanded_query_text(injury_query_text)
+    qv_injury = model.encode(expanded_injury_text).astype("float32")
 
     # Stage 1: Exclusive category filtering
     candidate_indices = []
