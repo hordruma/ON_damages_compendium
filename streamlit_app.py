@@ -541,30 +541,30 @@ with st.sidebar:
         help="Choose a preset or select 'Custom' to manually adjust weights"
     )
 
-    # Define preset values
+    # Define preset values (embeddings-only for injury matching)
     presets = {
         "Balanced (Default)": {
-            "injury_list": 0.40,
+            "injury_embedding": 0.40,
             "keyword": 0.35,
             "semantic": 0.15,
             "meta": 0.10
         },
         "Story/Narrative Focus": {
-            "injury_list": 0.20,
+            "injury_embedding": 0.30,
             "keyword": 0.50,
-            "semantic": 0.20,
+            "semantic": 0.10,
             "meta": 0.10
         },
         "Injury Name Focus": {
-            "injury_list": 0.60,
+            "injury_embedding": 0.60,
             "keyword": 0.20,
             "semantic": 0.10,
             "meta": 0.10
         },
         "Similar Cases (Semantic)": {
-            "injury_list": 0.25,
-            "keyword": 0.25,
-            "semantic": 0.40,
+            "injury_embedding": 0.40,
+            "keyword": 0.20,
+            "semantic": 0.30,
             "meta": 0.10
         }
     }
@@ -572,30 +572,30 @@ with st.sidebar:
     # Initialize weights based on preset or use custom
     if weight_preset != "Custom":
         preset_values = presets[weight_preset]
-        injury_list_weight = preset_values["injury_list"]
+        injury_embedding_weight = preset_values["injury_embedding"]
         keyword_weight = preset_values["keyword"]
         semantic_weight = preset_values["semantic"]
         meta_weight = preset_values["meta"]
 
         # Display current preset weights (read-only)
         st.info(
-            f"**Current weights:**\n\n"
-            f"• Injury Name Matching: {injury_list_weight:.0%}\n\n"
+            f"**Current weights (Embeddings-Only System):**\n\n"
+            f"• Injury Embedding Matching: {injury_embedding_weight:.0%}\n\n"
             f"• Keyword/Text Matching: {keyword_weight:.0%}\n\n"
-            f"• Semantic Similarity: {semantic_weight:.0%}\n\n"
+            f"• Semantic Similarity (Full Text): {semantic_weight:.0%}\n\n"
             f"• Demographics/Metadata: {meta_weight:.0%}"
         )
     else:
         # Custom sliders
         st.caption("💡 Adjust individual weights (will be normalized to sum to 100%)")
 
-        injury_list_weight = st.slider(
-            "Injury Name Matching",
+        injury_embedding_weight = st.slider(
+            "Injury Embedding Matching",
             min_value=0.0,
             max_value=1.0,
             value=0.40,
             step=0.05,
-            help="Weight for direct matching of injury names (e.g., 'TBI', 'fracture'). Increase for searches with specific injury terms."
+            help="Weight for AI-based injury similarity using embeddings of injury terms. Finds semantically similar injuries (e.g., 'TBI' matches 'brain injury', 'head trauma')."
         )
 
         keyword_weight = st.slider(
@@ -608,12 +608,12 @@ with st.sidebar:
         )
 
         semantic_weight = st.slider(
-            "Semantic Similarity",
+            "Semantic Similarity (Full Text)",
             min_value=0.0,
             max_value=1.0,
             value=0.15,
             step=0.05,
-            help="Weight for AI-based similarity using embeddings. Increase to find conceptually similar cases even with different wording."
+            help="Weight for AI-based similarity using full query text embeddings. Increase to find conceptually similar cases with different wording."
         )
 
         meta_weight = st.slider(
@@ -626,16 +626,16 @@ with st.sidebar:
         )
 
         # Normalize weights to sum to 1.0
-        total_weight = injury_list_weight + keyword_weight + semantic_weight + meta_weight
+        total_weight = injury_embedding_weight + keyword_weight + semantic_weight + meta_weight
         if total_weight > 0:
-            injury_list_weight = injury_list_weight / total_weight
+            injury_embedding_weight = injury_embedding_weight / total_weight
             keyword_weight = keyword_weight / total_weight
             semantic_weight = semantic_weight / total_weight
             meta_weight = meta_weight / total_weight
 
             st.caption(
                 f"**Normalized weights:** "
-                f"Injury: {injury_list_weight:.0%}, "
+                f"Injury Embed: {injury_embedding_weight:.0%}, "
                 f"Keyword: {keyword_weight:.0%}, "
                 f"Semantic: {semantic_weight:.0%}, "
                 f"Meta: {meta_weight:.0%}"
@@ -668,7 +668,7 @@ with tab1:
                     semantic_weight=semantic_weight,
                     keyword_weight=keyword_weight,
                     meta_weight=meta_weight,
-                    injury_list_weight=injury_list_weight
+                    injury_embedding_weight=injury_embedding_weight
                 )
 
                 # Apply outlier filtering if requested

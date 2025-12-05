@@ -114,41 +114,70 @@ Extract the following information and return as JSON:
   "comments": "Additional notes about primary plaintiff" or null,
   "plaintiffs": [{{
     "plaintiff_id": "p1|p2|p3|etc",
-    "plaintiff_name": "Name of this plaintiff",
+    "plaintiff_name": "Name of this plaintiff (REQUIRED - do not create plaintiff without a name)",
     "sex": "M" or "F" or null,
     "age": age as integer or null,
     "non_pecuniary_damages": amount or null,
     "injuries": ["injury1", "injury2"] or [],
-    "comments": "Plaintiff-specific comments (p2, p3 for additional plaintiffs)"
+    "comments": "Plaintiff-specific comments"
   }}] or null (only use if multiple plaintiffs; omit if single plaintiff),
   "is_continuation": true if this row lacks case_name/citation (continuation of previous case), false otherwise
 }}
 
-IMPORTANT:
-- Set "is_continuation": true if this row has no case name or citation (it's continuing the previous case)
-- Judge names: Extract LAST NAME ONLY, no first initials, no titles (J., J.A., J.J.A., C.J., etc.)
-  Examples: "Smith J." -> "Smith", "A. Brown J.A." -> "Brown", "Hon. Jones" -> "Jones"
-  PRESERVE HYPHENATED SURNAMES: "J.A. Harrison-Young J." -> "Harrison-Young"
-- FLA (Family Law Act) Claims Normalization:
-  * Extract relationship-specific awards and normalize to specific gender-aware categories
-  * Use gender-specific terms when gender is clear: "son" / "daughter" (not "child"), "father" / "mother" (not "parent"), "brother" / "sister" (not "sibling"), "grandfather" / "grandmother" (not "grandparent")
-  * Use gender-neutral terms ONLY when explicitly stated as gender-neutral (e.g., "sibling claim") or gender is unspecified
-  * Use "unknown" for FLA claimants when ONLY a name is provided without any relationship information (e.g., "Mary Smith: $50,000" with no other context). This prevents polluting the relationship data.
-  * Handle typos and variations through context (e.g., "2daughers" or "daugjters" in context of children -> "daughter")
-  * Handle numeric prefixes and plurals (e.g., "2 sisters", "3 sons") -> normalize to singular form
-  * Handle abbreviations and colloquialisms (e.g., "mom" -> "mother", "dad" -> "father", "spouse" -> "spouse")
-  * Mark as is_fla_award: false for non-FLA awards like:
-    - Subrogated insurance claims (OHIP, motor vehicle, workers comp)
-    - Reimbursement for third-party payments
-    - General/punitive damages (NOT family law relationship-based)
-    - Any award explicitly labeled as insurance recovery or subrogation
-  * Mark as is_fla_award: true only for true Family Law Act damages (spousal support, child support, family property division-related awards, etc.)
-- Multi-plaintiff cases: If multiple plaintiffs are identified in a single row:
-  * Return a "plaintiffs" array with separate objects for p2, p3, etc. (additional plaintiffs beyond primary)
-  * Include plaintiff-specific injuries, damages, sex, age, and comments for each plaintiff
-  * Omit "plaintiffs" array if only one plaintiff (use top-level fields instead)
-- Parse monetary amounts as numbers only (no $ or commas)
-- Return only valid JSON, no other text
+CRITICAL RULES:
+
+1. CONTINUATION ROWS:
+   - Set "is_continuation": true ONLY if BOTH case name AND citation are missing/null
+   - If there's a case name OR citation, it's a NEW case (is_continuation: false)
+   - Continuation rows usually contain additional damages, injuries, or comments for the previous case
+
+2. INJURY EXTRACTION (MOST IMPORTANT):
+   - ALWAYS extract injuries from the Comments field, even if described narratively
+   - Look for injury descriptions in ALL text fields, not just dedicated injury columns
+   - Extract specific medical conditions, body parts injured, symptoms, and diagnoses
+   - Examples from comments that MUST be extracted as injuries:
+     * "plaintiff's head bounced off the pavement twice" -> ["head injury", "head trauma"]
+     * "soft tissue injuries to neck and back" -> ["soft tissue injury to neck", "soft tissue injury to back"]
+     * "suffered fractures to lumbar spine" -> ["lumbar spine fractures"]
+     * "torn ACL requiring surgery" -> ["ACL tear", "knee surgery required"]
+   - DO NOT leave injuries array empty if there's ANY injury description in comments
+   - For mass casualty cases, copy injury descriptions to all affected plaintiffs if individual details not specified
+
+3. MULTI-PLAINTIFF CASES:
+   - Use "plaintiffs" array ONLY when there are truly MULTIPLE distinct plaintiffs
+   - Each plaintiff entry MUST have a name (even if generic like "Plaintiff 2" or "Son")
+   - NEVER create a plaintiff entry without plaintiff_name - omit the entry entirely if no name found
+   - Extract plaintiff-specific injuries by analyzing the comments:
+     * Look for patterns like "P1 suffered X", "plaintiff Mary had Y", "the son injured his Z"
+     * If comments mention "one plaintiff had leg injury, another had arm injury", create separate plaintiffs with respective injuries
+     * If generic description applies to all, copy to all plaintiff entries
+   - Include ALL plaintiffs mentioned in the row, with their specific details
+   - The plaintiffs array should contain p1, p2, p3... for ALL plaintiffs (including primary)
+
+4. FLA (Family Law Act) Claims - These are SEPARATE from plaintiff injuries:
+   - FLA claims represent awards to FAMILY MEMBERS for loss of care/companionship
+   - DO NOT confuse these with injury types - they are relationship-based claims
+   - Use gender-specific terms when clear: "son"/"daughter", "father"/"mother", "brother"/"sister", "grandfather"/"grandmother"
+   - Use gender-neutral ONLY when unspecified: "child", "parent", "sibling", "grandparent", "grandchild"
+   - Use "unknown" when ONLY a name is provided without relationship context
+   - Handle plurals by creating separate entries: "2 sisters $5000 each" -> two entries with relationship="sister", amount=5000
+   - Mark is_fla_award: false for insurance subrogation, reimbursements, or non-relationship awards
+   - Mark is_fla_award: true for true Family Law Act claims based on familial relationships
+
+5. PLAINTIFF-SPECIFIC DETAILS:
+   - If the row mentions specific plaintiffs with specific injuries, extract them separately
+   - Examples:
+     * "Mary (41F) - lumbar fractures; Michael (43M) - minor injuries" -> Create p1 and p2 with respective injuries
+     * "One plaintiff had leg injury ($50k), another had arm injury ($30k)" -> Create p1 and p2 with respective injuries
+     * "Five family members injured; mother most seriously" -> Create separate plaintiffs if details provided
+   - Use contextual clues to assign injuries to specific plaintiffs
+   - If damages amounts differ, there are likely multiple plaintiffs with different injury severities
+
+6. DATA QUALITY:
+   - DO NOT create incomplete plaintiff entries (missing name AND injuries AND damages)
+   - If you cannot extract complete plaintiff information, use top-level fields only (no plaintiffs array)
+   - Parse monetary amounts as numbers only (no $ or commas)
+   - Extract judge LAST NAME ONLY, preserve hyphenated surnames
 
 Return the JSON object:"""
 
@@ -653,6 +682,47 @@ Return the JSON object:"""
         if row_data.get('other_damages'):
             case.setdefault('other_damages', []).extend(row_data['other_damages'])
 
+        # Merge family_law_act_claims
+        if row_data.get('family_law_act_claims'):
+            case.setdefault('family_law_act_claims', []).extend(row_data['family_law_act_claims'])
+
+        # Merge plaintiffs array
+        if row_data.get('plaintiffs'):
+            # If case doesn't have plaintiffs array yet, create it
+            if not case.get('plaintiffs'):
+                case['plaintiffs'] = []
+
+            # Merge plaintiffs by plaintiff_id
+            existing_plaintiff_ids = {p.get('plaintiff_id'): p for p in case['plaintiffs']}
+
+            for new_plaintiff in row_data['plaintiffs']:
+                plaintiff_id = new_plaintiff.get('plaintiff_id')
+                if plaintiff_id and plaintiff_id in existing_plaintiff_ids:
+                    # Merge with existing plaintiff
+                    existing = existing_plaintiff_ids[plaintiff_id]
+
+                    # Merge injuries
+                    if new_plaintiff.get('injuries'):
+                        existing_inj = set(existing.get('injuries', []))
+                        existing_inj.update(new_plaintiff['injuries'])
+                        existing['injuries'] = list(existing_inj)
+
+                    # Append comments
+                    if new_plaintiff.get('comments'):
+                        if existing.get('comments'):
+                            existing['comments'] = f"{existing['comments']} | {new_plaintiff['comments']}"
+                        else:
+                            existing['comments'] = new_plaintiff['comments']
+
+                    # Update damages if higher
+                    new_damages = new_plaintiff.get('non_pecuniary_damages')
+                    if new_damages is not None:
+                        if existing.get('non_pecuniary_damages') is None or new_damages > existing['non_pecuniary_damages']:
+                            existing['non_pecuniary_damages'] = new_damages
+                else:
+                    # Add new plaintiff
+                    case['plaintiffs'].append(new_plaintiff)
+
         # Append comments
         if row_data.get('comments'):
             existing_comments = case.get('comments', '')
@@ -667,6 +737,67 @@ Return the JSON object:"""
             existing_npd = case.get('non_pecuniary_damages')
             if existing_npd is None or new_npd > existing_npd:
                 case['non_pecuniary_damages'] = new_npd
+
+    @staticmethod
+    def clean_up_plaintiff_data(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Clean up incomplete plaintiff data and remove phantom entries.
+
+        Rules:
+        1. Remove plaintiffs with no name AND no injuries AND no damages
+        2. If all plaintiffs are removed, remove the plaintiffs array
+        3. Remove cases with no case_name (likely failed continuation rows)
+        4. Ensure top-level injuries are populated if they exist in plaintiffs
+
+        Args:
+            cases: List of parsed cases
+
+        Returns:
+            Cleaned list of cases
+        """
+        cleaned_cases = []
+
+        for case in cases:
+            # Skip cases with no case name (likely failed continuation rows)
+            if not case.get('case_name'):
+                continue
+
+            # Clean up plaintiffs array
+            if case.get('plaintiffs'):
+                valid_plaintiffs = []
+
+                for plaintiff in case['plaintiffs']:
+                    # Check if plaintiff has meaningful data
+                    has_name = bool(plaintiff.get('plaintiff_name'))
+                    has_injuries = bool(plaintiff.get('injuries'))
+                    has_damages = plaintiff.get('non_pecuniary_damages') is not None
+                    has_comments = bool(plaintiff.get('comments'))
+
+                    # Keep plaintiff if they have name OR (injuries OR damages OR comments)
+                    # This allows plaintiffs with damages but generic names like "Plaintiff 2"
+                    if has_name or has_injuries or has_damages or has_comments:
+                        valid_plaintiffs.append(plaintiff)
+
+                # Update or remove plaintiffs array
+                if valid_plaintiffs:
+                    case['plaintiffs'] = valid_plaintiffs
+
+                    # Ensure top-level injuries include all plaintiff injuries
+                    all_plaintiff_injuries = set()
+                    for p in valid_plaintiffs:
+                        all_plaintiff_injuries.update(p.get('injuries', []))
+
+                    # Merge with top-level injuries
+                    top_level_injuries = set(case.get('injuries', []))
+                    top_level_injuries.update(all_plaintiff_injuries)
+                    case['injuries'] = list(top_level_injuries)
+                else:
+                    # Remove empty plaintiffs array
+                    del case['plaintiffs']
+
+            cleaned_cases.append(case)
+
+        return cleaned_cases
 
     def parse_pdf(
         self,
@@ -881,6 +1012,12 @@ Return the JSON object:"""
             print(f"  Total rows processed: {total_rows}")
             print(f"  Continuation rows merged: {continuation_rows}")
             print(f"  Unique cases: {len(all_cases)}")
+
+        # Post-process to clean up incomplete data
+        all_cases = self.clean_up_plaintiff_data(all_cases)
+
+        if self.verbose:
+            print(f"  After cleanup: {len(all_cases)} cases")
 
         # Save final results
         if output_json:
