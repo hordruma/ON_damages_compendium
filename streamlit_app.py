@@ -542,44 +542,62 @@ with st.sidebar:
     st.subheader("Search Weighting")
     st.caption("Adjust how different aspects of cases are weighted in search results")
 
-    # Preset options
+    # Preset options with clearer descriptions
     weight_preset = st.selectbox(
         "Preset:",
         options=[
             "Balanced (Default)",
-            "Story/Narrative Focus",
-            "Injury Name Focus",
-            "Similar Cases (Semantic)",
+            "Medical Diagnosis Match",
+            "Symptoms & Impact Search",
+            "Conceptual Similarity",
+            "Strict Medical Terms",
             "Custom"
         ],
-        help="Choose a preset or select 'Custom' to manually adjust weights"
+        help="Choose a search strategy:\n"
+             "• Balanced: General-purpose search across all factors\n"
+             "• Medical Diagnosis: Find exact/similar medical diagnoses\n"
+             "• Symptoms & Impact: Search by functional limitations and symptoms\n"
+             "• Conceptual Similarity: Find cases with similar circumstances\n"
+             "• Strict Medical Terms: Precise medical terminology only\n"
+             "• Custom: Manual weight adjustment"
     )
 
-    # Define preset values (embeddings-only for injury matching)
+    # Define preset values (embeddings-only for injury matching with medical expansion)
     presets = {
         "Balanced (Default)": {
             "injury_embedding": 0.40,
             "keyword": 0.35,
             "semantic": 0.15,
-            "meta": 0.10
+            "meta": 0.10,
+            "description": "Balanced search across all factors - good starting point"
         },
-        "Story/Narrative Focus": {
-            "injury_embedding": 0.30,
-            "keyword": 0.50,
+        "Medical Diagnosis Match": {
+            "injury_embedding": 0.55,
+            "keyword": 0.25,
             "semantic": 0.10,
-            "meta": 0.10
+            "meta": 0.10,
+            "description": "Prioritizes medical injury matching - best for specific diagnoses like 'diffuse axonal injury', 'herniated disc L4-L5'"
         },
-        "Injury Name Focus": {
-            "injury_embedding": 0.60,
-            "keyword": 0.20,
-            "semantic": 0.10,
-            "meta": 0.10
+        "Symptoms & Impact Search": {
+            "injury_embedding": 0.15,
+            "keyword": 0.60,
+            "semantic": 0.15,
+            "meta": 0.10,
+            "description": "Keyword-focused for narrative descriptions - best for 'chronic pain affecting daily activities', 'unable to work'"
         },
-        "Similar Cases (Semantic)": {
-            "injury_embedding": 0.40,
-            "keyword": 0.20,
-            "semantic": 0.30,
-            "meta": 0.10
+        "Conceptual Similarity": {
+            "injury_embedding": 0.25,
+            "keyword": 0.15,
+            "semantic": 0.50,
+            "meta": 0.10,
+            "description": "Finds conceptually similar cases - best for 'young athlete with career-ending injury', 'elderly fall victim'"
+        },
+        "Strict Medical Terms": {
+            "injury_embedding": 0.75,
+            "keyword": 0.10,
+            "semantic": 0.05,
+            "meta": 0.10,
+            "description": "Precise medical terminology only - best for finding exact injury matches with minimal noise"
         }
     }
 
@@ -591,9 +609,10 @@ with st.sidebar:
         semantic_weight = preset_values["semantic"]
         meta_weight = preset_values["meta"]
 
-        # Display current preset weights (read-only)
+        # Display current preset weights with description (read-only)
         st.info(
-            f"**Current weights (Embeddings-Only System):**\n\n"
+            f"**{preset_values['description']}**\n\n"
+            f"**Current weights (with medical term expansion):**\n\n"
             f"• Injury Embedding Matching: {injury_embedding_weight:.0%}\n\n"
             f"• Keyword/Text Matching: {keyword_weight:.0%}\n\n"
             f"• Semantic Similarity (Full Text): {semantic_weight:.0%}\n\n"
