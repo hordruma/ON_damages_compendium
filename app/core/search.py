@@ -388,9 +388,9 @@ def search_cases(
     age: Optional[int] = None,
     top_n: int = 25,
     semantic_weight: float = 0.15,
-    keyword_weight: float = 0.55,
-    meta_weight: float = 0.3,
-    injury_list_weight: float = 0.4
+    keyword_weight: float = 0.35,
+    meta_weight: float = 0.10,
+    injury_list_weight: float = 0.40
 ) -> List[Tuple[Dict[str, Any], float, float]]:
     """
     Search cases using hybrid search (semantic + keyword + metadata + injury list match).
@@ -409,8 +409,8 @@ def search_cases(
     Weight Distribution:
     - Default (with injury categories):
       Injury List: 0.4, Keyword: 0.35, Semantic: 0.15, Metadata: 0.1
-    - Without categories (metadata weight redistributed):
-      Injury List: 0.5, Keyword: 0.35, Semantic: 0.15
+    - Without categories (metadata weight redistributed to injury list):
+      Injury List: increased by meta_weight, Keyword/Semantic: unchanged, Metadata: 0.0
 
     Args:
         query_text: Free-text injury description from user (comma-separated)
@@ -422,8 +422,8 @@ def search_cases(
         age: Optional age filter
         top_n: Number of results to return
         semantic_weight: Weight for semantic similarity (default 0.15)
-        keyword_weight: Weight for keyword matching (default 0.55, adjusted to 0.35 internally)
-        meta_weight: Weight for metadata score (default 0.3, adjusted to 0.1 internally)
+        keyword_weight: Weight for keyword matching (default 0.35)
+        meta_weight: Weight for metadata score (default 0.10)
         injury_list_weight: Weight for injury list matching (default 0.4)
 
     Returns:
@@ -472,18 +472,19 @@ def search_cases(
         return []
 
     # Adjust weights for new 4-component system
-    # Default weights (with categories): injury_list=0.4, keyword=0.35, semantic=0.15, meta=0.1
+    # Use the passed weight parameters directly
     adjusted_injury_list_weight = injury_list_weight
-    adjusted_keyword_weight = 0.35  # Reduced from 0.55 to accommodate injury list weight
+    adjusted_keyword_weight = keyword_weight
     adjusted_semantic_weight = semantic_weight
-    adjusted_meta_weight = 0.1  # Reduced from 0.3 to accommodate injury list weight
+    adjusted_meta_weight = meta_weight
 
     if not selected_regions:
         # No category filter: redistribute metadata weight to injury list matching
-        # Adjusted weights: injury_list=0.5, keyword=0.35, semantic=0.15, meta=0.0
-        adjusted_injury_list_weight = injury_list_weight + 0.1  # 0.4 + 0.1 = 0.5
-        adjusted_keyword_weight = 0.35
-        adjusted_semantic_weight = 0.15
+        # This maintains the principle that metadata weighting is less relevant without category filtering
+        meta_redistribution = adjusted_meta_weight
+        adjusted_injury_list_weight = injury_list_weight + meta_redistribution
+        adjusted_keyword_weight = keyword_weight
+        adjusted_semantic_weight = semantic_weight
         adjusted_meta_weight = 0.0
 
     # Stage 2: Compute semantic similarity
