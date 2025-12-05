@@ -35,6 +35,20 @@ from inflation_adjuster import (
 )
 
 # =============================================================================
+# VERSION AND CACHE MANAGEMENT
+# =============================================================================
+
+# Version identifier to force cache refresh when code changes
+APP_VERSION = "2.1.0"  # Updated for injury_embedding_weight parameter
+
+# Clear caches on startup to ensure fresh deployment
+# This prevents Streamlit Cloud from using stale cached code
+if 'app_version' not in st.session_state or st.session_state.get('app_version') != APP_VERSION:
+    st.cache_resource.clear()
+    st.cache_data.clear()
+    st.session_state.app_version = APP_VERSION
+
+# =============================================================================
 # PAGE CONFIGURATION
 # =============================================================================
 
@@ -406,7 +420,7 @@ with tab1:
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        search_button = st.button("🔍 Find Comparable Cases", type="primary", use_container_width=True)
+        search_button = st.button("🔍 Find Comparable Cases", type="primary", width="stretch")
 
 # =============================================================================
 # SIDEBAR - SEARCH PARAMETERS
@@ -834,7 +848,7 @@ with tab1:
             )
 
         with col_dl2:
-            if st.button("📄 Generate PDF Report", type="primary", use_container_width=True):
+            if st.button("📄 Generate PDF Report", type="primary", width="stretch"):
                 with st.spinner("Generating PDF report..."):
                     try:
                         search_data = st.session_state.search_results
@@ -881,7 +895,7 @@ with tab1:
                                 file_name=pdf_filename,
                                 mime="application/pdf",
                                 type="primary",
-                                use_container_width=True
+                                width="stretch"
                             )
 
                     except Exception as e:
