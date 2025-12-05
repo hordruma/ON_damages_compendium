@@ -2,34 +2,29 @@
 
 ## Overview
 
-The search system now implements a **dual embedding approach** for injury matching, where two separate embedding computations compete alongside string-based matching. This provides more nuanced and accurate injury matching.
+The search system now implements a **dual embedding approach** for injury matching, where two separate embedding computations work together. This provides more nuanced and accurate injury matching using **embeddings-only** (no string matching).
 
 ## Architecture
 
-### 5-Component Hybrid Search System
+### 4-Component Hybrid Search System (Embeddings-Only)
 
 1. **Semantic Similarity (Full Text)** - `semantic_weight` (default: 0.15)
    - Embeds the full query text
    - Matches against case injury embeddings
    - Captures overall context and narrative
 
-2. **Injury Embedding Matching** - `injury_embedding_weight` (default: 0.20)
+2. **Injury Embedding Matching** - `injury_embedding_weight` (default: 0.40)
    - Embeds only the extracted injury terms from query
    - Matches against case injury embeddings
    - Provides semantic similarity for injury-specific terms
-   - Example: "TBI" will match "traumatic brain injury", "head injury", etc.
+   - Example: "TBI" will match "traumatic brain injury", "head injury", "brain contusion", etc.
 
-3. **Injury String Matching** - `injury_list_weight` (default: 0.20)
-   - Direct string matching (exact/substring)
-   - Fast and precise for known injury names
-   - Example: "TBI" matches "TBI" or "mild TBI"
-
-4. **Keyword/Text Matching** - `keyword_weight` (default: 0.35)
+3. **Keyword/Text Matching** - `keyword_weight` (default: 0.35)
    - BM25 keyword matching
    - Searches comments, case names, summaries
    - Good for narrative descriptions
 
-5. **Demographics/Metadata** - `meta_weight` (default: 0.10)
+4. **Demographics/Metadata** - `meta_weight` (default: 0.10)
    - Age proximity, gender match, injury overlap
    - Redistributed to injury embeddings when no category filter applied
 
@@ -61,31 +56,29 @@ combined_score = (
 )
 ```
 
-### Competition Between Methods
+### Dual Embedding Strategy
 
-The system creates healthy competition between three injury matching approaches:
+The system uses two embedding computations for comprehensive matching:
 
 | Method | Type | Strengths | Use Case |
 |--------|------|-----------|----------|
-| **Injury String Matching** | Exact/Substring | Fast, precise | Known injury terms |
-| **Injury Embedding Matching** | Semantic | Finds similar concepts | Synonyms, related injuries |
-| **Semantic (Full Text)** | Contextual | Understands narrative | Complex descriptions |
+| **Injury Embedding Matching** | Semantic | Finds similar concepts | Synonyms, related injuries, abbreviations |
+| **Semantic (Full Text)** | Contextual | Understands narrative | Complex descriptions, mechanisms of injury |
 
 ### Example: Query = "head injury"
 
-**Injury String Matching (0.20):**
-- ✅ "head injury" → 1.0 (exact match)
-- ❌ "traumatic brain injury" → 0.0 (no substring)
-- ❌ "skull fracture" → 0.0 (no match)
-
-**Injury Embedding Matching (0.20):**
+**Injury Embedding Matching (0.40):**
 - ✅ "head injury" → 0.95 (very similar)
 - ✅ "traumatic brain injury" → 0.88 (semantic match)
+- ✅ "TBI" → 0.86 (abbreviation understood)
 - ✅ "skull fracture" → 0.72 (related injury)
+- ✅ "brain contusion" → 0.78 (similar injury type)
+- ✅ "concussion" → 0.80 (related head trauma)
 
 **Semantic Full Text (0.15):**
 - Captures overall context
-- May match "plaintiff suffered severe head trauma" even without exact injury name
+- Matches "plaintiff suffered severe head trauma" with narrative understanding
+- Understands mechanism and impact descriptions
 
 ## UI Configuration
 
@@ -94,19 +87,19 @@ The system creates healthy competition between three injury matching approaches:
 Four presets are available with optimized weight distributions:
 
 1. **Balanced (Default)**
-   - Injury String: 20%, Injury Embedding: 20%, Keyword: 35%, Semantic: 15%, Meta: 10%
+   - Injury Embedding: 40%, Keyword: 35%, Semantic: 15%, Meta: 10%
    - Good for general use
 
 2. **Story/Narrative Focus**
-   - Injury String: 15%, Injury Embedding: 15%, Keyword: 50%, Semantic: 10%, Meta: 10%
+   - Injury Embedding: 30%, Keyword: 50%, Semantic: 10%, Meta: 10%
    - Best for detailed narrative descriptions
 
 3. **Injury Name Focus**
-   - Injury String: 30%, Injury Embedding: 30%, Keyword: 20%, Semantic: 10%, Meta: 10%
+   - Injury Embedding: 60%, Keyword: 20%, Semantic: 10%, Meta: 10%
    - Best for searches with specific injury terms
 
 4. **Similar Cases (Semantic)**
-   - Injury String: 20%, Injury Embedding: 25%, Keyword: 20%, Semantic: 25%, Meta: 10%
+   - Injury Embedding: 40%, Keyword: 20%, Semantic: 30%, Meta: 10%
    - Best for finding conceptually similar cases
 
 ### Custom Weights
@@ -114,8 +107,7 @@ Four presets are available with optimized weight distributions:
 Users can adjust each weight individually:
 
 ```python
-injury_list_weight = 0.20          # String matching
-injury_embedding_weight = 0.20     # Injury-specific embeddings
+injury_embedding_weight = 0.40     # Injury-specific embeddings
 keyword_weight = 0.35              # BM25 keyword matching
 semantic_weight = 0.15             # Full-text embeddings
 meta_weight = 0.10                 # Demographics/metadata
@@ -159,10 +151,11 @@ Both embeddings use the same model (all-MiniLM-L6-v2) and compare against the sa
 
 ## Benefits
 
-1. **Better Semantic Matching**: Injury embeddings catch synonyms and related terms
-2. **Preserves Precision**: String matching still available for exact matches
+1. **Superior Semantic Matching**: Injury embeddings understand synonyms, abbreviations, and related medical terms
+2. **Pure AI-Based**: Fully embedding-based approach for intelligent matching
 3. **Flexible Tuning**: Users can adjust weights to their preference
 4. **Context Awareness**: Full-text embeddings capture narrative context
+5. **Robust to Terminology**: Works even when exact terms don't match (e.g., "TBI" matches "brain injury")
 
 ## Performance
 

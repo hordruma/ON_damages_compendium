@@ -390,11 +390,10 @@ def search_cases(
     semantic_weight: float = 0.15,
     keyword_weight: float = 0.35,
     meta_weight: float = 0.10,
-    injury_list_weight: float = 0.20,
-    injury_embedding_weight: float = 0.20
+    injury_embedding_weight: float = 0.40
 ) -> List[Tuple[Dict[str, Any], float, float]]:
     """
-    Search cases using hybrid search with dual embedding system.
+    Search cases using hybrid search with dual embedding system (embeddings-only for injuries).
 
     Algorithm:
     1. Apply exclusive category filter: only include cases matching selected categories
@@ -402,17 +401,15 @@ def search_cases(
     3. Compute semantic similarity on full query text (embeddings)
     4. Compute injury embedding similarity on extracted injury terms (separate embeddings)
     5. Compute keyword match score using BM25
-    6. Compute injury list match score (direct string matching)
-    7. Compute metadata score from injury overlap, gender match, age proximity
-    8. Combine all scores with weights
-    9. If no categories selected, adjust weight distribution
-    10. Return top N sorted by combined_score descending
+    6. Compute metadata score from injury overlap, gender match, age proximity
+    7. Combine all scores with weights
+    8. If no categories selected, adjust weight distribution
+    9. Return top N sorted by combined_score descending
 
-    Weight Distribution (Dual Embedding System):
+    Weight Distribution (Dual Embedding System - Embeddings Only):
     - Default (with injury categories):
       Semantic (full text): 0.15
-      Injury Embedding (injury-specific): 0.20
-      Injury List (string match): 0.20
+      Injury Embedding (injury-specific): 0.40
       Keyword: 0.35
       Metadata: 0.10
     - Without categories (metadata weight redistributed to injury embeddings):
@@ -430,8 +427,7 @@ def search_cases(
         semantic_weight: Weight for full-text semantic similarity (default 0.15)
         keyword_weight: Weight for keyword matching (default 0.35)
         meta_weight: Weight for metadata score (default 0.10)
-        injury_list_weight: Weight for injury string matching (default 0.20)
-        injury_embedding_weight: Weight for injury-specific embedding matching (default 0.20)
+        injury_embedding_weight: Weight for injury-specific embedding matching (default 0.40)
 
     Returns:
         List of (case, semantic_sim, combined_score) sorted by combined_score desc
@@ -484,9 +480,8 @@ def search_cases(
     if not candidate_indices:
         return []
 
-    # Adjust weights for new 5-component dual embedding system
+    # Adjust weights for 4-component dual embedding system (embeddings-only)
     # Use the passed weight parameters directly
-    adjusted_injury_list_weight = injury_list_weight
     adjusted_injury_embedding_weight = injury_embedding_weight
     adjusted_keyword_weight = keyword_weight
     adjusted_semantic_weight = semantic_weight
@@ -497,7 +492,6 @@ def search_cases(
         # This gives priority to injury-specific matching when no category filter is applied
         meta_redistribution = adjusted_meta_weight
         adjusted_injury_embedding_weight = injury_embedding_weight + meta_redistribution
-        adjusted_injury_list_weight = injury_list_weight
         adjusted_keyword_weight = keyword_weight
         adjusted_semantic_weight = semantic_weight
         adjusted_meta_weight = 0.0
@@ -509,7 +503,7 @@ def search_cases(
     # 2b. Injury-specific embedding similarity (matches injury terms against case injury embeddings)
     semantic_sims_injury = _cosine_sim_batch(qv_injury, candidate_indices)
 
-    # Stage 3: Hybrid scoring with dual embeddings
+    # Stage 3: Hybrid scoring with dual embeddings (embeddings-only for injuries)
     results = []
     for idx_pos, row_idx in enumerate(candidate_indices):
         case = case_index_map[row_idx]
@@ -521,23 +515,19 @@ def search_cases(
         # Keyword score from BM25
         keyword_score = _keyword_search_score(query_text, case)
 
-        # Injury list match score (string-based matching)
-        injury_list_score = _injury_list_match_score(query_injuries, case)
-
         # Metadata score
         meta_score = compute_meta_score(case, query_injuries, gender, age)
 
-        # Combine all five scores with adjusted weights
-        # This creates competition between dual embeddings and string matching
+        # Combine all four scores with adjusted weights
+        # Injury matching is purely embedding-based (no string matching)
         combined = float(
             adjusted_semantic_weight * semantic_sim_full +
             adjusted_injury_embedding_weight * semantic_sim_injury +
             adjusted_keyword_weight * keyword_score +
-            adjusted_injury_list_weight * injury_list_score +
             adjusted_meta_weight * meta_score
         )
 
-        # For display, use the injury-specific semantic similarity as it's more relevant
+        # For display, use the injury-specific semantic similarity as it's most relevant
         results.append((case, semantic_sim_injury, combined))
 
     # Stage 4: Sort and return top N
