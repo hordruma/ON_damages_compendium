@@ -680,6 +680,10 @@ with tab1:
             st.warning("⚠️ Please enter an injury description")
         else:
             with st.spinner("Searching comparable cases..."):
+                # Apply outlier filtering if requested - get more results first
+                # Get 3x the requested results to have enough data for outlier filtering
+                search_n = num_results * 3 if not include_outliers else num_results
+
                 # Get search results (no minimum threshold - user sees all results)
                 results = search_cases(
                     injury_text,
@@ -689,7 +693,7 @@ with tab1:
                     model,
                     gender=gender if gender != "Not Specified" else None,
                     age=age,
-                    top_n=num_results,
+                    top_n=search_n,
                     semantic_weight=semantic_weight,
                     keyword_weight=keyword_weight,
                     meta_weight=meta_weight,
@@ -697,13 +701,15 @@ with tab1:
                 )
 
                 # Apply outlier filtering if requested
-                if not include_outliers:
+                if not include_outliers and len(results) > 4:
                     result_cases = [case for case, _, _ in results]
                     filtered_cases = filter_outliers(result_cases)
                     # Rebuild results with only non-outlier cases
                     filtered_case_ids = {case.get('id') for case in filtered_cases}
                     results = [(case, emb_sim, score) for case, emb_sim, score in results
                                if case.get('id') in filtered_case_ids]
+                    # Trim to requested number
+                    results = results[:num_results]
 
             # Store results in session state
             st.session_state.search_results = {
