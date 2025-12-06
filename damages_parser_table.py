@@ -539,6 +539,7 @@ Return the JSON object:"""
     def _clean_section_header(self, section_text: str) -> str:
         """
         Clean section header text by removing trailing money/numbers and garbage.
+        Only accept known anatomical/injury section headers.
 
         Examples:
             "SISTER - $8,000.00" -> "SISTER"
@@ -546,6 +547,8 @@ Return the JSON object:"""
             "BRAIN & SKULL" -> "BRAIN & SKULL" (unchanged)
             "P11: FEMALE" -> "" (invalid, reject)
             "$85,796.00" -> "" (invalid, reject)
+            "Defendant's motion for a" -> "" (invalid, reject)
+            "non-pecuniary" -> "" (invalid, reject)
 
         Args:
             section_text: Raw section header text
@@ -562,16 +565,54 @@ Return the JSON object:"""
         if text and (text[0] == '$' or text[0].isdigit()):
             return ""
 
-        # Reject invalid patterns
+        # Reject invalid patterns (case-insensitive)
         invalid_patterns = [
-            "CONTRIBUTORILY",  # "PLAINTIFF 35% CONTRIBUTORILY"
-            "P11:", "P12:",     # "P11: FEMALE", "P12: SPECIAL"
-            "SPECIAL",          # Table artifacts
+            "CONTRIBUTORILY",
+            "P11:", "P12:",
+            "SPECIAL",
+            "DEFENDANT",  # "Defendant's motion for a"
+            "PLAINTIFF",  # "Plaintiff was..."
+            "MOTION",
+            "GENERAL DAMAGES",  # This is a column header, not a section
+            "PECUNIARY",  # "pecuniary" or "non-pecuniary" are column headers
+            "NON-PECUNIARY",
+            "DAMAGES",  # When standalone
+            "AWARD",
+            "TOTAL",
         ]
         text_upper = text.upper()
         for pattern in invalid_patterns:
             if pattern in text_upper:
                 return ""
+
+        # Whitelist: Only accept known anatomical/injury sections or FLA relationships
+        # This is the MOST IMPORTANT fix - only allow valid sections
+        valid_sections = [
+            "BRAIN", "SKULL", "HEAD",
+            "CERVICAL", "THORACIC", "LUMBAR", "SPINE", "SPINAL",
+            "NECK", "BACK",
+            "SHOULDER", "ARM", "ELBOW", "WRIST", "HAND", "FINGER",
+            "CHEST", "THORAX", "ABDOMEN", "PELVIS",
+            "HIP", "KNEE", "LEG", "ANKLE", "FOOT", "TOE",
+            "PSYCHOLOGICAL", "PSYCHIATRIC", "MENTAL",
+            "MULTIPLE", "SOFT TISSUE",
+            # FLA relationships
+            "FATHER", "MOTHER", "PARENT",
+            "SON", "DAUGHTER", "CHILD",
+            "BROTHER", "SISTER", "SIBLING",
+            "SPOUSE", "HUSBAND", "WIFE",
+            "GRANDFATHER", "GRANDMOTHER", "GRANDPARENT", "GRANDCHILD",
+        ]
+
+        # Check if text contains any valid section keyword
+        found_valid = False
+        for valid in valid_sections:
+            if valid in text_upper:
+                found_valid = True
+                break
+
+        if not found_valid:
+            return ""  # Reject - not a known section type
 
         # Clean trailing " - $..." or " - " patterns
         # Examples: "SISTER - $8,000.00" -> "SISTER"

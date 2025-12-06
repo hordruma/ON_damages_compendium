@@ -543,9 +543,20 @@ def search_cases(
         # For display, use the injury-specific semantic similarity as it's most relevant
         results.append((case, semantic_sim_injury, combined))
 
-    # Stage 4: Sort and return top N
+    # Stage 4: Sort by score
     results.sort(key=lambda t: t[2], reverse=True)
-    return results[:top_n]
+
+    # Stage 5: Deduplicate by case name (keep highest scoring instance)
+    # This prevents the same case appearing multiple times with different plaintiffs/sections
+    seen_cases = set()
+    dedup_results = []
+    for case, emb_sim, combined_score in results:
+        case_name = case.get('case_name', '').strip().lower()
+        if case_name and case_name not in seen_cases:
+            seen_cases.add(case_name)
+            dedup_results.append((case, emb_sim, combined_score))
+
+    return dedup_results[:top_n]
 
 
 def extract_damages_value(case: Dict[str, Any]) -> Optional[float]:
