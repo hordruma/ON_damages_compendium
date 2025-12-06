@@ -536,55 +536,53 @@ Return the JSON object:"""
 
         return "UNKNOWN"
 
-    def _is_valid_anatomical_section(self, section_text: str) -> bool:
+    def _clean_section_header(self, section_text: str) -> str:
         """
-        Check if section text is a valid anatomical section (not an FLA relationship).
+        Clean section header text by removing trailing money/numbers and garbage.
+
+        Examples:
+            "SISTER - $8,000.00" -> "SISTER"
+            "DAUGHTER -" -> "DAUGHTER"
+            "BRAIN & SKULL" -> "BRAIN & SKULL" (unchanged)
+            "P11: FEMALE" -> "" (invalid, reject)
+            "$85,796.00" -> "" (invalid, reject)
 
         Args:
-            section_text: Candidate section header text
+            section_text: Raw section header text
 
         Returns:
-            True if valid anatomical section, False if FLA relationship or invalid
+            Cleaned section text, or empty string if invalid
         """
         if not section_text:
-            return False
+            return ""
 
-        section_upper = section_text.strip().upper()
+        text = section_text.strip()
 
-        # FLA relationship patterns to reject
-        fla_patterns = [
-            "FATHER", "MOTHER", "PARENT", "PARENTS",
-            "SPOUSE", "WIFE", "HUSBAND",
-            "SON", "DAUGHTER", "CHILD", "CHILDREN",
-            "BROTHER", "SISTER", "SIBLING",
-            "GRANDFATHER", "GRANDMOTHER", "GRANDPARENT",
-            "GRANDSON", "GRANDDAUGHTER", "GRANDCHILD",
-            "UNCLE", "AUNT", "NEPHEW", "NIECE", "COUSIN"
+        # Reject if starts with $ or digits (clearly not a section header)
+        if text and (text[0] == '$' or text[0].isdigit()):
+            return ""
+
+        # Reject invalid patterns
+        invalid_patterns = [
+            "CONTRIBUTORILY",  # "PLAINTIFF 35% CONTRIBUTORILY"
+            "P11:", "P12:",     # "P11: FEMALE", "P12: SPECIAL"
+            "SPECIAL",          # Table artifacts
         ]
+        text_upper = text.upper()
+        for pattern in invalid_patterns:
+            if pattern in text_upper:
+                return ""
 
-        # Check if section starts with FLA term (e.g., "DAUGHTER -", "SISTER - $")
-        for fla_term in fla_patterns:
-            if section_upper.startswith(fla_term):
-                return False
+        # Clean trailing " - $..." or " - " patterns
+        # Examples: "SISTER - $8,000.00" -> "SISTER"
+        #           "DAUGHTER -" -> "DAUGHTER"
+        import re
+        # Remove " - $..." money amounts
+        text = re.sub(r'\s*-\s*\$[\d,\.]+', '', text)
+        # Remove trailing " -" if no content follows
+        text = re.sub(r'\s*-\s*$', '', text)
 
-        # Valid anatomical sections
-        valid_sections = [
-            "BRAIN", "SKULL", "HEAD",
-            "CERVICAL", "THORACIC", "LUMBAR", "SPINE", "NECK",
-            "SHOULDER", "ARM", "ELBOW", "WRIST", "HAND", "FINGER",
-            "CHEST", "THORAX", "ABDOMEN", "PELVIS",
-            "HIP", "KNEE", "LEG", "ANKLE", "FOOT", "TOE",
-            "BACK", "TORSO",
-            "PSYCHOLOGICAL", "PSYCHIATRIC", "MENTAL",
-            "MULTIPLE", "SOFT TISSUE", "GENERAL", "MISCELLANEOUS"
-        ]
-
-        # Check if section contains any valid anatomical term
-        for valid_term in valid_sections:
-            if valid_term in section_upper:
-                return True
-
-        return False
+        return text.strip()
 
     def extract_section_from_stream(self, pdf_path: str, page_spec: str) -> Dict[int, Optional[str]]:
         """
@@ -593,8 +591,7 @@ Return the JSON object:"""
         Uses stream mode to capture section headers that lattice mode misses.
         The PDF is predictably formatted with section headers always in row 0.
 
-        Filters out FLA relationship headers (e.g., "DAUGHTER -", "SISTER -")
-        and only accepts valid anatomical sections.
+        Cleans section headers to remove garbage like "SISTER - $8,000.00" -> "SISTER"
 
         Args:
             pdf_path: Path to PDF file
@@ -621,12 +618,13 @@ Return the JSON object:"""
                     for cell in row0_values:
                         cell_str = str(cell).strip()
                         if cell_str and cell_str != 'nan':
-                            # Validate that this is an anatomical section, not FLA relationship
-                            if self._is_valid_anatomical_section(cell_str):
-                                section_found = cell_str
+                            # Clean the section header
+                            cleaned = self._clean_section_header(cell_str)
+                            if cleaned:
+                                section_found = cleaned
                                 break
                             elif self.verbose:
-                                print(f"  [Page {page_num}] Rejected invalid section header: {cell_str}")
+                                print(f"  [Page {page_num}] Rejected/cleaned section header: {cell_str}")
 
                     sections_by_page[page_num] = section_found
         except Exception as e:
@@ -912,7 +910,6 @@ Return the JSON object:"""
 
         # Track current section per page
         section_by_page = {}
-        last_valid_anatomical_section = "UNKNOWN"  # Track last valid section for FLA pages
 
         # Process each table
         for table_idx, table in enumerate(tables):
@@ -929,13 +926,6 @@ Return the JSON object:"""
                 # Fallback to table content detection if stream didn't find it
                 if not section:
                     section = self.detect_section_from_table(table)
-
-                # If no valid section found (e.g., FLA page), use last valid anatomical section
-                if not section or section == "UNKNOWN":
-                    section = last_valid_anatomical_section
-                else:
-                    # Update last valid section for future FLA pages
-                    last_valid_anatomical_section = section.upper()
 
                 # Store uppercase version for consistency
                 section_by_page[page_number] = section.upper() if section else "UNKNOWN"
