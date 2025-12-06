@@ -259,6 +259,8 @@ if 'search_results' not in st.session_state:
     st.session_state.search_results = None
 if 'analysis_data' not in st.session_state:
     st.session_state.analysis_data = None
+if 'dismissed_cases' not in st.session_state:
+    st.session_state.dismissed_cases = set()
 
 # =============================================================================
 # MAIN UI
@@ -722,6 +724,9 @@ with tab1:
                 'timestamp': datetime.now()
             }
 
+            # Clear dismissed cases for new search
+            st.session_state.dismissed_cases = set()
+
             st.divider()
             st.header("Search Results")
 
@@ -798,10 +803,17 @@ with tab1:
 
             st.divider()
 
-            # Display individual cases
-            st.subheader(f"Top {len(results)} Comparable Cases")
+            # Filter out dismissed cases
+            active_results = [(case, emb_sim, score) for case, emb_sim, score in results
+                            if case.get('id') not in st.session_state.dismissed_cases]
 
-            for idx, (case, emb_sim, combined_score) in enumerate(results, 1):
+            # Display individual cases
+            st.subheader(f"Top {len(active_results)} Comparable Cases")
+
+            if len(st.session_state.dismissed_cases) > 0:
+                st.caption(f"💡 {len(st.session_state.dismissed_cases)} case(s) dismissed. Click 'Find Comparable Cases' again to see more results.")
+
+            for idx, (case, emb_sim, combined_score) in enumerate(active_results, 1):
                 # Build expander title with multi-plaintiff indicator and award amount
                 extended_data = case.get('extended_data', {})
                 num_plaintiffs = extended_data.get('num_plaintiffs', 0)
@@ -817,6 +829,11 @@ with tab1:
                     f"Match: {combined_score*100:.1f}%",
                     expanded=(idx <= EXPANDED_RESULTS_COUNT)
                 ):
+                    # Add dismiss button at the top
+                    if st.button("✕ Dismiss this case", key=f"dismiss_{case.get('id')}_{idx}", type="secondary"):
+                        st.session_state.dismissed_cases.add(case.get('id'))
+                        st.rerun()
+
                     col1, col2 = st.columns([2, 1])
 
                     with col1:
