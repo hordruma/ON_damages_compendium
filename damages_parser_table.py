@@ -536,12 +536,65 @@ Return the JSON object:"""
 
         return "UNKNOWN"
 
+    def _is_valid_anatomical_section(self, section_text: str) -> bool:
+        """
+        Check if section text is a valid anatomical section (not an FLA relationship).
+
+        Args:
+            section_text: Candidate section header text
+
+        Returns:
+            True if valid anatomical section, False if FLA relationship or invalid
+        """
+        if not section_text:
+            return False
+
+        section_upper = section_text.strip().upper()
+
+        # FLA relationship patterns to reject
+        fla_patterns = [
+            "FATHER", "MOTHER", "PARENT", "PARENTS",
+            "SPOUSE", "WIFE", "HUSBAND",
+            "SON", "DAUGHTER", "CHILD", "CHILDREN",
+            "BROTHER", "SISTER", "SIBLING",
+            "GRANDFATHER", "GRANDMOTHER", "GRANDPARENT",
+            "GRANDSON", "GRANDDAUGHTER", "GRANDCHILD",
+            "UNCLE", "AUNT", "NEPHEW", "NIECE", "COUSIN"
+        ]
+
+        # Check if section starts with FLA term (e.g., "DAUGHTER -", "SISTER - $")
+        for fla_term in fla_patterns:
+            if section_upper.startswith(fla_term):
+                return False
+
+        # Valid anatomical sections
+        valid_sections = [
+            "BRAIN", "SKULL", "HEAD",
+            "CERVICAL", "THORACIC", "LUMBAR", "SPINE", "NECK",
+            "SHOULDER", "ARM", "ELBOW", "WRIST", "HAND", "FINGER",
+            "CHEST", "THORAX", "ABDOMEN", "PELVIS",
+            "HIP", "KNEE", "LEG", "ANKLE", "FOOT", "TOE",
+            "BACK", "TORSO",
+            "PSYCHOLOGICAL", "PSYCHIATRIC", "MENTAL",
+            "MULTIPLE", "SOFT TISSUE", "GENERAL", "MISCELLANEOUS"
+        ]
+
+        # Check if section contains any valid anatomical term
+        for valid_term in valid_sections:
+            if valid_term in section_upper:
+                return True
+
+        return False
+
     def extract_section_from_stream(self, pdf_path: str, page_spec: str) -> Dict[int, Optional[str]]:
         """
         Extract section headers from stream mode row 0.
 
         Uses stream mode to capture section headers that lattice mode misses.
         The PDF is predictably formatted with section headers always in row 0.
+
+        Filters out FLA relationship headers (e.g., "DAUGHTER -", "SISTER -")
+        and only accepts valid anatomical sections.
 
         Args:
             pdf_path: Path to PDF file
@@ -568,8 +621,12 @@ Return the JSON object:"""
                     for cell in row0_values:
                         cell_str = str(cell).strip()
                         if cell_str and cell_str != 'nan':
-                            section_found = cell_str
-                            break
+                            # Validate that this is an anatomical section, not FLA relationship
+                            if self._is_valid_anatomical_section(cell_str):
+                                section_found = cell_str
+                                break
+                            elif self.verbose:
+                                print(f"  [Page {page_num}] Rejected invalid section header: {cell_str}")
 
                     sections_by_page[page_num] = section_found
         except Exception as e:
@@ -855,6 +912,7 @@ Return the JSON object:"""
 
         # Track current section per page
         section_by_page = {}
+        last_valid_anatomical_section = "UNKNOWN"  # Track last valid section for FLA pages
 
         # Process each table
         for table_idx, table in enumerate(tables):
@@ -871,6 +929,13 @@ Return the JSON object:"""
                 # Fallback to table content detection if stream didn't find it
                 if not section:
                     section = self.detect_section_from_table(table)
+
+                # If no valid section found (e.g., FLA page), use last valid anatomical section
+                if not section or section == "UNKNOWN":
+                    section = last_valid_anatomical_section
+                else:
+                    # Update last valid section for future FLA pages
+                    last_valid_anatomical_section = section.upper()
 
                 # Store uppercase version for consistency
                 section_by_page[page_number] = section.upper() if section else "UNKNOWN"

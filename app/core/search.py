@@ -557,6 +557,7 @@ def extract_damages_value(case: Dict[str, Any]) -> Optional[float]:
     2. Top-level 'non_pecuniary_damages' field
     3. extended_data.non_pecuniary_damages
     4. Non-pecuniary damages from plaintiffs array
+    5. Sum of Family Law Act claims (for FLA-only cases)
 
     Returns:
         Damages value as float, or None if not found
@@ -593,6 +594,24 @@ def extract_damages_value(case: Dict[str, Any]) -> Optional[float]:
                     return float(damages)
                 except (ValueError, TypeError):
                     pass
+
+    # Fallback: Sum Family Law Act claims (for FLA-only cases like wrongful death)
+    # These cases have no non-pecuniary damages to the deceased, only FLA awards to family
+    ext = case.get("extended_data", {})
+    fla_claims = ext.get("family_law_act_claims", [])
+    if fla_claims:
+        total_fla = 0.0
+        found_any = False
+        for claim in fla_claims:
+            amount = claim.get("amount")
+            if amount:
+                try:
+                    total_fla += float(amount)
+                    found_any = True
+                except (ValueError, TypeError):
+                    pass
+        if found_any:
+            return total_fla
 
     return None
 

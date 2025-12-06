@@ -238,8 +238,8 @@ def display_enhanced_data(case: Dict) -> None:
     if is_provisional:
         st.warning("⚠️ Provisional damages award")
 
-    # Comments
-    comments = extended_data.get('comments')
+    # Comments (check both top-level and extended_data)
+    comments = extended_data.get('comments') or case.get('comments')
     if comments:
         st.markdown(f"**Comments:** {comments}")
 
