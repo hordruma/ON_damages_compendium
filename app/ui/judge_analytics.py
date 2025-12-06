@@ -377,7 +377,8 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
         options=judge_options,
         default=[judge_options[0]] if judge_options else [],
         max_selections=8,
-        help="Choose up to 8 judges to view and compare their award statistics and patterns. Each judge is shown in a different color."
+        help="Choose up to 8 judges to view and compare their award statistics and patterns. Each judge is shown in a different color.",
+        key="judge_selector"
     )
 
     # Extract judge names from selections (remove the case count suffix)

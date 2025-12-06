@@ -429,12 +429,12 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
                     stats = calculate_category_statistics(category_cases, category_name)
                     fig_comparison.add_trace(go.Bar(
                         name=category_name,
-                        x=['Median Award', 'Mean Award', 'Max Award'],
-                        y=[stats['adjusted_damages']['median'],
-                           stats['adjusted_damages']['mean'],
+                        x=['Min Award', 'Median Award', 'Max Award'],
+                        y=[stats['adjusted_damages']['min'],
+                           stats['adjusted_damages']['median'],
                            stats['adjusted_damages']['max']],
-                        text=[f"${stats['adjusted_damages']['median']:,.0f}",
-                              f"${stats['adjusted_damages']['mean']:,.0f}",
+                        text=[f"${stats['adjusted_damages']['min']:,.0f}",
+                              f"${stats['adjusted_damages']['median']:,.0f}",
                               f"${stats['adjusted_damages']['max']:,.0f}"],
                         textposition='auto',
                     ))

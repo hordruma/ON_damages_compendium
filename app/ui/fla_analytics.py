@@ -71,8 +71,8 @@ def extract_fla_awards(case: Dict[str, Any]) -> List[Dict[str, Any]]:
         if amount and amount > 0 and is_fla_award:
             awards.append({
                 'amount': amount,
-                'description': relationship,  # Use LLM-normalized relationship
-                'original_description': claim.get('description', relationship),  # Keep original for reference
+                'relationship': relationship,  # The relationship type (father, mother, etc.)
+                'description': claim.get('description', ''),  # The actual description/comments
                 'category': claim.get('category', 'Family Law Act Claim'),
                 'case_name': case.get('case_name', 'Unknown'),
                 'year': case.get('year'),
@@ -152,8 +152,8 @@ def create_fla_relationship_chart(fla_awards_data: List[Dict[str, Any]]) -> Opti
     if not fla_awards_data:
         return None
 
-    # Group by relationship description
-    relationship_counts = Counter([award['description'] for award in fla_awards_data])
+    # Group by relationship type
+    relationship_counts = Counter([award['relationship'] for award in fla_awards_data])
 
     if not relationship_counts:
         return None
@@ -228,7 +228,10 @@ def create_fla_timeline_chart(fla_awards_data: List[Dict[str, Any]]) -> Optional
             color='rgba(59, 130, 246, 0.6)',
             line=dict(width=1, color='white')
         ),
-        text=[f"<b>{row['case_name']}</b><br>{row['description']}<br>${row['amount']:,.0f}"
+        text=[f"<b>{row['case_name']}</b><br>"
+              f"Relationship: {row['relationship']}<br>"
+              f"{('Comments: ' + row['description'] + '<br>') if row.get('description') else ''}"
+              f"Award: ${row['amount']:,.0f}"
               for _, row in df.iterrows()],
         hovertemplate='%{text}<br>Year: %{x}<extra></extra>'
     ))
@@ -323,7 +326,7 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]]) -> None:
         st.subheader("📈 FLA Awards Over Time")
 
         # Extract unique relationships for filter
-        unique_relationships = sorted(set(award['description'] for award in all_fla_awards))
+        unique_relationships = sorted(set(award['relationship'] for award in all_fla_awards))
 
         # Relationship filter
         selected_relationships = st.multiselect(
@@ -336,7 +339,7 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]]) -> None:
         # Filter awards based on selected relationships
         filtered_awards = [
             award for award in all_fla_awards
-            if award['description'] in selected_relationships
+            if award['relationship'] in selected_relationships
         ]
 
         if filtered_awards:
