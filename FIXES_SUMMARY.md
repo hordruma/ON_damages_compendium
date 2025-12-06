@@ -1,179 +1,164 @@
-# DAMAGES COMPENDIUM - COMPREHENSIVE FIXES
+# DAMAGES COMPENDIUM - ACTUAL FIXES APPLIED
 
-## Issues Found and Fixes Applied
+## ✅ BUGS FIXED
 
-### 1. FLA Relationships Showing as 0 ❌ → ✅ FIXED
+### 1. Category Contamination - "SISTER - $8,000.00" ✅ FIXED
 **Problem:**
-- `data/damages_with_embeddings.json` was created with old transformer
-- Old transformer didn't include `family_law_act_claims` in `extended_data`
-- Source data (`damages_table_based.json`) HAS 476 cases with 1000+ FLA relationships
+- Category field showing garbage: "SISTER - $8,000.00", "$85,796.00", "P11: FEMALE"
+- Parser blindly accepted ANY text from row 0 as section header
+- 26 cases had numbers/money in category field
 
 **Root Cause:**
-- Line 196 of current `data_transformer.py` DOES include FLA claims
-- But the JSON file was generated before this fix was added
+- `extract_section_from_stream()` grabbed first non-empty cell without validation
+- Table headers like "SISTER - $8,000.00" (FLA award amount) got extracted as category
 
 **Fix:**
-- Created `regenerate_embeddings.py` to re-transform from source
-- Preserves: injuries, FLA claims, comments, demographics, judges
-- Running now...
+- Added `_clean_section_header()` method (lines 539-585)
+- Strips trailing " - $..." money patterns: "SISTER - $8,000.00" → "SISTER"
+- Rejects invalid patterns: "$85,796.00", "P11: FEMALE", "CONTRIBUTORILY"
+- Preserves valid FLA categories: "DAUGHTER", "SISTER", "HUSBAND AND FATHER"
+
+**Files:** `damages_parser_table.py:539-634`
 
 ---
 
-### 2. No Award Amounts for FLA Cases ❌ → NEEDS FIX
+### 2. Comments Not Displaying ✅ FIXED
 **Problem:**
-- FLA cases like "MacMillan v. Moreau" show no award
-- FLA awards are in `family_law_act_claims[]` array, not `non_pecuniary_damages`
-- `extract_damages_value()` only checks non-pecuniary fields
-
-**Example:**
-```
-MacMillan v. Moreau (2002):
-- Deceased: massive pulmonary embolism
-- Wife: $40,000 FLA award
-- Child 1: $50,000 FLA award
-- Child 2: $35,000 FLA award
-- Child 3: $30,000 FLA award
-- TOTAL: $155,000 in FLA awards
-But shows: "No award amount"
-```
-
-**Fix Required:**
-Update `app/core/search.py::extract_damages_value()` to:
-1. Try non-pecuniary damages first (current behavior)
-2. If None, sum all FLA awards as fallback
-3. Display total FLA amount for FLA-only cases
-
----
-
-### 3. Comments Not Displaying ❌ → ACTUALLY WORKING
-**Finding:**
-- Comments ARE in the data
-- MacMillan case has: "Wife separated for 3 years; not a close relationship..."
-- Display logic IS correct (lines 240-244 of streamlit_app.py)
-
-**Likely Issue:**
-- You may be seeing old cached data in browser
-- OR looking at wrong plaintiff in multi-plaintiff display
+- MacMillan v. Moreau shows no comments (but data exists)
+- Display function only checked `extended_data.get('comments')`
+- Comments stored at top-level `case.get('comments')`
 
 **Fix:**
-- Regenerating embeddings will refresh all data
-- Clear browser cache / restart Streamlit
+```python
+# OLD:
+comments = extended_data.get('comments')
+
+# NEW:
+comments = extended_data.get('comments') or case.get('comments')
+```
+
+**Files:** `streamlit_app.py:242`
 
 ---
 
-### 4. Search Returns Wrong Cases (DAI → Pulmonary Embolism) ❌ → INVESTIGATING
-**Problem:**
-- Searching "diffuse axonal injury" returns "massive pulmonary embolism" case
+## ❌ INCORRECT ASSUMPTIONS (CORRECTED)
 
-**Finding:**
-- DAI cases DO exist in data (found 2 cases: Foniciello v. Bendall)
-- MacMillan case (pulmonary embolism) should NOT match DAI query
+### 1. FLA Sections Are VALID ✅ UNDERSTOOD
+**Initial Mistake:**
+- I thought FLA relationships ("DAUGHTER", "SISTER") were invalid categories
+- Tried to reject them and make them inherit from anatomical sections
+
+**Reality:**
+- FLA relationships ARE valid section headers in the compendium
+- "DAUGHTER", "SISTER", "HUSBAND AND FATHER" are legitimate categories
+- The bug was just the trailing money amounts (" - $8,000.00")
+
+**Correction:**
+- Removed FLA rejection logic
+- Removed inheritance logic
+- Only clean garbage from category text, don't reject FLA terms
+
+---
+
+### 2. FLA Awards Should NOT Auto-Sum ✅ CORRECTED
+**Initial Mistake:**
+- Added FLA award summation to `extract_damages_value()`
+- Thought FLA-only cases should show total FLA awards
+
+**Reality:**
+- User controls FLA inclusion via UI checkbox
+- FLA awards should NOT be automatically included
+- FLA-only cases correctly show no non-pecuniary award (None)
+
+**Correction:**
+- Reverted FLA auto-sum logic
+- `extract_damages_value()` only returns non-pecuniary damages
+
+---
+
+## 🔍 REMAINING ISSUES TO INVESTIGATE
+
+### 1. Search Returns Irrelevant Results
+**Example:** "diffuse axonal injury" → "massive pulmonary embolism" case
 
 **Possible Causes:**
-1. Old embeddings (being regenerated now)
-2. Category filter mismatch
-3. Embedding model not understanding medical terms
-4. Search weights heavily favoring keywords over semantics
+- Old/stale embeddings
+- Search weights favoring wrong signals
+- Medical term expansion not working
 
-**Fix:**
-- Regenerating embeddings with better model (all-mpnet-base-v2)
-- Will test after regeneration completes
-
----
-
-### 5. MTBI Filtered on HEAD Gives No Results ❌ → NEEDS FIX
-**Problem:**
-- "MTBI" abbreviation may not appear in injury text
-- Cases might use "mild traumatic brain injury" or "concussion"
-
-**Fix Required:**
-- Add medical abbreviation expansion to search
-- "MTBI" → ["MTBI", "mild traumatic brain injury", "mild TBI", "concussion"]
-- Already exists in `app/core/medical_terms.py` - verify it's being used
+**Next Steps:**
+- User will regenerate embeddings locally
+- Test with fresh embeddings
 
 ---
 
-### 6. Display Formatting Issues ❌ → NEEDS INVESTIGATION
-**Problem:**
-- User sees: "Category: SISTER - 8,000.00"
-- Category field should be anatomical (HEAD, SPINE, etc.)
-- "SISTER" is an FLA relationship, not a category!
+### 2. MTBI + HEAD Filter Gives No Results
+**Issue:** "MTBI" abbreviation may not match injury text
 
 **Possible Cause:**
-- Data corruption during parsing
-- FLA relationship overwriting category field
-- Multi-plaintiff case display bug
+- Medical abbreviation expansion not applied
+- "MTBI" written as "mild traumatic brain injury"
 
-**Fix:**
-- Review parser logic for FLA cases
-- Ensure category stays anatomical
-- Fix display to show: "Category: BRAIN & SKULL | FLA: Sister - $8,000"
+**Next Steps:**
+- Verify `app/core/medical_terms.py` expansion logic
+- Test after embedding regeneration
 
 ---
 
-### 7. Injuries Not Showing ❌ → PARTIALLY FIXED
-**Problem:**
-- User says "injuries are NOT showing up"
+### 3. Injuries Not Showing for Some Cases
+**User Report:** "injuries are NOT showing up"
 
-**Finding:**
-- Injuries ARE in the data (1260/1350 cases have injuries)
-- `display_enhanced_data()` DOES display them (lines 176-199)
+**Investigation:**
+- Current data has injuries in 1260/1350 cases (93%)
+- Display logic IS correct (lines 176-199)
+- May be old cached data in browser
 
-**Issue:**
-- Old `extended_data` may not have injuries
-- Current transformer DOES include injuries
-- Regenerating embeddings will fix this
-
----
-
-## Files Modified / Created
-
-1. ✅ **regenerate_embeddings.py** - Complete data transformation script
-2. ⏳ **app/core/search.py** - Need to update `extract_damages_value()`
-3. ⏳ **streamlit_app.py** - May need display formatting fixes
-4. ⏳ **app/core/medical_terms.py** - Verify abbreviation expansion
+**Next Steps:**
+- User regenerating embeddings locally
+- Will refresh all data
 
 ---
 
-## Next Steps
+## 📋 FILES MODIFIED
 
-1. ✅ Wait for regeneration script to complete
-2. ⏳ Fix `extract_damages_value()` for FLA awards
-3. ⏳ Fix display formatting for FLA cases
-4. ⏳ Run `generate_embeddings.py` for injury embeddings
-5. ⏳ Test search with "diffuse axonal injury"
-6. ⏳ Test "MTBI" + HEAD filter
-7. ⏳ Verify FLA relationships show correctly
-8. ⏳ Commit and push fixes
+### Core Fixes:
+1. ✅ **damages_parser_table.py**
+   - Added `_clean_section_header()` method
+   - Cleans category garbage while preserving FLA terms
+   - Updated `extract_section_from_stream()` to use cleaner
+
+2. ✅ **streamlit_app.py**
+   - Fixed comments display fallback logic
+
+3. ✅ **app/core/search.py**
+   - Reverted FLA auto-sum (incorrect fix)
+
+### Utility Scripts:
+4. **regenerate_embeddings.py** - User will run locally
+5. **check_data.py** - Diagnostic script
+6. **FIXES_SUMMARY.md** - This file
 
 ---
 
-## Technical Details
+## 🎯 ACTUAL BUGS VS PERCEIVED BUGS
 
-### Data Flow:
-```
-damages_table_based.json (SOURCE)
-  ↓
-data_transformer.py::convert_to_dashboard_format()
-  ↓
-data/damages_with_embeddings.json (DASHBOARD)
-  ↓
-generate_embeddings.py (INJURY EMBEDDINGS)
-  ↓
-data/compendium_inj.json + embeddings_inj.npy
-  ↓
-Streamlit App (SEARCH & DISPLAY)
-```
+| Issue | Actual Bug? | Fixed? |
+|-------|-------------|--------|
+| Category shows "SISTER - $8,000.00" | ✅ YES | ✅ YES |
+| Comments not showing | ✅ YES | ✅ YES |
+| FLA relationships showing as 0 | ❌ NO (data needs regen) | N/A |
+| No award amounts for FLA cases | ❌ NO (by design) | N/A |
+| Search broken (DAI → embolism) | ⏳ INVESTIGATING | Pending |
+| MTBI filter gives no results | ⏳ INVESTIGATING | Pending |
+| Injuries not showing | ❌ NO (display works) | N/A |
 
-### Data Preservation Checklist:
-- [x] case_name, year, court, judge, citation
-- [x] category (anatomical region)
-- [x] non_pecuniary_damages, pecuniary_damages
-- [x] comments
-- [x] injuries array
-- [x] family_law_act_claims array ← **THIS WAS MISSING!**
-- [x] sex, age (demographics)
-- [x] other_damages array
-- [x] num_plaintiffs, plaintiff_id
-- [x] judges array
+---
 
+## 🚀 NEXT STEPS
+
+User will:
+1. ✅ Regenerate embeddings locally (regenerate_embeddings.py)
+2. Test search with fresh data
+3. Investigate remaining search issues if they persist
+
+Parser fixes are complete and pushed.
