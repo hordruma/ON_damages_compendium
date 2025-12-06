@@ -536,12 +536,62 @@ Return the JSON object:"""
 
         return "UNKNOWN"
 
+    def _clean_section_header(self, section_text: str) -> str:
+        """
+        Clean section header text by removing trailing money/numbers and garbage.
+
+        Examples:
+            "SISTER - $8,000.00" -> "SISTER"
+            "DAUGHTER -" -> "DAUGHTER"
+            "BRAIN & SKULL" -> "BRAIN & SKULL" (unchanged)
+            "P11: FEMALE" -> "" (invalid, reject)
+            "$85,796.00" -> "" (invalid, reject)
+
+        Args:
+            section_text: Raw section header text
+
+        Returns:
+            Cleaned section text, or empty string if invalid
+        """
+        if not section_text:
+            return ""
+
+        text = section_text.strip()
+
+        # Reject if starts with $ or digits (clearly not a section header)
+        if text and (text[0] == '$' or text[0].isdigit()):
+            return ""
+
+        # Reject invalid patterns
+        invalid_patterns = [
+            "CONTRIBUTORILY",  # "PLAINTIFF 35% CONTRIBUTORILY"
+            "P11:", "P12:",     # "P11: FEMALE", "P12: SPECIAL"
+            "SPECIAL",          # Table artifacts
+        ]
+        text_upper = text.upper()
+        for pattern in invalid_patterns:
+            if pattern in text_upper:
+                return ""
+
+        # Clean trailing " - $..." or " - " patterns
+        # Examples: "SISTER - $8,000.00" -> "SISTER"
+        #           "DAUGHTER -" -> "DAUGHTER"
+        import re
+        # Remove " - $..." money amounts
+        text = re.sub(r'\s*-\s*\$[\d,\.]+', '', text)
+        # Remove trailing " -" if no content follows
+        text = re.sub(r'\s*-\s*$', '', text)
+
+        return text.strip()
+
     def extract_section_from_stream(self, pdf_path: str, page_spec: str) -> Dict[int, Optional[str]]:
         """
         Extract section headers from stream mode row 0.
 
         Uses stream mode to capture section headers that lattice mode misses.
         The PDF is predictably formatted with section headers always in row 0.
+
+        Cleans section headers to remove garbage like "SISTER - $8,000.00" -> "SISTER"
 
         Args:
             pdf_path: Path to PDF file
@@ -568,8 +618,13 @@ Return the JSON object:"""
                     for cell in row0_values:
                         cell_str = str(cell).strip()
                         if cell_str and cell_str != 'nan':
-                            section_found = cell_str
-                            break
+                            # Clean the section header
+                            cleaned = self._clean_section_header(cell_str)
+                            if cleaned:
+                                section_found = cleaned
+                                break
+                            elif self.verbose:
+                                print(f"  [Page {page_num}] Rejected/cleaned section header: {cell_str}")
 
                     sections_by_page[page_num] = section_found
         except Exception as e:
