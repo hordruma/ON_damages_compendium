@@ -134,7 +134,6 @@ def convert_ai_to_dashboard_inline(
         return []
 
 
-@st.cache_data
 def load_cases_auto() -> Optional[List[Dict[str, Any]]]:
     """
     Auto-detect and load case data in either format.
@@ -151,36 +150,49 @@ def load_cases_auto() -> Optional[List[Dict[str, Any]]]:
 
     # Try standard dashboard format first
     if data_path.exists():
-        with open(data_path) as f:
-            data = json.load(f)
+        try:
+            with open(data_path) as f:
+                data = json.load(f)
 
-        format_type = detect_json_format(data)
+            format_type = detect_json_format(data)
 
-        if format_type == "dashboard":
-            return data
-        elif format_type == "ai_parsed":
-            # Auto-convert silently
-            model = load_embedding_model()
-            return convert_ai_to_dashboard_inline(data, model)
+            if format_type == "dashboard":
+                return data
+            elif format_type == "ai_parsed":
+                # Auto-convert with progress indicator
+                st.info("📊 Converting AI-parsed data to dashboard format... This may take a moment.")
+                model = load_embedding_model()
+                return convert_ai_to_dashboard_inline(data, model)
+        except Exception as e:
+            st.error(f"❌ Error loading data from {data_path}: {str(e)}")
+            st.info("Trying alternative data source...")
 
     # Try AI-parsed format
     if ai_parsed_path.exists():
-        with open(ai_parsed_path) as f:
-            data = json.load(f)
+        try:
+            with open(ai_parsed_path) as f:
+                data = json.load(f)
 
-        format_type = detect_json_format(data)
+            format_type = detect_json_format(data)
 
-        if format_type == "ai_parsed":
-            # Convert silently
-            model = load_embedding_model()
-            converted = convert_ai_to_dashboard_inline(data, model)
+            if format_type == "ai_parsed":
+                # Convert with progress indicator
+                st.info("📊 Converting AI-parsed data to dashboard format... This may take a moment.")
+                model = load_embedding_model()
+                converted = convert_ai_to_dashboard_inline(data, model)
 
-            # Save for future use
-            data_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(data_path, 'w') as f:
-                json.dump(converted, f, indent=2)
+                # Save for future use
+                try:
+                    data_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(data_path, 'w') as f:
+                        json.dump(converted, f, indent=2)
+                    st.success("✅ Converted data saved for faster loading next time!")
+                except Exception as e:
+                    st.warning(f"⚠️ Could not save converted data: {str(e)}")
 
-            return converted
+                return converted
+        except Exception as e:
+            st.error(f"❌ Error loading data from {ai_parsed_path}: {str(e)}")
 
     # Not found
     st.error(f"❌ Data file not found: {data_path}")
@@ -190,6 +202,12 @@ def load_cases_auto() -> Optional[List[Dict[str, Any]]]:
         "2. Place AI-parsed `damages_full.json` in the project root"
     )
     return None
+
+
+@st.cache_data
+def _cached_load_cases() -> Optional[List[Dict[str, Any]]]:
+    """Cached wrapper for load_cases_auto() to avoid re-computing on every rerun."""
+    return load_cases_auto()
 
 
 def initialize_data() -> tuple:
@@ -208,7 +226,17 @@ def initialize_data() -> tuple:
         SystemExit: If case data cannot be loaded (via st.stop())
     """
     model = load_embedding_model()
-    cases = load_cases_auto()  # Use auto-detection
+
+    # Check if we have cached data first
+    if 'cases_loaded' not in st.session_state:
+        with st.spinner("🔄 Loading case data... This may take a moment on first load."):
+            cases = _cached_load_cases()
+            if cases is not None:
+                st.session_state.cases_loaded = True
+    else:
+        # Use cached version without spinner
+        cases = _cached_load_cases()
+
     region_map = load_region_map()
 
     if cases is None:
