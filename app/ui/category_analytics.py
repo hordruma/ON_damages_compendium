@@ -413,7 +413,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
 
         if comparison_data:
             comparison_df = pd.DataFrame(comparison_data)
-            st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+            st.dataframe(comparison_df, width='stretch', hide_index=True)
 
             st.divider()
 
@@ -450,7 +450,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
                 showlegend=True
             )
 
-            st.plotly_chart(fig_comparison, use_container_width=True)
+            st.plotly_chart(fig_comparison, width='stretch')
 
             st.divider()
 
@@ -506,7 +506,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
                     template='plotly_white'
                 )
                 fig_timeline.update_yaxes(tickformat='$,.0f')
-                st.plotly_chart(fig_timeline, use_container_width=True)
+                st.plotly_chart(fig_timeline, width='stretch')
             else:
                 st.info("Insufficient data with both year and damages information to display timeline")
 
@@ -540,7 +540,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
                     # Timeline chart for this category
                     timeline_fig = create_category_timeline_chart(category_cases, category_name)
                     if timeline_fig:
-                        st.plotly_chart(timeline_fig, use_container_width=True)
+                        st.plotly_chart(timeline_fig, width='stretch')
 
                     st.divider()
 
@@ -587,7 +587,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
                         case_list.append(case_data)
 
                     cases_df = pd.DataFrame(case_list)
-                    st.dataframe(cases_df, use_container_width=True, hide_index=True)
+                    st.dataframe(cases_df, width='stretch', hide_index=True)
             else:
                 st.warning(f"No cases found for {category_name}")
 
@@ -661,7 +661,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
     timeline_fig = create_category_timeline_chart(category_cases, selected_category)
 
     if timeline_fig:
-        st.plotly_chart(timeline_fig, use_container_width=True)
+        st.plotly_chart(timeline_fig, width='stretch')
     else:
         st.info("Insufficient data with both year and damages information to display timeline")
 
@@ -711,4 +711,4 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
         case_list.append(case_data)
 
     cases_df = pd.DataFrame(case_list)
-    st.dataframe(cases_df, use_container_width=True, hide_index=True)
+    st.dataframe(cases_df, width='stretch', hide_index=True)

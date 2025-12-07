@@ -102,9 +102,10 @@ def main():
     print(f"   ✓ Source has {len(fla_cases)} cases with {fla_count} FLA claims")
 
     # STEP 2: Load embedding model (only once!)
+    # IMPORTANT: Must match EMBEDDING_MODEL_NAME in app/core/config.py
     print(f"\n🔄 Step 2: Loading embedding model (all-mpnet-base-v2)...")
-    print(f"   This model provides excellent medical terminology understanding")
-    print(f"   (First run will download ~400MB model)")
+    print(f"   This model produces 768-dim embeddings for better semantic understanding")
+    print(f"   (First run will download ~420MB model)")
     model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
     print(f"   ✓ Model loaded")
 

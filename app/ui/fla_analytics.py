@@ -316,7 +316,7 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]]) -> None:
         st.subheader("💰 FLA Award Distribution")
         dist_fig = create_fla_distribution_chart(fla_award_amounts)
         if dist_fig:
-            st.plotly_chart(dist_fig, use_container_width=True)
+            st.plotly_chart(dist_fig, width='stretch')
             st.caption("💡 Distribution of Family Law Act awards across all cases")
 
         st.divider()
@@ -345,7 +345,7 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]]) -> None:
         if filtered_awards:
             timeline_fig = create_fla_timeline_chart(filtered_awards)
             if timeline_fig:
-                st.plotly_chart(timeline_fig, use_container_width=True)
+                st.plotly_chart(timeline_fig, width='stretch')
             else:
                 st.info("Insufficient data with year information to display timeline")
         else:
@@ -377,4 +377,4 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]]) -> None:
             })
 
         cases_df = pd.DataFrame(case_list)
-        st.dataframe(cases_df, use_container_width=True, hide_index=True)
+        st.dataframe(cases_df, width='stretch', hide_index=True)

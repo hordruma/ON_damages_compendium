@@ -748,7 +748,7 @@ with tab1:
                 st.subheader("📊 Awards Relative to Ontario Damages Cap")
                 cap_fig = create_damages_cap_chart(damages_values, DEFAULT_REFERENCE_YEAR)
                 if cap_fig:
-                    st.plotly_chart(cap_fig, use_container_width=True)
+                    st.plotly_chart(cap_fig, width='stretch')
                     st.caption("💡 Bars are colored based on their proportion to the Ontario non-pecuniary damages cap")
 
                 st.divider()
@@ -759,7 +759,7 @@ with tab1:
                 fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
 
                 if fig:
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
 
                     # Calculate and display statistics
                     chart_data = []
@@ -1142,7 +1142,7 @@ with tab4:
                         st.subheader("📊 Awards Relative to Ontario Damages Cap")
                         cap_fig = create_damages_cap_chart(bool_damages_values, DEFAULT_REFERENCE_YEAR)
                         if cap_fig:
-                            st.plotly_chart(cap_fig, use_container_width=True)
+                            st.plotly_chart(cap_fig, width='stretch')
                             st.caption("💡 Bars are colored based on their proportion to the Ontario non-pecuniary damages cap")
 
                     st.divider()

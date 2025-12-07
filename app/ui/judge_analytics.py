@@ -330,7 +330,7 @@ def _display_individual_judge_details(judge_name: str, judge_cases: List[Dict[st
     st.markdown("**📈 Awards Over Time**")
     timeline_fig = create_awards_timeline_chart(judge_cases)
     if timeline_fig:
-        st.plotly_chart(timeline_fig, use_container_width=True)
+        st.plotly_chart(timeline_fig, width='stretch')
 
 
 def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: bool = True) -> None:
@@ -420,7 +420,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
 
         if comparison_data:
             comparison_df = pd.DataFrame(comparison_data)
-            st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+            st.dataframe(comparison_df, width='stretch', hide_index=True)
 
             st.divider()
 
@@ -485,7 +485,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
                     template='plotly_white'
                 )
                 fig_timeline.update_yaxes(tickformat='$,.0f')
-                st.plotly_chart(fig_timeline, use_container_width=True)
+                st.plotly_chart(fig_timeline, width='stretch')
             else:
                 st.info("Insufficient data with both year and damages information to display timeline")
 
@@ -585,7 +585,7 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
     timeline_fig = create_awards_timeline_chart(judge_cases)
 
     if timeline_fig:
-        st.plotly_chart(timeline_fig, use_container_width=True)
+        st.plotly_chart(timeline_fig, width='stretch')
     else:
         st.info("Insufficient data with both year and damages information to display timeline")
 
