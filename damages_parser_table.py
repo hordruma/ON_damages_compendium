@@ -682,14 +682,33 @@ CRITICAL RULES:
         # Whitelist: Only accept known anatomical/injury sections or FLA relationships
         # This is the MOST IMPORTANT fix - only allow valid sections
         valid_sections = [
+            # General/common subsections
+            "GENERAL", "MISCELLANEOUS", "MOST SEVERE", "FATAL",
+            # Head/sensory
             "BRAIN", "SKULL", "HEAD",
+            "EARS", "HEARING", "EYE", "SIGHT", "TEETH",
+            # Spine
             "CERVICAL", "THORACIC", "LUMBAR", "SPINE", "SPINAL",
-            "NECK", "BACK",
-            "SHOULDER", "ARM", "ELBOW", "WRIST", "HAND", "FINGER",
-            "CHEST", "THORAX", "ABDOMEN", "PELVIS",
-            "HIP", "KNEE", "LEG", "ANKLE", "FOOT", "TOE",
-            "PSYCHOLOGICAL", "PSYCHIATRIC", "MENTAL",
+            "NECK", "BACK", "WHIPLASH",
+            # Arms
+            "SHOULDER", "ARM", "ELBOW", "FOREARM", "WRIST", "HAND", "FINGER", "WHOLE", "COLLAR",
+            # Body/torso
+            "CHEST", "THORAX", "ABDOMEN", "PELVIS", "BODY",
+            "BUTTOCK", "THIGH", "INTERNAL", "REPRODUCTIVE", "RIBS",
+            # Legs
+            "HIP", "KNEE", "LEG", "ANKLE", "FOOT", "TOE", "LOWER", "LOSS",
+            # Skin
+            "SKIN", "BURNS", "SCARS", "LACERATIONS",
+            # Severe injuries
+            "PARAPLEGIA", "QUADRIPLEGIA",
+            # Psychological
+            "PSYCHOLOGICAL", "PSYCHIATRIC", "MENTAL", "TRAUMATIC", "NEUROSIS",
+            "PAIN", "SUFFERING", "MINOR",
+            # Other
             "MULTIPLE", "SOFT TISSUE",
+            "PRE-EXISTING", "DISABILITY", "CONDITION",
+            "SEXUAL", "ASSAULT", "ABUSE",
+            "GUIDANCE", "CARE", "COMPANIONSHIP",
             # FLA relationships
             "FATHER", "MOTHER", "PARENT",
             "SON", "DAUGHTER", "CHILD",
@@ -982,7 +1001,7 @@ CRITICAL RULES:
     def parse_pdf(
         self,
         pdf_path: str,
-        start_page: int = 1,
+        start_page: int = 4,
         end_page: Optional[int] = None,
         output_json: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -991,7 +1010,7 @@ CRITICAL RULES:
 
         Args:
             pdf_path: Path to PDF
-            start_page: Starting page (1-indexed)
+            start_page: Starting page (1-indexed, default=4 to skip TOC)
             end_page: Ending page (None = all)
             output_json: Optional path to save results
 
@@ -1036,6 +1055,19 @@ CRITICAL RULES:
         # Track current section per page
         section_by_page = {}
 
+        # Track parent section for hierarchical sections
+        # Main sections that can have subsections
+        main_sections = [
+            "HEAD", "BRAIN", "SKULL",
+            "ARMS", "SPINE", "BODY", "LEGS", "SKIN",
+            "FATAL INJURIES", "MOST SEVERE INJURIES", "MISCELLANEOUS"
+        ]
+
+        # Subsection-only keywords that should be combined with parent
+        subsection_keywords = ["GENERAL"]
+
+        current_parent_section = None
+
         # Process each table
         for table_idx, table in enumerate(tables):
             page_number = table.page  # Camelot table objects have .page attribute
@@ -1052,8 +1084,30 @@ CRITICAL RULES:
                 if not section:
                     section = self.detect_section_from_table(table)
 
-                # Store uppercase version for consistency
-                section_by_page[page_number] = section.upper() if section else "UNKNOWN"
+                if section:
+                    section_upper = section.upper()
+
+                    # Check if this is a main section
+                    is_main_section = any(main_sec in section_upper for main_sec in main_sections)
+
+                    # Check if this is a subsection-only keyword
+                    is_subsection_only = any(sub_kw in section_upper for sub_kw in subsection_keywords)
+
+                    if is_main_section:
+                        # This is a main section - update parent
+                        current_parent_section = section_upper
+                        section_by_page[page_number] = section_upper
+                    elif is_subsection_only and current_parent_section:
+                        # This is a subsection - combine with parent
+                        combined = f"{current_parent_section} - {section_upper}"
+                        section_by_page[page_number] = combined
+                        if self.verbose:
+                            print(f"[Hierarchical: {combined}]", end=" ")
+                    else:
+                        # Standalone section or subsection under a main category
+                        section_by_page[page_number] = section_upper
+                else:
+                    section_by_page[page_number] = "UNKNOWN"
 
             section = section_by_page[page_number]
 
@@ -1278,7 +1332,7 @@ def parse_compendium_tables(
 
     return parser.parse_pdf(
         pdf_path=pdf_path,
-        start_page=start_page or 1,
+        start_page=start_page or 4,  # Start on page 4 to skip TOC (pages 1-3)
         end_page=end_page,
         output_json=output_json
     )
