@@ -429,12 +429,12 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
                     stats = calculate_category_statistics(category_cases, category_name)
                     fig_comparison.add_trace(go.Bar(
                         name=category_name,
-                        x=['Median Award', 'Mean Award', 'Max Award'],
-                        y=[stats['adjusted_damages']['median'],
-                           stats['adjusted_damages']['mean'],
+                        x=['Min Award', 'Median Award', 'Max Award'],
+                        y=[stats['adjusted_damages']['min'],
+                           stats['adjusted_damages']['median'],
                            stats['adjusted_damages']['max']],
-                        text=[f"${stats['adjusted_damages']['median']:,.0f}",
-                              f"${stats['adjusted_damages']['mean']:,.0f}",
+                        text=[f"${stats['adjusted_damages']['min']:,.0f}",
+                              f"${stats['adjusted_damages']['median']:,.0f}",
                               f"${stats['adjusted_damages']['max']:,.0f}"],
                         textposition='auto',
                     ))
@@ -547,6 +547,10 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
                     # Case list
                     st.markdown(f"**Cases in {category_name}:**")
                     case_list = []
+
+                    # Check if this is an FLA category
+                    is_fla_category = category_name.startswith("FLA: ")
+
                     for case in category_cases:
                         damage = case.get('damages', 0)
                         year = case.get('year')
@@ -557,13 +561,30 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
                             adj = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
                             adjusted_damage = adj if adj else damage
 
-                        case_list.append({
+                        # For FLA categories, extract the specific FLA claim description/comments
+                        fla_description = ""
+                        if is_fla_category:
+                            relationship_name = category_name[5:].strip().lower()
+                            extended_data = case.get('extended_data', {})
+                            fla_claims = extended_data.get('family_law_act_claims', [])
+                            for claim in fla_claims:
+                                if claim.get('relationship', '').strip().lower() == relationship_name:
+                                    fla_description = claim.get('description', '')
+                                    break
+
+                        case_data = {
                             'Case Name': case.get('case_name', 'Unknown'),
                             'Year': year if year else 'N/A',
                             'Court': case.get('court', 'N/A'),
                             'Original Award': f"${damage:,.0f}" if damage else 'N/A',
                             f'Adjusted Award ({DEFAULT_REFERENCE_YEAR}$)': f"${adjusted_damage:,.0f}" if adjusted_damage else 'N/A'
-                        })
+                        }
+
+                        # Add FLA description/comments column if this is an FLA category
+                        if is_fla_category and fla_description:
+                            case_data['Comments'] = fla_description
+
+                        case_list.append(case_data)
 
                     cases_df = pd.DataFrame(case_list)
                     st.dataframe(cases_df, use_container_width=True, hide_index=True)
@@ -650,6 +671,10 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
     st.subheader(f"📋 All {len(category_cases)} Cases")
 
     case_list = []
+
+    # Check if this is an FLA category
+    is_fla_category = selected_category.startswith("FLA: ")
+
     for case in category_cases:
         damage = case.get('damages', 0)
         year = case.get('year')
@@ -660,13 +685,30 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
             adj = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
             adjusted_damage = adj if adj else damage
 
-        case_list.append({
+        # For FLA categories, extract the specific FLA claim description/comments
+        fla_description = ""
+        if is_fla_category:
+            relationship_name = selected_category[5:].strip().lower()
+            extended_data = case.get('extended_data', {})
+            fla_claims = extended_data.get('family_law_act_claims', [])
+            for claim in fla_claims:
+                if claim.get('relationship', '').strip().lower() == relationship_name:
+                    fla_description = claim.get('description', '')
+                    break
+
+        case_data = {
             'Case Name': case.get('case_name', 'Unknown'),
             'Year': year if year else 'N/A',
             'Court': case.get('court', 'N/A'),
             'Original Award': f"${damage:,.0f}" if damage else 'N/A',
             f'Adjusted Award ({DEFAULT_REFERENCE_YEAR}$)': f"${adjusted_damage:,.0f}" if adjusted_damage else 'N/A'
-        })
+        }
+
+        # Add FLA description/comments column if this is an FLA category
+        if is_fla_category and fla_description:
+            case_data['Comments'] = fla_description
+
+        case_list.append(case_data)
 
     cases_df = pd.DataFrame(case_list)
     st.dataframe(cases_df, use_container_width=True, hide_index=True)

@@ -216,12 +216,20 @@ def display_enhanced_data(case: Dict) -> None:
     if fla_claims:
         st.markdown("**Family Law Act Claims:**")
         for claim in fla_claims:
-            desc = claim.get('description', 'FLA claim')
+            relationship = claim.get('relationship', 'FLA claim')
+            description = claim.get('description', '')
             amount = claim.get('amount')
+
+            # Build display string with relationship and comments
+            display_parts = [relationship]
+            if description:
+                display_parts.append(f"({description})")
+            display_str = ' '.join(display_parts)
+
             if amount:
-                st.markdown(f"- {desc}: ${amount:,.0f}")
+                st.markdown(f"- {display_str}: ${amount:,.0f}")
             else:
-                st.markdown(f"- {desc}")
+                st.markdown(f"- {display_str}")
 
     # Citations
     citations = extended_data.get('citations')
@@ -251,6 +259,8 @@ if 'search_results' not in st.session_state:
     st.session_state.search_results = None
 if 'analysis_data' not in st.session_state:
     st.session_state.analysis_data = None
+if 'dismissed_cases' not in st.session_state:
+    st.session_state.dismissed_cases = set()
 
 # =============================================================================
 # MAIN UI
@@ -408,14 +418,6 @@ with tab1:
                             key=f"status_{filter_id}"
                         )
 
-    # Outliers filter - moved from sidebar
-    include_outliers = st.checkbox(
-        "Include outliers",
-        value=False,
-        help="Include statistical outliers (very high or very low awards). "
-             "When unchecked, cases outside 1.5×IQR from the median are excluded to improve statistical accuracy."
-    )
-
     st.markdown("<br>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -524,6 +526,16 @@ with st.sidebar:
 
     st.divider()
 
+    # Outliers filter - applies to all tabs
+    include_outliers = st.checkbox(
+        "Include statistical outliers",
+        value=False,
+        help="Include outliers (very high or very low awards). When unchecked, cases outside 1.5×IQR are excluded for more accurate statistics. Applies to Case Search, Judge Analytics, and Category Statistics.",
+        key="include_outliers_global"
+    )
+
+    st.divider()
+
     # Search filters
     st.subheader("Search Filters")
 
@@ -542,23 +554,19 @@ with st.sidebar:
     st.subheader("Search Weighting")
     st.caption("Adjust how different aspects of cases are weighted in search results")
 
-    # Preset options with clearer descriptions
+    # Preset options - simplified to 3 meaningful presets + Custom
     weight_preset = st.selectbox(
         "Preset:",
         options=[
             "Balanced (Default)",
-            "Medical Diagnosis Match",
-            "Symptoms & Impact Search",
-            "Conceptual Similarity",
-            "Strict Medical Terms",
+            "Medical Focus",
+            "Symptom/Impact Focus",
             "Custom"
         ],
         help="Choose a search strategy:\n"
              "• Balanced: General-purpose search across all factors\n"
-             "• Medical Diagnosis: Find exact/similar medical diagnoses\n"
-             "• Symptoms & Impact: Search by functional limitations and symptoms\n"
-             "• Conceptual Similarity: Find cases with similar circumstances\n"
-             "• Strict Medical Terms: Precise medical terminology only\n"
+             "• Medical Focus: Prioritize medical diagnoses and terminology\n"
+             "• Symptom/Impact: Focus on functional limitations and symptoms\n"
              "• Custom: Manual weight adjustment"
     )
 
@@ -569,35 +577,21 @@ with st.sidebar:
             "keyword": 0.35,
             "semantic": 0.15,
             "meta": 0.10,
-            "description": "Balanced search across all factors - good starting point"
+            "description": "Balanced search across all factors - good starting point for most searches"
         },
-        "Medical Diagnosis Match": {
-            "injury_embedding": 0.55,
-            "keyword": 0.25,
+        "Medical Focus": {
+            "injury_embedding": 0.65,
+            "keyword": 0.20,
             "semantic": 0.10,
-            "meta": 0.10,
-            "description": "Prioritizes medical injury matching - best for specific diagnoses like 'diffuse axonal injury', 'herniated disc L4-L5'"
+            "meta": 0.05,
+            "description": "Emphasizes medical injury matching and terminology - best for specific diagnoses like 'C5-C6 disc herniation' or 'diffuse axonal injury'"
         },
-        "Symptoms & Impact Search": {
+        "Symptom/Impact Focus": {
             "injury_embedding": 0.15,
             "keyword": 0.60,
             "semantic": 0.15,
             "meta": 0.10,
-            "description": "Keyword-focused for narrative descriptions - best for 'chronic pain affecting daily activities', 'unable to work'"
-        },
-        "Conceptual Similarity": {
-            "injury_embedding": 0.25,
-            "keyword": 0.15,
-            "semantic": 0.50,
-            "meta": 0.10,
-            "description": "Finds conceptually similar cases - best for 'young athlete with career-ending injury', 'elderly fall victim'"
-        },
-        "Strict Medical Terms": {
-            "injury_embedding": 0.75,
-            "keyword": 0.10,
-            "semantic": 0.05,
-            "meta": 0.10,
-            "description": "Precise medical terminology only - best for finding exact injury matches with minimal noise"
+            "description": "Keyword-focused for narrative descriptions - best for functional limitations like 'chronic pain affecting daily activities' or 'unable to return to work'"
         }
     }
 
@@ -688,6 +682,10 @@ with tab1:
             st.warning("⚠️ Please enter an injury description")
         else:
             with st.spinner("Searching comparable cases..."):
+                # Apply outlier filtering if requested - get more results first
+                # Get 3x the requested results to have enough data for outlier filtering
+                search_n = num_results * 3 if not include_outliers else num_results
+
                 # Get search results (no minimum threshold - user sees all results)
                 results = search_cases(
                     injury_text,
@@ -697,7 +695,7 @@ with tab1:
                     model,
                     gender=gender if gender != "Not Specified" else None,
                     age=age,
-                    top_n=num_results,
+                    top_n=search_n,
                     semantic_weight=semantic_weight,
                     keyword_weight=keyword_weight,
                     meta_weight=meta_weight,
@@ -705,13 +703,15 @@ with tab1:
                 )
 
                 # Apply outlier filtering if requested
-                if not include_outliers:
+                if not include_outliers and len(results) > 4:
                     result_cases = [case for case, _, _ in results]
                     filtered_cases = filter_outliers(result_cases)
                     # Rebuild results with only non-outlier cases
                     filtered_case_ids = {case.get('id') for case in filtered_cases}
                     results = [(case, emb_sim, score) for case, emb_sim, score in results
                                if case.get('id') in filtered_case_ids]
+                    # Trim to requested number
+                    results = results[:num_results]
 
             # Store results in session state
             st.session_state.search_results = {
@@ -723,6 +723,9 @@ with tab1:
                 'num_results': num_results,
                 'timestamp': datetime.now()
             }
+
+            # Clear dismissed cases for new search
+            st.session_state.dismissed_cases = set()
 
             st.divider()
             st.header("Search Results")
@@ -800,10 +803,17 @@ with tab1:
 
             st.divider()
 
-            # Display individual cases
-            st.subheader(f"Top {len(results)} Comparable Cases")
+            # Filter out dismissed cases
+            active_results = [(case, emb_sim, score) for case, emb_sim, score in results
+                            if case.get('id') not in st.session_state.dismissed_cases]
 
-            for idx, (case, emb_sim, combined_score) in enumerate(results, 1):
+            # Display individual cases
+            st.subheader(f"Top {len(active_results)} Comparable Cases")
+
+            if len(st.session_state.dismissed_cases) > 0:
+                st.caption(f"💡 {len(st.session_state.dismissed_cases)} case(s) dismissed. Click 'Find Comparable Cases' again to see more results.")
+
+            for idx, (case, emb_sim, combined_score) in enumerate(active_results, 1):
                 # Build expander title with multi-plaintiff indicator and award amount
                 extended_data = case.get('extended_data', {})
                 num_plaintiffs = extended_data.get('num_plaintiffs', 0)
@@ -819,6 +829,11 @@ with tab1:
                     f"Match: {combined_score*100:.1f}%",
                     expanded=(idx <= EXPANDED_RESULTS_COUNT)
                 ):
+                    # Add dismiss button at the top
+                    if st.button("✕ Dismiss this case", key=f"dismiss_{case.get('id')}_{idx}", type="secondary"):
+                        st.session_state.dismissed_cases.add(case.get('id'))
+                        st.rerun()
+
                     col1, col2 = st.columns([2, 1])
 
                     with col1:
