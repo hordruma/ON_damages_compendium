@@ -30,7 +30,17 @@ env/
 .ipynb_checkpoints
 
 # Data files
+*.db
+*.csv
+compendium_parsed*.json
+damages_full.json
+damages_table_based.json
+test_output.json
+parsing_checkpoint.json
 
+# Debug/test notebooks
+debug_*.ipynb
+test_*.ipynb
 
 # Environment variables
 .env
