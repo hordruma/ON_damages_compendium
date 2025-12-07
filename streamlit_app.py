@@ -146,8 +146,13 @@ model, cases, region_map = initialize_data()
 # HELPER FUNCTIONS
 # =============================================================================
 
-def display_enhanced_data(case: Dict) -> None:
-    """Display enhanced AI-parsed data if available."""
+def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
+    """Display enhanced AI-parsed data if available.
+
+    Args:
+        case: Case dictionary
+        show_fla: Whether to display Family Law Act claims section
+    """
     extended_data = case.get('extended_data')
     if not extended_data:
         return
@@ -211,9 +216,9 @@ def display_enhanced_data(case: Dict) -> None:
             else:
                 st.markdown(f"- {damage_type}" + (f": {desc}" if desc else ""))
 
-    # Family Law Act claims
+    # Family Law Act claims - only show if show_fla is True
     fla_claims = extended_data.get('family_law_act_claims')
-    if fla_claims:
+    if show_fla and fla_claims:
         st.markdown("**Family Law Act Claims:**")
         for claim in fla_claims:
             relationship = claim.get('relationship', 'FLA claim')
@@ -388,6 +393,14 @@ with tab1:
     st.markdown("#### Case Characteristics (Optional)")
     st.caption("Additional filters for case characteristics")
 
+    # FLA display toggle
+    show_fla = st.checkbox(
+        "Show Family Law Act claims",
+        value=False,
+        help="When checked, Family Law Act claims (spouse, children, etc.) will be displayed in case results. When unchecked, FLA claims are hidden from the display.",
+        key="show_fla_claims"
+    )
+
     # Load compendium regions for status filters
     status_filters = {}
     compendium_regions_for_status = None
@@ -430,6 +443,16 @@ with tab1:
 
 with st.sidebar:
     st.header("Search Parameters")
+
+    # Outliers filter - at the top for visibility
+    include_outliers = st.checkbox(
+        "Include statistical outliers",
+        value=True,
+        help="Include outliers (very high or very low awards). When unchecked, cases outside 1.5×IQR are excluded for more accurate statistics. Applies to Case Search, Judge Analytics, and Category Statistics.",
+        key="include_outliers_global"
+    )
+
+    st.divider()
 
     # Demographics - back in sidebar for better organization
     st.subheader("Demographics")
@@ -523,16 +546,6 @@ with st.sidebar:
 
             except Exception as e:
                 st.error(f"Failed to update CPI data: {e}")
-
-    st.divider()
-
-    # Outliers filter - applies to all tabs
-    include_outliers = st.checkbox(
-        "Include statistical outliers",
-        value=False,
-        help="Include outliers (very high or very low awards). When unchecked, cases outside 1.5×IQR are excluded for more accurate statistics. Applies to Case Search, Judge Analytics, and Category Statistics.",
-        key="include_outliers_global"
-    )
 
     st.divider()
 
@@ -727,138 +740,145 @@ with tab1:
             # Clear dismissed cases for new search
             st.session_state.dismissed_cases = set()
 
+    # =============================================================================
+    # DISPLAY SEARCH RESULTS (runs on every page load if results exist)
+    # =============================================================================
+
+    if st.session_state.search_results:
+        results = st.session_state.search_results['results']
+
+        st.divider()
+        st.header("Search Results")
+
+        # Display search info
+        st.info(f"🔍 Showing {len(results)} comparable cases (sorted by relevance)")
+
+        # Extract damages for charts
+        damages_values = []
+        for case, emb_sim, combined_score in results:
+            damage_val = extract_damages_value(case)
+            if damage_val:
+                damages_values.append(damage_val)
+
+        # Charts Section (min/med/max shown in cap chart below)
+        if damages_values and len(results) > 0:
             st.divider()
-            st.header("Search Results")
 
-            # Display search info
-            st.info(f"🔍 Showing {len(results)} comparable cases (sorted by relevance)")
-
-            # Extract damages for charts
-            damages_values = []
-            for case, emb_sim, combined_score in results:
-                damage_val = extract_damages_value(case)
-                if damage_val:
-                    damages_values.append(damage_val)
-
-            # Charts Section (min/med/max shown in cap chart below)
-            if damages_values and len(results) > 0:
-                st.divider()
-
-                # Damages Cap Comparison Chart
-                st.subheader("📊 Awards Relative to Ontario Damages Cap")
-                cap_fig = create_damages_cap_chart(damages_values, DEFAULT_REFERENCE_YEAR)
-                if cap_fig:
-                    st.plotly_chart(cap_fig, use_container_width=True)
-                    st.caption("💡 Bars are colored based on their proportion to the Ontario non-pecuniary damages cap")
-
-                st.divider()
-
-                # Inflation-Adjusted Timeline Chart
-                st.subheader("📈 Inflation-Adjusted Award Timeline")
-
-                fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
-
-                if fig:
-                    st.plotly_chart(fig, use_container_width=True)
-
-                    # Calculate and display statistics
-                    chart_data = []
-                    for case, emb_sim, combined_score in results[:CHART_MAX_CASES]:
-                        damage_val = extract_damages_value(case)
-                        year = case.get('year')
-                        if damage_val and year:
-                            from inflation_adjuster import adjust_for_inflation
-                            adjusted_val = adjust_for_inflation(damage_val, year, DEFAULT_REFERENCE_YEAR)
-                            if adjusted_val:
-                                chart_data.append({
-                                    'original_award': damage_val,
-                                    'adjusted_award': adjusted_val
-                                })
-
-                    if chart_data:
-                        stats = calculate_chart_statistics(chart_data)
-
-                        col1, col2 = st.columns(2)
-
-                        with col1:
-                            st.metric(
-                                f"Median Award ({DEFAULT_REFERENCE_YEAR}$)",
-                                f"${stats['median_adjusted']:,.0f}",
-                                help=f"Median of all awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
-                            )
-
-                        with col2:
-                            st.metric(
-                                "Avg. Inflation Impact",
-                                f"+{stats['avg_inflation_impact']:.1f}%",
-                                help="Average percentage increase from original award year to current dollars"
-                            )
-
-                        st.caption(
-                            f"💡 All awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
-                            "Canadian CPI. Original amounts are not shown as they are not comparable across different years."
-                        )
-                else:
-                    st.info("Inflation adjustment requires case year information. Some cases may not have dates.")
+            # Damages Cap Comparison Chart
+            st.subheader("📊 Awards Relative to Ontario Damages Cap")
+            cap_fig = create_damages_cap_chart(damages_values, DEFAULT_REFERENCE_YEAR)
+            if cap_fig:
+                st.plotly_chart(cap_fig, use_container_width=True)
+                st.caption("💡 Bars are colored based on their proportion to the Ontario non-pecuniary damages cap")
 
             st.divider()
 
-            # Filter out dismissed cases
-            active_results = [(case, emb_sim, score) for case, emb_sim, score in results
-                            if case.get('id') not in st.session_state.dismissed_cases]
+            # Inflation-Adjusted Timeline Chart
+            st.subheader("📈 Inflation-Adjusted Award Timeline")
 
-            # Display individual cases
-            st.subheader(f"Top {len(active_results)} Comparable Cases")
+            fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
 
-            if len(st.session_state.dismissed_cases) > 0:
-                st.caption(f"💡 {len(st.session_state.dismissed_cases)} case(s) dismissed. Click 'Find Comparable Cases' again to see more results.")
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
 
-            for idx, (case, emb_sim, combined_score) in enumerate(active_results, 1):
-                # Build expander title with multi-plaintiff indicator and award amount
-                extended_data = case.get('extended_data', {})
-                num_plaintiffs = extended_data.get('num_plaintiffs', 0)
-                title_suffix = f" [P{extended_data.get('plaintiff_id', '')}]" if num_plaintiffs > 1 else ""
+                # Calculate and display statistics
+                chart_data = []
+                for case, emb_sim, combined_score in results[:CHART_MAX_CASES]:
+                    damage_val = extract_damages_value(case)
+                    year = case.get('year')
+                    if damage_val and year:
+                        from inflation_adjuster import adjust_for_inflation
+                        adjusted_val = adjust_for_inflation(damage_val, year, DEFAULT_REFERENCE_YEAR)
+                        if adjusted_val:
+                            chart_data.append({
+                                'original_award': damage_val,
+                                'adjusted_award': adjusted_val
+                            })
 
-                # Get damage value for expander title
-                damage_val = extract_damages_value(case)
-                damage_display = f" | Award: ${damage_val:,.0f}" if damage_val else ""
+                if chart_data:
+                    stats = calculate_chart_statistics(chart_data)
 
-                with st.expander(
-                    f"**Case {idx}** - {case.get('case_name', 'Unknown')}{title_suffix} | "
-                    f"Category: {case.get('region', 'Unknown')}{damage_display} | "
-                    f"Match: {combined_score*100:.1f}%",
-                    expanded=(idx <= EXPANDED_RESULTS_COUNT)
-                ):
-                    # Add dismiss button at the top
-                    if st.button("✕ Dismiss this case", key=f"dismiss_{case.get('id')}_{idx}", type="secondary"):
-                        st.session_state.dismissed_cases.add(case.get('id'))
-                        st.rerun()
-
-                    col1, col2 = st.columns([2, 1])
+                    col1, col2 = st.columns(2)
 
                     with col1:
-                        st.markdown(f"**Category:** {case.get('region', 'Unknown')}")
-
-                        if case.get('year'):
-                            st.markdown(f"**Year:** {case['year']}")
-
-                        if case.get('court'):
-                            st.markdown(f"**Court:** {case['court']}")
-
-                        if damage_val:
-                            st.markdown(f"**Damages:** ${damage_val:,.0f}")
-
-                        # Summary paragraph removed - pertinent info shown in enhanced data below
-
-                        # Display enhanced AI-parsed data
-                        st.divider()
-                        display_enhanced_data(case)
+                        st.metric(
+                            f"Median Award ({DEFAULT_REFERENCE_YEAR}$)",
+                            f"${stats['median_adjusted']:,.0f}",
+                            help=f"Median of all awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
+                        )
 
                     with col2:
-                        st.metric("Match Score", f"{combined_score*100:.1f}%", help="Overall similarity based on injury description and categories")
+                        st.metric(
+                            "Avg. Inflation Impact",
+                            f"+{stats['avg_inflation_impact']:.1f}%",
+                            help="Average percentage increase from original award year to current dollars"
+                        )
 
-                        if case.get("region_score", 0) > 0:
-                            st.metric("Category Match", f"{case['region_score']*100:.0f}%")
+                    st.caption(
+                        f"💡 All awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
+                        "Canadian CPI. Original amounts are not shown as they are not comparable across different years."
+                    )
+            else:
+                st.info("Inflation adjustment requires case year information. Some cases may not have dates.")
+
+        st.divider()
+
+        # Filter out dismissed cases
+        active_results = [(case, emb_sim, score) for case, emb_sim, score in results
+                        if case.get('id') not in st.session_state.dismissed_cases]
+
+        # Display individual cases
+        st.subheader(f"Top {len(active_results)} Comparable Cases")
+
+        if len(st.session_state.dismissed_cases) > 0:
+            st.caption(f"💡 {len(st.session_state.dismissed_cases)} case(s) dismissed. Click 'Find Comparable Cases' again to see more results.")
+
+        for idx, (case, emb_sim, combined_score) in enumerate(active_results, 1):
+            # Build expander title with multi-plaintiff indicator and award amount
+            extended_data = case.get('extended_data', {})
+            num_plaintiffs = extended_data.get('num_plaintiffs', 0)
+            title_suffix = f" [P{extended_data.get('plaintiff_id', '')}]" if num_plaintiffs > 1 else ""
+
+            # Get damage value for expander title
+            damage_val = extract_damages_value(case)
+            damage_display = f" | Award: ${damage_val:,.0f}" if damage_val else ""
+
+            with st.expander(
+                f"**Case {idx}** - {case.get('case_name', 'Unknown')}{title_suffix} | "
+                f"Category: {case.get('region', 'Unknown')}{damage_display} | "
+                f"Match: {combined_score*100:.1f}%",
+                expanded=(idx <= EXPANDED_RESULTS_COUNT)
+            ):
+                # Add dismiss button at the top
+                if st.button("✕ Dismiss this case", key=f"dismiss_{case.get('id')}_{idx}", type="secondary"):
+                    st.session_state.dismissed_cases.add(case.get('id'))
+                    st.rerun()
+
+                col1, col2 = st.columns([2, 1])
+
+                with col1:
+                    st.markdown(f"**Category:** {case.get('region', 'Unknown')}")
+
+                    if case.get('year'):
+                        st.markdown(f"**Year:** {case['year']}")
+
+                    if case.get('court'):
+                        st.markdown(f"**Court:** {case['court']}")
+
+                    if damage_val:
+                        st.markdown(f"**Damages:** ${damage_val:,.0f}")
+
+                    # Summary paragraph removed - pertinent info shown in enhanced data below
+
+                    # Display enhanced AI-parsed data
+                    st.divider()
+                    display_enhanced_data(case, show_fla=show_fla)
+
+                with col2:
+                    st.metric("Match Score", f"{combined_score*100:.1f}%", help="Overall similarity based on injury description and categories")
+
+                    if case.get("region_score", 0) > 0:
+                        st.metric("Category Match", f"{case['region_score']*100:.0f}%")
 
     # =============================================================================
     # PDF REPORT GENERATION
@@ -1052,13 +1072,15 @@ with tab4:
             )
             min_year, max_year = year_range
 
-    # Sidebar filters
-    with st.sidebar:
-        st.header("Boolean Search Filters")
+    # Additional filters section
+    st.subheader("🔍 Additional Filters (Optional)")
 
+    col1, col2 = st.columns(2)
+
+    with col1:
         # Category filter
         bool_selected_regions = []
-        with st.expander("🎯 Injury Categories (Optional)", expanded=False):
+        with st.expander("🎯 Injury Categories", expanded=False):
             if region_map:
                 for category_id, category_data in region_map.items():
                     if st.checkbox(
@@ -1073,26 +1095,27 @@ with tab4:
                         if subcats:
                             bool_selected_regions.extend(subcats)
 
+    with col2:
         # Demographics
-        st.subheader("👤 Demographics (Optional)")
-        bool_gender = st.selectbox(
-            "Gender",
-            options=["Any", "Male", "Female"],
-            key="bool_gender"
-        )
-        if bool_gender == "Any":
-            bool_gender = None
-
-        bool_use_age = st.checkbox("Filter by age", key="bool_use_age")
-        bool_age = None
-        if bool_use_age:
-            bool_age = st.slider(
-                "Age (±5 years)",
-                min_value=0,
-                max_value=100,
-                value=40,
-                key="bool_age"
+        with st.expander("👤 Demographics", expanded=False):
+            bool_gender = st.selectbox(
+                "Gender",
+                options=["Any", "Male", "Female"],
+                key="bool_gender"
             )
+            if bool_gender == "Any":
+                bool_gender = None
+
+            bool_use_age = st.checkbox("Filter by age", key="bool_use_age")
+            bool_age = None
+            if bool_use_age:
+                bool_age = st.slider(
+                    "Age (±5 years)",
+                    min_value=0,
+                    max_value=100,
+                    value=40,
+                    key="bool_age"
+                )
 
     # Search button
     if st.button("🔍 Search Cases", type="primary", key="bool_search_btn"):

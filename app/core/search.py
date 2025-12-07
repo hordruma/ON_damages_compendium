@@ -297,19 +297,128 @@ def _keyword_search_score(query_text: str, case: Dict[str, Any]) -> float:
     return normalized
 
 
+def _compute_severity_score(text: str) -> float:
+    """
+    Compute injury severity score from text (0.0 = mild, 1.0 = catastrophic).
+
+    Analyzes severity indicators in injury descriptions and comments to classify
+    injury severity on a continuous scale. This helps match mild injuries with mild
+    injuries and severe with severe.
+
+    Args:
+        text: Combined text from injuries and comments
+
+    Returns:
+        Severity score from 0.0 (mild) to 1.0 (catastrophic)
+    """
+    if not text:
+        return 0.5  # Neutral if no text
+
+    text_lower = text.lower()
+
+    # Catastrophic indicators (score: 0.9-1.0)
+    catastrophic_terms = [
+        'quadriplegia', 'tetraplegia', 'paraplegia',
+        'catastrophic', 'total disability', 'permanent vegetative',
+        'complete loss', 'severe permanent', 'brain death',
+        'locked-in', 'locked in'
+    ]
+
+    # Severe indicators (score: 0.7-0.85)
+    severe_terms = [
+        'severe', 'permanent', 'chronic pain', 'total loss',
+        'unable to work', 'cannot work', 'disability pension',
+        'long-term care', 'wheelchair', 'amputation',
+        'traumatic brain injury', ' tbi ', 'diffuse axonal',
+        'spinal cord', 'irreversible', 'degenerative'
+    ]
+
+    # Moderate indicators (score: 0.4-0.6)
+    moderate_terms = [
+        'moderate', 'ongoing', 'partial', 'reduced capacity',
+        'chronic', 'persistent', 'limitations', 'restricted',
+        'accommodation', 'modified duties'
+    ]
+
+    # Mild indicators (score: 0.1-0.3)
+    mild_terms = [
+        'mild', 'minor', 'temporary', 'resolved', 'full recovery',
+        'complete recovery', 'returned to work', 'no permanent',
+        'soft tissue', 'whiplash', 'mtbi', 'mild traumatic',
+        'concussion', 'strain', 'sprain', 'bruising'
+    ]
+
+    # Count matches
+    catastrophic_count = sum(1 for term in catastrophic_terms if term in text_lower)
+    severe_count = sum(1 for term in severe_terms if term in text_lower)
+    moderate_count = sum(1 for term in moderate_terms if term in text_lower)
+    mild_count = sum(1 for term in mild_terms if term in text_lower)
+
+    # Determine severity tier (hierarchical - catastrophic > severe > moderate > mild)
+    if catastrophic_count > 0:
+        return 1.0
+    elif severe_count > 0:
+        # Scale based on number of severe indicators
+        return min(0.7 + (severe_count * 0.05), 0.9)
+    elif moderate_count > 0:
+        return 0.5
+    elif mild_count > 0:
+        # Scale based on number of mild indicators
+        return max(0.1, 0.3 - (mild_count * 0.05))
+    else:
+        # No clear severity indicators
+        return 0.5  # Neutral
+
+
+def _severity_proximity_score(case_severity: float, query_severity: float) -> float:
+    """
+    Score severity proximity: closer severities get higher scores.
+
+    This ensures mild injuries (MTBI, concussion) match with other mild injuries,
+    and severe injuries (paraplegia) match with other severe injuries.
+
+    Args:
+        case_severity: Severity score of the case (0.0-1.0)
+        query_severity: Severity score of the query (0.0-1.0)
+
+    Returns:
+        Proximity score (0.0-1.0), higher if severities are similar
+    """
+    # Calculate absolute difference
+    diff = abs(case_severity - query_severity)
+
+    # Convert to similarity (0 diff = 1.0 score, 1.0 diff = 0.0 score)
+    # Use exponential decay for stronger penalty on large differences
+    similarity = math.exp(-3 * diff)  # e^(-3*diff)
+
+    return similarity
+
+
 def compute_meta_score(
     case: Dict[str, Any],
     query_injuries: List[str],
     query_gender: Optional[str],
-    query_age: Optional[int]
+    query_age: Optional[int],
+    query_text: Optional[str] = None
 ) -> float:
     """
-    Compute meta_score from injury overlap, gender match, and age proximity.
+    Compute meta_score from injury overlap, gender match, age proximity, and severity match.
 
     Weights:
-    - Injury overlap: 0.7
-    - Gender match: 0.15
-    - Age proximity: 0.15
+    - Injury overlap: 0.6
+    - Severity proximity: 0.2 (NEW - helps mild match with mild, severe with severe)
+    - Gender match: 0.1
+    - Age proximity: 0.1
+
+    Args:
+        case: Case dictionary
+        query_injuries: List of query injury terms
+        query_gender: Query gender filter
+        query_age: Query age filter
+        query_text: Original query text for severity analysis
+
+    Returns:
+        Combined meta score (0.0-1.0)
     """
     inj_score = _injury_overlap_score(
         case.get("extended_data", {}).get("injuries", []) or [],
@@ -324,7 +433,27 @@ def compute_meta_score(
         query_age
     )
 
-    combined = (0.7 * inj_score) + (0.15 * gender_score) + (0.15 * age_score)
+    # NEW: Severity matching
+    severity_score = 0.5  # Default neutral
+    if query_text:
+        # Compute query severity from input text
+        query_severity = _compute_severity_score(query_text)
+
+        # Compute case severity from injuries and comments
+        case_injuries_text = ' '.join(case.get("extended_data", {}).get("injuries", []))
+        case_comments = case.get("extended_data", {}).get("comments") or case.get("comments") or ""
+        case_text = f"{case_injuries_text} {case_comments}"
+        case_severity = _compute_severity_score(case_text)
+
+        # Score based on severity proximity
+        severity_score = _severity_proximity_score(case_severity, query_severity)
+
+    combined = (
+        0.6 * inj_score +
+        0.2 * severity_score +
+        0.1 * gender_score +
+        0.1 * age_score
+    )
     return min(max(combined, 0.0), 1.0)
 
 
@@ -528,8 +657,8 @@ def search_cases(
         # Keyword score from BM25
         keyword_score = _keyword_search_score(query_text, case)
 
-        # Metadata score
-        meta_score = compute_meta_score(case, query_injuries, gender, age)
+        # Metadata score (includes severity matching)
+        meta_score = compute_meta_score(case, query_injuries, gender, age, query_text=query_text)
 
         # Combine all four scores with adjusted weights
         # Injury matching is purely embedding-based (no string matching)
