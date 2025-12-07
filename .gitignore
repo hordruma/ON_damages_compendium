@@ -29,8 +29,17 @@ env/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Data files
+# Intermediate/generated files (root level only)
+/cases.db
+/compendium_parsed*.json
+/damages_full.json
+/damages_table_based.json
+/test_output.json
+/parsing_checkpoint.json
 
+# Debug/test notebooks
+debug_*.ipynb
+test_*.ipynb
 
 # Environment variables
 .env
