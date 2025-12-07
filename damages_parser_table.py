@@ -295,16 +295,19 @@ CRITICAL RULES:
 
     def _call_api(self, prompt: str, max_retries: int = 3, use_tools: bool = True) -> Optional[Dict[str, Any]]:
         """
-        Call Azure API with retry logic and optional tool calling.
+        Call Azure API with tool calling support.
 
         Args:
             prompt: The prompt text
             max_retries: Number of retry attempts
-            use_tools: Whether to use function calling (default True)
+            use_tools: Whether to use function calling (must be True)
 
         Returns:
-            Dict with either 'content' or 'tool_call' key, or None on error
+            Dict with 'tool_call' key containing extracted data, or None on error
         """
+        if not use_tools:
+            raise ValueError("Tool calling is required - old models without tool support are not supported")
+
         if self.rate_limiter:
             self.rate_limiter.wait_if_needed()
 
@@ -322,12 +325,9 @@ CRITICAL RULES:
         payload = {
             "messages": [{"role": "user", "content": prompt}],
             "temperature": self.temperature,
+            "tools": [self.CASE_EXTRACTION_TOOL],
+            "tool_choice": {"type": "function", "function": {"name": "extract_case_row"}}
         }
-
-        # Add tool calling if requested
-        if use_tools:
-            payload["tools"] = [self.CASE_EXTRACTION_TOOL]
-            payload["tool_choice"] = {"type": "function", "function": {"name": "extract_case_row"}}
 
         if self.uses_max_completion_tokens:
             payload["max_completion_tokens"] = 2048
@@ -344,7 +344,7 @@ CRITICAL RULES:
                         choice = result["choices"][0]
                         message = choice.get("message", {})
 
-                        # Check for tool call
+                        # Extract tool call
                         if "tool_calls" in message and len(message["tool_calls"]) > 0:
                             tool_call = message["tool_calls"][0]
                             if tool_call.get("type") == "function":
@@ -352,10 +352,8 @@ CRITICAL RULES:
                                 import json
                                 return {"tool_call": json.loads(function_args)}
 
-                        # Fallback to regular content
-                        if "content" in message:
-                            return {"content": message["content"]}
-
+                    if self.verbose:
+                        print(f"  No tool call in response")
                     return None
 
                 elif response.status_code == 429:
@@ -831,44 +829,20 @@ CRITICAL RULES:
 
         api_response = self._call_api(prompt, use_tools=True)
 
-        if api_response:
-            # Handle tool call response (preferred)
-            if "tool_call" in api_response:
-                data = api_response["tool_call"]
-                data['source_page'] = page_number
-                data['category'] = section
-                data['region'] = [section] if section else []
+        if api_response and "tool_call" in api_response:
+            data = api_response["tool_call"]
+            data['source_page'] = page_number
+            data['category'] = section
+            data['region'] = [section] if section else []
 
-                # Normalize judge name to last name only
-                if data.get('judge'):
-                    data['judge'] = self.normalize_judge_name(data['judge'])
+            # Normalize judge name to last name only
+            if data.get('judge'):
+                data['judge'] = self.normalize_judge_name(data['judge'])
 
-                return data
+            return data
 
-            # Fallback: Handle regular text response with JSON
-            elif "content" in api_response:
-                response_text = api_response["content"]
-                # Extract JSON from response
-                json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
-                if json_match:
-                    response_text = json_match.group(1)
-
-                try:
-                    data = json.loads(response_text)
-                    data['source_page'] = page_number
-                    data['category'] = section
-                    data['region'] = [section] if section else []
-
-                    # Normalize judge name to last name only
-                    if data.get('judge'):
-                        data['judge'] = self.normalize_judge_name(data['judge'])
-
-                    return data
-                except json.JSONDecodeError as e:
-                    if self.verbose:
-                        print(f"  JSON parse error: {e}")
-                    return None
-
+        if self.verbose:
+            print(f"  No tool call response received")
         return None
 
     def merge_continuation_row(self, case: Dict[str, Any], row_data: Dict[str, Any]) -> None:
