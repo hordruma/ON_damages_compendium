@@ -879,11 +879,15 @@ CRITICAL RULES:
 
         # Merge other_damages
         if row_data.get('other_damages'):
-            case.setdefault('other_damages', []).extend(row_data['other_damages'])
+            if not isinstance(case.get('other_damages'), list):
+                case['other_damages'] = []
+            case['other_damages'].extend(row_data['other_damages'])
 
         # Merge family_law_act_claims
         if row_data.get('family_law_act_claims'):
-            case.setdefault('family_law_act_claims', []).extend(row_data['family_law_act_claims'])
+            if not isinstance(case.get('family_law_act_claims'), list):
+                case['family_law_act_claims'] = []
+            case['family_law_act_claims'].extend(row_data['family_law_act_claims'])
 
         # Merge plaintiffs array
         if row_data.get('plaintiffs'):
