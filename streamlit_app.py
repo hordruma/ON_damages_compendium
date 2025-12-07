@@ -431,6 +431,24 @@ with tab1:
 with st.sidebar:
     st.header("Search Parameters")
 
+    # Outliers filter - at the top for visibility
+    include_outliers = st.checkbox(
+        "Include statistical outliers",
+        value=True,
+        help="Include outliers (very high or very low awards). When unchecked, cases outside 1.5×IQR are excluded for more accurate statistics. Applies to Case Search, Judge Analytics, and Category Statistics.",
+        key="include_outliers_global"
+    )
+
+    # FLA case filter - exclude by default
+    include_fla = st.checkbox(
+        "Include Family Law Act cases",
+        value=False,
+        help="Include Family Law Act damages cases. When unchecked, cases that only have FLA claims (spouse, children, etc.) are excluded from search results.",
+        key="include_fla_cases"
+    )
+
+    st.divider()
+
     # Demographics - back in sidebar for better organization
     st.subheader("Demographics")
     gender = st.radio("Gender:", ["Male", "Female", "Not Specified"], index=2, horizontal=False)
@@ -523,16 +541,6 @@ with st.sidebar:
 
             except Exception as e:
                 st.error(f"Failed to update CPI data: {e}")
-
-    st.divider()
-
-    # Outliers filter - applies to all tabs
-    include_outliers = st.checkbox(
-        "Include statistical outliers",
-        value=False,
-        help="Include outliers (very high or very low awards). When unchecked, cases outside 1.5×IQR are excluded for more accurate statistics. Applies to Case Search, Judge Analytics, and Category Statistics.",
-        key="include_outliers_global"
-    )
 
     st.divider()
 
@@ -699,7 +707,8 @@ with tab1:
                     semantic_weight=semantic_weight,
                     keyword_weight=keyword_weight,
                     meta_weight=meta_weight,
-                    injury_embedding_weight=injury_embedding_weight
+                    injury_embedding_weight=injury_embedding_weight,
+                    include_fla=include_fla
                 )
 
                 # Apply outlier filtering if requested

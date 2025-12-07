@@ -328,6 +328,39 @@ def compute_meta_score(
     return min(max(combined, 0.0), 1.0)
 
 
+def _is_fla_only_case(case: Dict[str, Any]) -> bool:
+    """
+    Check if a case is a Family Law Act only case (no non-pecuniary damages).
+
+    A case is considered FLA-only if:
+    - It has family_law_act_claims, AND
+    - It has no non-pecuniary damages awarded to the plaintiff
+
+    Args:
+        case: Case dictionary
+
+    Returns:
+        True if this is an FLA-only case, False otherwise
+    """
+    ext_data = case.get('extended_data', {})
+    fla_claims = ext_data.get('family_law_act_claims', [])
+
+    # If no FLA claims, it's not an FLA-only case
+    if not fla_claims:
+        return False
+
+    # Check if there's a non-pecuniary damages award
+    non_pec = case.get('non_pecuniary_damages') or ext_data.get('non_pecuniary_damages')
+    damages = case.get('damages')
+
+    # If there's a non-pecuniary award or general damages, it's not FLA-only
+    if non_pec or damages:
+        return False
+
+    # Has FLA claims but no non-pecuniary damages = FLA-only case
+    return True
+
+
 def filter_outliers(
     cases: List[Dict[str, Any]],
     threshold: float = 1.5
@@ -401,7 +434,8 @@ def search_cases(
     semantic_weight: float = 0.15,
     keyword_weight: float = 0.35,
     meta_weight: float = 0.10,
-    injury_embedding_weight: float = 0.40
+    injury_embedding_weight: float = 0.40,
+    include_fla: bool = True
 ) -> List[Tuple[Dict[str, Any], float, float]]:
     """
     Search cases using hybrid search with dual embedding system (embeddings-only for injuries).
@@ -469,6 +503,10 @@ def search_cases(
             row_idx = _ids.index(cid)
         except ValueError:
             # Case ID not found in embedding matrix, skip
+            continue
+
+        # Apply FLA filter if requested
+        if not include_fla and _is_fla_only_case(case):
             continue
 
         # Apply exclusive category filter if categories selected
