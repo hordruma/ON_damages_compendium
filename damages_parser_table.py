@@ -114,6 +114,9 @@ CRITICAL RULES:
    - Use gender-specific terms when clear (son/daughter, father/mother)
    - Mark is_fla_award: false for insurance/subrogation
    - Mark is_fla_award: true for true FLA claims
+   - CRITICAL: Extract Comments field EVEN FOR FLA-ONLY CASES
+   - For FLA cases, comments describe the underlying injury/circumstances (e.g., "No liability", "Alleged medical negligence")
+   - DO NOT leave comments empty if the Comments column has text
 
 5. DATA QUALITY:
    - Parse monetary amounts as numbers only (no $ or commas)
@@ -219,7 +222,7 @@ CRITICAL RULES:
                     },
                     "comments": {
                         "type": ["string", "null"],
-                        "description": "Additional notes about primary plaintiff"
+                        "description": "Additional notes from Comments column. Extract EVEN FOR FLA-ONLY CASES (describes injury/circumstances, liability, causation, etc.)"
                     },
                     "plaintiffs": {
                         "type": ["array", "null"],

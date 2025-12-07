@@ -146,8 +146,13 @@ model, cases, region_map = initialize_data()
 # HELPER FUNCTIONS
 # =============================================================================
 
-def display_enhanced_data(case: Dict) -> None:
-    """Display enhanced AI-parsed data if available."""
+def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
+    """Display enhanced AI-parsed data if available.
+
+    Args:
+        case: Case dictionary
+        show_fla: Whether to display Family Law Act claims section
+    """
     extended_data = case.get('extended_data')
     if not extended_data:
         return
@@ -211,9 +216,9 @@ def display_enhanced_data(case: Dict) -> None:
             else:
                 st.markdown(f"- {damage_type}" + (f": {desc}" if desc else ""))
 
-    # Family Law Act claims
+    # Family Law Act claims - only show if show_fla is True
     fla_claims = extended_data.get('family_law_act_claims')
-    if fla_claims:
+    if show_fla and fla_claims:
         st.markdown("**Family Law Act Claims:**")
         for claim in fla_claims:
             relationship = claim.get('relationship', 'FLA claim')
@@ -388,6 +393,14 @@ with tab1:
     st.markdown("#### Case Characteristics (Optional)")
     st.caption("Additional filters for case characteristics")
 
+    # FLA display toggle
+    show_fla = st.checkbox(
+        "Show Family Law Act claims",
+        value=False,
+        help="When checked, Family Law Act claims (spouse, children, etc.) will be displayed in case results. When unchecked, FLA claims are hidden from the display.",
+        key="show_fla_claims"
+    )
+
     # Load compendium regions for status filters
     status_filters = {}
     compendium_regions_for_status = None
@@ -437,14 +450,6 @@ with st.sidebar:
         value=True,
         help="Include outliers (very high or very low awards). When unchecked, cases outside 1.5×IQR are excluded for more accurate statistics. Applies to Case Search, Judge Analytics, and Category Statistics.",
         key="include_outliers_global"
-    )
-
-    # FLA case filter - exclude by default
-    include_fla = st.checkbox(
-        "Include Family Law Act cases",
-        value=False,
-        help="Include Family Law Act damages cases. When unchecked, cases that only have FLA claims (spouse, children, etc.) are excluded from search results.",
-        key="include_fla_cases"
     )
 
     st.divider()
@@ -707,8 +712,7 @@ with tab1:
                     semantic_weight=semantic_weight,
                     keyword_weight=keyword_weight,
                     meta_weight=meta_weight,
-                    injury_embedding_weight=injury_embedding_weight,
-                    include_fla=include_fla
+                    injury_embedding_weight=injury_embedding_weight
                 )
 
                 # Apply outlier filtering if requested
@@ -861,7 +865,7 @@ with tab1:
 
                         # Display enhanced AI-parsed data
                         st.divider()
-                        display_enhanced_data(case)
+                        display_enhanced_data(case, show_fla=show_fla)
 
                     with col2:
                         st.metric("Match Score", f"{combined_score*100:.1f}%", help="Overall similarity based on injury description and categories")
@@ -1061,13 +1065,15 @@ with tab4:
             )
             min_year, max_year = year_range
 
-    # Sidebar filters
-    with st.sidebar:
-        st.header("Boolean Search Filters")
+    # Additional filters section
+    st.subheader("🔍 Additional Filters (Optional)")
 
+    col1, col2 = st.columns(2)
+
+    with col1:
         # Category filter
         bool_selected_regions = []
-        with st.expander("🎯 Injury Categories (Optional)", expanded=False):
+        with st.expander("🎯 Injury Categories", expanded=False):
             if region_map:
                 for category_id, category_data in region_map.items():
                     if st.checkbox(
@@ -1082,26 +1088,27 @@ with tab4:
                         if subcats:
                             bool_selected_regions.extend(subcats)
 
+    with col2:
         # Demographics
-        st.subheader("👤 Demographics (Optional)")
-        bool_gender = st.selectbox(
-            "Gender",
-            options=["Any", "Male", "Female"],
-            key="bool_gender"
-        )
-        if bool_gender == "Any":
-            bool_gender = None
-
-        bool_use_age = st.checkbox("Filter by age", key="bool_use_age")
-        bool_age = None
-        if bool_use_age:
-            bool_age = st.slider(
-                "Age (±5 years)",
-                min_value=0,
-                max_value=100,
-                value=40,
-                key="bool_age"
+        with st.expander("👤 Demographics", expanded=False):
+            bool_gender = st.selectbox(
+                "Gender",
+                options=["Any", "Male", "Female"],
+                key="bool_gender"
             )
+            if bool_gender == "Any":
+                bool_gender = None
+
+            bool_use_age = st.checkbox("Filter by age", key="bool_use_age")
+            bool_age = None
+            if bool_use_age:
+                bool_age = st.slider(
+                    "Age (±5 years)",
+                    min_value=0,
+                    max_value=100,
+                    value=40,
+                    key="bool_age"
+                )
 
     # Search button
     if st.button("🔍 Search Cases", type="primary", key="bool_search_btn"):
