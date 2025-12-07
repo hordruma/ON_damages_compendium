@@ -83,103 +83,170 @@ class TableBasedParser:
     - Deterministic merging
     """
 
-    # Row parsing prompt - much simpler and cheaper than full-page
+    # Row parsing prompt - uses structured column:value format for better LLM parsing
     ROW_PROMPT = """Parse this table row from a legal damages compendium.
 
-Anatomical Category: {section}
-Table Columns: {columns}
-Row Data: {row_data}
+ANATOMICAL CATEGORY: {section}
 
-Extract the following information and return as JSON:
-{{
-  "case_name": "Full case name (plaintiff v. defendant)" or null,
-  "plaintiff_name": "Plaintiff name only (primary plaintiff, or null if multiple)" or null,
-  "defendant_name": "Defendant name only" or null,
-  "year": year as integer or null,
-  "citation": "Citation string" or null,
-  "court": "SCJ" (for Superior Court of Justice, including ONSC, SCJ, Ont. S.C.J., Superior Court) or "CA" (for Court of Appeal, including ONCA, C.A., Court of Appeal) or null,
-  "judge": "Judge's LAST NAME ONLY (e.g., 'Smith' not 'A. Smith J.'). For appeals with multiple judges, use a list like ['Smith', 'Jones', 'Brown']. Preserve hyphenated surnames (e.g., 'Harrison-Young')" or null,
-  "sex": "M" or "F" or null,
-  "age": age as integer or null,
-  "non_pecuniary_damages": amount in dollars (number, no $ or commas) or null,
-  "is_provisional": true/false or null,
-  "injuries": ["injury1", "injury2"] or [],
-  "other_damages": [{{"type": "future_loss_of_income|past_loss_of_income|cost_of_future_care|housekeeping_capacity|other", "amount": number, "description": "text"}}] or [],
-  "family_law_act_claims": [{{
-    "relationship": "father|mother|parent|spouse|son|daughter|child|brother|sister|sibling|grandfather|grandmother|grandparent|grandchild|unknown",
-    "amount": number,
-    "description": "description text",
-    "is_fla_award": true (false if this is a non-FLA award like subrogation or insurance reimbursement)
-  }}] or [],
-  "comments": "Additional notes about primary plaintiff" or null,
-  "plaintiffs": [{{
-    "plaintiff_id": "p1|p2|p3|etc",
-    "plaintiff_name": "Name of this plaintiff (REQUIRED - do not create plaintiff without a name)",
-    "sex": "M" or "F" or null,
-    "age": age as integer or null,
-    "non_pecuniary_damages": amount or null,
-    "injuries": ["injury1", "injury2"] or [],
-    "comments": "Plaintiff-specific comments"
-  }}] or null (only use if multiple plaintiffs; omit if single plaintiff),
-  "is_continuation": true if this row lacks case_name/citation (continuation of previous case), false otherwise
-}}
+DATA FROM TABLE:
+{row_data_formatted}
+
+Call the extract_case_row function with the parsed data.
 
 CRITICAL RULES:
 
 1. CONTINUATION ROWS:
-   - Set "is_continuation": true ONLY if BOTH case name AND citation are missing/null
+   - Set is_continuation: true ONLY if BOTH case name AND citation are missing/null
    - If there's a case name OR citation, it's a NEW case (is_continuation: false)
-   - Continuation rows usually contain additional damages, injuries, or comments for the previous case
 
 2. INJURY EXTRACTION (MOST IMPORTANT):
-   - ALWAYS extract injuries from the Comments field, even if described narratively
-   - Look for injury descriptions in ALL text fields, not just dedicated injury columns
-   - Extract specific medical conditions, body parts injured, symptoms, and diagnoses
-   - Examples from comments that MUST be extracted as injuries:
-     * "plaintiff's head bounced off the pavement twice" -> ["head injury", "head trauma"]
-     * "soft tissue injuries to neck and back" -> ["soft tissue injury to neck", "soft tissue injury to back"]
-     * "suffered fractures to lumbar spine" -> ["lumbar spine fractures"]
-     * "torn ACL requiring surgery" -> ["ACL tear", "knee surgery required"]
-   - DO NOT leave injuries array empty if there's ANY injury description in comments
-   - For mass casualty cases, copy injury descriptions to all affected plaintiffs if individual details not specified
+   - ALWAYS extract injuries from Comments, even if described narratively
+   - Extract ALL injury descriptions from ANY text field
+   - DO NOT leave injuries array empty if ANY injury description exists
 
 3. MULTI-PLAINTIFF CASES:
-   - Use "plaintiffs" array ONLY when there are truly MULTIPLE distinct plaintiffs
-   - Each plaintiff entry MUST have a name (even if generic like "Plaintiff 2" or "Son")
-   - NEVER create a plaintiff entry without plaintiff_name - omit the entry entirely if no name found
-   - Extract plaintiff-specific injuries by analyzing the comments:
-     * Look for patterns like "P1 suffered X", "plaintiff Mary had Y", "the son injured his Z"
-     * If comments mention "one plaintiff had leg injury, another had arm injury", create separate plaintiffs with respective injuries
-     * If generic description applies to all, copy to all plaintiff entries
-   - Include ALL plaintiffs mentioned in the row, with their specific details
-   - The plaintiffs array should contain p1, p2, p3... for ALL plaintiffs (including primary)
+   - Use plaintiffs array ONLY when truly MULTIPLE distinct plaintiffs
+   - Each plaintiff MUST have a name (even if generic like "Plaintiff 2")
+   - NEVER create plaintiff without plaintiff_name
 
-4. FLA (Family Law Act) Claims - These are SEPARATE from plaintiff injuries:
-   - FLA claims represent awards to FAMILY MEMBERS for loss of care/companionship
-   - DO NOT confuse these with injury types - they are relationship-based claims
-   - Use gender-specific terms when clear: "son"/"daughter", "father"/"mother", "brother"/"sister", "grandfather"/"grandmother"
-   - Use gender-neutral ONLY when unspecified: "child", "parent", "sibling", "grandparent", "grandchild"
-   - Use "unknown" when ONLY a name is provided without relationship context
-   - Handle plurals by creating separate entries: "2 sisters $5000 each" -> two entries with relationship="sister", amount=5000
-   - Mark is_fla_award: false for insurance subrogation, reimbursements, or non-relationship awards
-   - Mark is_fla_award: true for true Family Law Act claims based on familial relationships
+4. FLA Claims:
+   - FLA = Family Law Act claims for family members
+   - Use gender-specific terms when clear (son/daughter, father/mother)
+   - Mark is_fla_award: false for insurance/subrogation
+   - Mark is_fla_award: true for true FLA claims
 
-5. PLAINTIFF-SPECIFIC DETAILS:
-   - If the row mentions specific plaintiffs with specific injuries, extract them separately
-   - Examples:
-     * "Mary (41F) - lumbar fractures; Michael (43M) - minor injuries" -> Create p1 and p2 with respective injuries
-     * "One plaintiff had leg injury ($50k), another had arm injury ($30k)" -> Create p1 and p2 with respective injuries
-     * "Five family members injured; mother most seriously" -> Create separate plaintiffs if details provided
-   - Use contextual clues to assign injuries to specific plaintiffs
-   - If damages amounts differ, there are likely multiple plaintiffs with different injury severities
-
-6. DATA QUALITY:
-   - DO NOT create incomplete plaintiff entries (missing name AND injuries AND damages)
-   - If you cannot extract complete plaintiff information, use top-level fields only (no plaintiffs array)
+5. DATA QUALITY:
    - Parse monetary amounts as numbers only (no $ or commas)
-   - Extract judge LAST NAME ONLY, preserve hyphenated surnames
+   - Extract judge LAST NAME ONLY
+   - Preserve hyphenated surnames (e.g., 'Harrison-Young')
+"""
 
-Return the JSON object:"""
+    # Tool definition for structured extraction
+    CASE_EXTRACTION_TOOL = {
+        "type": "function",
+        "function": {
+            "name": "extract_case_row",
+            "description": "Extract structured case information from a legal damages compendium table row",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "case_name": {
+                        "type": ["string", "null"],
+                        "description": "Full case name (plaintiff v. defendant)"
+                    },
+                    "plaintiff_name": {
+                        "type": ["string", "null"],
+                        "description": "Plaintiff name only (primary plaintiff, or null if multiple)"
+                    },
+                    "defendant_name": {
+                        "type": ["string", "null"],
+                        "description": "Defendant name only"
+                    },
+                    "year": {
+                        "type": ["integer", "null"],
+                        "description": "Year as integer"
+                    },
+                    "citation": {
+                        "type": ["string", "null"],
+                        "description": "Citation string"
+                    },
+                    "court": {
+                        "type": ["string", "null"],
+                        "enum": ["SCJ", "CA", None],
+                        "description": "SCJ for Superior Court of Justice or CA for Court of Appeal"
+                    },
+                    "judge": {
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}},
+                            {"type": "null"}
+                        ],
+                        "description": "Judge's LAST NAME ONLY. For appeals with multiple judges, use array"
+                    },
+                    "sex": {
+                        "type": ["string", "null"],
+                        "enum": ["M", "F", None]
+                    },
+                    "age": {
+                        "type": ["integer", "null"],
+                        "description": "Age as integer"
+                    },
+                    "non_pecuniary_damages": {
+                        "type": ["number", "null"],
+                        "description": "Amount in dollars (number only, no $ or commas)"
+                    },
+                    "is_provisional": {
+                        "type": ["boolean", "null"]
+                    },
+                    "injuries": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of injuries extracted from all text fields"
+                    },
+                    "other_damages": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["future_loss_of_income", "past_loss_of_income", "cost_of_future_care", "housekeeping_capacity", "other"]
+                                },
+                                "amount": {"type": "number"},
+                                "description": {"type": "string"}
+                            },
+                            "required": ["type", "amount"]
+                        }
+                    },
+                    "family_law_act_claims": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "relationship": {
+                                    "type": "string",
+                                    "enum": ["father", "mother", "parent", "spouse", "son", "daughter", "child", "brother", "sister", "sibling", "grandfather", "grandmother", "grandparent", "grandchild", "unknown"]
+                                },
+                                "amount": {"type": "number"},
+                                "description": {"type": "string"},
+                                "is_fla_award": {
+                                    "type": "boolean",
+                                    "description": "true for FLA awards, false for subrogation/insurance"
+                                }
+                            },
+                            "required": ["relationship", "amount", "is_fla_award"]
+                        }
+                    },
+                    "comments": {
+                        "type": ["string", "null"],
+                        "description": "Additional notes about primary plaintiff"
+                    },
+                    "plaintiffs": {
+                        "type": ["array", "null"],
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "plaintiff_id": {"type": "string"},
+                                "plaintiff_name": {"type": "string"},
+                                "sex": {"type": ["string", "null"], "enum": ["M", "F", None]},
+                                "age": {"type": ["integer", "null"]},
+                                "non_pecuniary_damages": {"type": ["number", "null"]},
+                                "injuries": {"type": "array", "items": {"type": "string"}},
+                                "comments": {"type": ["string", "null"]}
+                            },
+                            "required": ["plaintiff_id", "plaintiff_name"]
+                        },
+                        "description": "Only use if multiple plaintiffs; omit if single plaintiff"
+                    },
+                    "is_continuation": {
+                        "type": "boolean",
+                        "description": "true if this row lacks case_name/citation (continuation of previous case)"
+                    }
+                },
+                "required": ["is_continuation"]
+            }
+        }
+    }
 
     def __init__(
         self,
@@ -226,8 +293,18 @@ Return the JSON object:"""
         else:
             self.temperature = 0.1
 
-    def _call_api(self, prompt: str, max_retries: int = 3) -> Optional[str]:
-        """Call Azure API with retry logic."""
+    def _call_api(self, prompt: str, max_retries: int = 3, use_tools: bool = True) -> Optional[Dict[str, Any]]:
+        """
+        Call Azure API with retry logic and optional tool calling.
+
+        Args:
+            prompt: The prompt text
+            max_retries: Number of retry attempts
+            use_tools: Whether to use function calling (default True)
+
+        Returns:
+            Dict with either 'content' or 'tool_call' key, or None on error
+        """
         if self.rate_limiter:
             self.rate_limiter.wait_if_needed()
 
@@ -247,8 +324,13 @@ Return the JSON object:"""
             "temperature": self.temperature,
         }
 
+        # Add tool calling if requested
+        if use_tools:
+            payload["tools"] = [self.CASE_EXTRACTION_TOOL]
+            payload["tool_choice"] = {"type": "function", "function": {"name": "extract_case_row"}}
+
         if self.uses_max_completion_tokens:
-            payload["max_completion_tokens"] = 2048  # Rows are small, don't need much
+            payload["max_completion_tokens"] = 2048
         else:
             payload["max_tokens"] = 2048
 
@@ -259,7 +341,21 @@ Return the JSON object:"""
                 if response.status_code == 200:
                     result = response.json()
                     if "choices" in result and len(result["choices"]) > 0:
-                        return result["choices"][0]["message"]["content"]
+                        choice = result["choices"][0]
+                        message = choice.get("message", {})
+
+                        # Check for tool call
+                        if "tool_calls" in message and len(message["tool_calls"]) > 0:
+                            tool_call = message["tool_calls"][0]
+                            if tool_call.get("type") == "function":
+                                function_args = tool_call.get("function", {}).get("arguments", "{}")
+                                import json
+                                return {"tool_call": json.loads(function_args)}
+
+                        # Fallback to regular content
+                        if "content" in message:
+                            return {"content": message["content"]}
+
                     return None
 
                 elif response.status_code == 429:
@@ -726,38 +822,52 @@ Return the JSON object:"""
         if not row_data:
             return None
 
-        row_data_str = "\n".join(row_data)
-        columns_str = ", ".join(columns)
+        row_data_formatted = "\n".join(row_data)
 
         prompt = self.ROW_PROMPT.format(
             section=section,
-            columns=columns_str,
-            row_data=row_data_str
+            row_data_formatted=row_data_formatted
         )
 
-        response = self._call_api(prompt)
+        api_response = self._call_api(prompt, use_tools=True)
 
-        if response:
-            # Extract JSON from response
-            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
-            if json_match:
-                response = json_match.group(1)
-
-            try:
-                data = json.loads(response)
+        if api_response:
+            # Handle tool call response (preferred)
+            if "tool_call" in api_response:
+                data = api_response["tool_call"]
                 data['source_page'] = page_number
                 data['category'] = section
-                data['region'] = [section] if section else []  # Save section as region too
+                data['region'] = [section] if section else []
 
                 # Normalize judge name to last name only
                 if data.get('judge'):
                     data['judge'] = self.normalize_judge_name(data['judge'])
 
                 return data
-            except json.JSONDecodeError as e:
-                if self.verbose:
-                    print(f"  JSON parse error: {e}")
-                return None
+
+            # Fallback: Handle regular text response with JSON
+            elif "content" in api_response:
+                response_text = api_response["content"]
+                # Extract JSON from response
+                json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+                if json_match:
+                    response_text = json_match.group(1)
+
+                try:
+                    data = json.loads(response_text)
+                    data['source_page'] = page_number
+                    data['category'] = section
+                    data['region'] = [section] if section else []
+
+                    # Normalize judge name to last name only
+                    if data.get('judge'):
+                        data['judge'] = self.normalize_judge_name(data['judge'])
+
+                    return data
+                except json.JSONDecodeError as e:
+                    if self.verbose:
+                        print(f"  JSON parse error: {e}")
+                    return None
 
         return None
 
