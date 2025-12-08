@@ -33,6 +33,7 @@ def get_all_judges(cases: List[Dict[str, Any]]) -> List[str]:
 
     Judge names are normalized by the LLM during parsing to last name only,
     with hyphenated surnames preserved (e.g., "Harrison-Young").
+    Case normalization is applied to handle inconsistencies (e.g., "DOHERTY" vs "Doherty").
 
     Args:
         cases: List of case dictionaries
@@ -47,34 +48,60 @@ def get_all_judges(cases: List[Dict[str, Any]]) -> List[str]:
         if case_judges:
             for judge in case_judges:
                 if judge and judge.strip():
-                    judges.add(judge.strip())
+                    # Normalize to title case for consistency
+                    normalized_judge = judge.strip().title()
+                    judges.add(normalized_judge)
 
     return sorted(list(judges))
 
 
-def get_judge_cases(cases: List[Dict[str, Any]], judge_name: str) -> List[Dict[str, Any]]:
+def get_judge_cases(cases: List[Dict[str, Any]], judge_name: str, deduplicate: bool = True) -> List[Dict[str, Any]]:
     """
     Filter cases decided by a specific judge.
 
     Judge names are already normalized by the LLM during parsing.
+    Case-insensitive matching is used to handle data inconsistencies.
+    By default, deduplicates cases that appear multiple times for different injury regions.
 
     Args:
         cases: List of all cases
         judge_name: Name of the judge to filter by
+        deduplicate: Whether to remove duplicate cases (same case_name + year)
 
     Returns:
         List of cases decided by this judge
     """
     judge_cases = []
+    # Normalize the search name for case-insensitive comparison
+    normalized_search_name = judge_name.strip().title()
+
     for case in cases:
         extended_data = case.get('extended_data', {})
         case_judges = extended_data.get('judges', [])
         if case_judges:
-            # Check if any case judge matches the search name
+            # Check if any case judge matches the search name (case-insensitive)
             for case_judge in case_judges:
-                if case_judge and case_judge.strip() == judge_name:
+                if case_judge and case_judge.strip().title() == normalized_search_name:
                     judge_cases.append(case)
                     break  # Don't add the same case multiple times
+
+    # Deduplicate by case_name + year if requested
+    # Note: We use case_name + year (not case ID) because the same legal case
+    # appears multiple times with different IDs for different injury regions
+    if deduplicate:
+        seen = set()
+        unique_cases = []
+        for case in judge_cases:
+            # Create unique identifier from case_name and year
+            case_name = case.get('case_name', '')
+            year = case.get('year', '')
+            identifier = f"{case_name}|{year}"
+
+            if identifier not in seen:
+                seen.add(identifier)
+                unique_cases.append(case)
+
+        return unique_cases
 
     return judge_cases
 
@@ -368,16 +395,22 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
         judge_cases = get_filtered_judge_cases(judge_name)
         judge_case_counts[judge_name] = len(judge_cases)
 
-    # Create judge options with case counts
-    judge_options = [f"{judge_name} ({judge_case_counts[judge_name]} cases)" for judge_name in all_judges]
+    # Sort judges by case count (descending)
+    judges_by_count = sorted(judge_case_counts.items(), key=lambda x: x[1], reverse=True)
 
-    # Judge selector - now with multi-select (max 8 for legibility)
+    # Create judge options with case counts (sorted by count)
+    judge_options = [f"{judge_name} ({count} cases)" for judge_name, count in judges_by_count]
+
+    # Pre-select top 10 judges by case count (or fewer if less than 10 total)
+    max_preselect = 10
+    default_selections = judge_options[:min(max_preselect, len(judge_options))]
+
+    # Judge selector - now with multi-select
     selected_judge_options = st.multiselect(
         "Select Judge(s) to Compare:",
         options=judge_options,
-        default=[judge_options[0]] if judge_options else [],
-        max_selections=8,
-        help="Choose up to 8 judges to view and compare their award statistics and patterns. Each judge is shown in a different color.",
+        default=default_selections,
+        help=f"Choose judges to view and compare their award statistics and patterns. Top {max_preselect} judges by case count are pre-selected.",
         key="judge_selector"
     )
 

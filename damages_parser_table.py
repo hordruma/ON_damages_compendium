@@ -438,6 +438,11 @@ CRITICAL RULES:
                     last_name = parts[-1]
                     # Clean up any remaining periods
                     last_name = last_name.rstrip('.')
+
+                    # Normalize to title case for consistency
+                    # Handle special cases like "MacKinnon", "O'Brien", "DiTomaso"
+                    last_name = last_name.title()
+
                     return last_name
 
             return ""
