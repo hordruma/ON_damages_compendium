@@ -31,10 +31,16 @@ def load_embedding_model() -> SentenceTransformer:
     Uses Streamlit's cache_resource to avoid reloading the model
     on every interaction. The model persists across reruns.
 
+    IMPORTANT: device='cpu' is explicitly set for Streamlit Cloud compatibility.
+    Streamlit Cloud runs on CPU-only containers. Attempting to auto-detect or
+    use GPU will cause NotImplementedError during model initialization.
+
+    For local embedding generation with GPU support, see build_embeddings.py
+
     Returns:
-        Loaded SentenceTransformer model
+        Loaded SentenceTransformer model (CPU-only)
     """
-    return SentenceTransformer(EMBEDDING_MODEL_NAME)
+    return SentenceTransformer(EMBEDDING_MODEL_NAME, device='cpu')
 
 
 @st.cache_data

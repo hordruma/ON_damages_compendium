@@ -105,6 +105,11 @@ def main():
     print(f"\n🔄 Step 2: Loading embedding model (all-mpnet-base-v2)...")
     print(f"   This model provides excellent medical terminology understanding")
     print(f"   (First run will download ~400MB model)")
+
+    # NOTE: No device parameter specified - auto-detects GPU if available
+    # This script is meant for LOCAL development/embedding generation
+    # GPU recommended: ~10-20 min vs 1-2 hours on CPU
+    # For Streamlit app deployment, see app/core/data_loader.py (CPU-only)
     model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
     print(f"   ✓ Model loaded")
 
