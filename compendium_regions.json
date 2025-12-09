@@ -97,10 +97,6 @@
     "PRE_EXISTING": {
       "label": "Pre-existing Disability or Condition",
       "description": "Cases involving pre-existing conditions"
-    },
-    "LOSS_GUIDANCE": {
-      "label": "Loss of Guidance, Care and Companionship",
-      "description": "Family Law Act claims"
     }
   }
 }
