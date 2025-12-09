@@ -15,33 +15,70 @@ A professional legal tool for searching comparable personal injury awards in Ont
 
 ## Installation
 
-1. Clone the repository:
+### 1. Clone the repository
 ```bash
 git clone https://github.com/hordruma/ON_damages_compendium.git
 cd ON_damages_compendium
 ```
 
-2. Install dependencies:
+### 2. Install dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Extract and process the compendium data:
+### 3. Prepare your data
+
+Place your source data file (e.g., `damages_table_based.json`) in the project root. This should contain the parsed case data from the Ontario Damages Compendium.
+
+### 4. Generate embeddings
+
+Run the embedding generation script to create the searchable database:
+
 ```bash
-jupyter notebook 01_extract_and_embed.ipynb
+python build_embeddings.py
 ```
 
-4. Run the Streamlit app:
+**Hardware Requirements:**
+- **GPU recommended** for faster embedding generation (~10-20 minutes with GPU vs 1-2 hours on CPU)
+- Supports CUDA GPUs (NVIDIA) - automatically detected
+- Falls back to CPU if no GPU available
+- Requires ~2GB RAM during processing
+
+**What this does:**
+1. Loads the source case data
+2. Converts to dashboard format
+3. Generates semantic embeddings for all cases using `all-mpnet-base-v2` model
+4. Creates injury-focused search indices
+5. Outputs to `data/` directory
+
+**Output files:**
+- `data/damages_with_embeddings.json` - Main dashboard data with full embeddings
+- `data/compendium_inj.json` - Injury-focused case data
+- `data/embeddings_inj.npy` - Pre-computed embedding matrix for fast search
+- `data/ids.json` - Case ID mapping
+
+**Alternative (for development/debugging):**
+If you prefer using Jupyter notebooks:
+```bash
+jupyter notebook parse_and_embed.ipynb
+```
+
+### 5. Run the Streamlit app
+
 ```bash
 streamlit run streamlit_app.py
 ```
+
+The app will automatically load the generated data files.
 
 ## Project Structure
 
 ```
 ON_damages_compendium/
-├── parse_and_embed.ipynb          # Data extraction and embedding generation
 ├── streamlit_app.py               # Main Streamlit application
+├── build_embeddings.py            # Embedding generation script (GPU-accelerated)
+├── data_transformer.py            # Data format conversion utilities
+├── parse_and_embed.ipynb          # Alternative notebook for embedding generation
 ├── expert_report_analyzer.py      # Expert report PDF analysis
 ├── pdf_report_generator.py        # PDF report generation
 ├── region_map.json                # Clinical anatomy region mappings
@@ -49,21 +86,20 @@ ON_damages_compendium/
 ├── app/
 │   ├── core/
 │   │   ├── search.py             # Injury-focused semantic search
-│   │   ├── data_loader.py        # Data loading and initialization
+│   │   ├── data_loader.py        # Data loading (CPU-only for Streamlit Cloud)
 │   │   └── config.py             # Configuration constants
 │   └── ui/
 │       ├── visualizations.py     # Chart generation
 │       ├── fla_analytics.py      # Family Law Act analytics
 │       └── judge_analytics.py    # Judge statistics
-├── data/
-│   ├── damages_with_embeddings.json  # Processed case data (generated)
-│   ├── compendium_inj.json           # Injury-focused case data (generated)
-│   ├── embeddings_inj.npy            # Injury embeddings matrix (generated)
-│   └── ids.json                      # Embedding ID mapping (generated)
+├── data/                          # Generated data (create via build_embeddings.py)
+│   ├── damages_with_embeddings.json  # Main dashboard data with embeddings
+│   ├── compendium_inj.json           # Injury-focused case data
+│   ├── embeddings_inj.npy            # Pre-computed embedding matrix
+│   └── ids.json                      # Case ID mapping
 ├── requirements.txt               # Python dependencies
 ├── README.md                      # This file
-├── EXPERT_REPORT_GUIDE.md         # Guide for expert report analysis
-└── [Additional documentation...]
+└── EXPERT_REPORT_GUIDE.md         # Guide for expert report analysis
 ```
 
 ## Usage
@@ -72,15 +108,19 @@ ON_damages_compendium/
 
 #### Basic Workflow
 
-1. **Prepare Data**: Place `2024damagescompendium.pdf` in the project root
-2. **Extract Cases**: Run the Jupyter notebook to generate embeddings
-3. **Launch App**: Run the Streamlit application
-4. **Search Cases**:
-   - Select gender and age
-   - Click body regions to highlight injuries
-   - Describe the injury in detail
+1. **Ensure Data is Generated**: Run `python build_embeddings.py` if you haven't already (see Installation step 4)
+2. **Launch App**:
+   ```bash
+   streamlit run streamlit_app.py
+   ```
+3. **Search for Comparable Cases**:
+   - Select gender and age filters (optional)
+   - Click body regions on the anatomical diagram to highlight injury areas
+   - Enter a detailed injury description in the search box
+   - Adjust the number of results (default: 15)
    - Click "Find Comparable Cases"
-   - Review matched cases and damage ranges
+   - Review matched cases with similarity scores
+   - Analyze damage award statistics (median, min, max)
 
 ### 🆕 Expert Report Analysis (Optional)
 
@@ -120,11 +160,50 @@ Download professional formatted reports with your search results:
 ## Technology Stack
 
 - **PDF Extraction**: Camelot-py, PDFPlumber
-- **Embeddings**: Sentence-Transformers (all-MiniLM-L6-v2)
+- **Embeddings**: Sentence-Transformers (`all-mpnet-base-v2`)
+  - 420MB model with excellent medical terminology understanding
+  - GPU-accelerated during embedding generation (optional)
+  - CPU-only during app runtime (for Streamlit Cloud compatibility)
 - **Semantic Search**: NumPy cosine similarity with injury-focused embeddings
 - **UI**: Streamlit
 - **Data Format**: JSON
 - **LLM Integration**: OpenAI GPT-4, Anthropic Claude (optional for expert report analysis)
+
+## Deployment
+
+### Local Development
+
+Run the app locally with full features:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+**Performance Tips:**
+- Use GPU for initial embedding generation (`build_embeddings.py`)
+- The app itself runs fine on CPU
+- First launch may take 30-60 seconds to load the embedding model into memory
+- Subsequent searches are fast (~100ms)
+
+### Streamlit Cloud Deployment
+
+The app is configured to run on Streamlit Cloud (CPU-only environment):
+
+1. **Data Preparation**:
+   - Generate embeddings locally using `build_embeddings.py` (with GPU if available)
+   - Commit the `data/` directory to your repository
+   - Or generate embeddings on first cloud startup (slower, ~1-2 hours)
+
+2. **Deploy to Streamlit Cloud**:
+   - Connect your GitHub repository
+   - Set secrets for API keys (if using expert report analysis)
+   - The app automatically detects CPU-only environment and configures accordingly
+
+3. **Environment Variables** (if using expert report features):
+   - `OPENAI_API_KEY` - For GPT-based report analysis
+   - `ANTHROPIC_API_KEY` - For Claude-based report analysis
+
+**Note**: The data loader (`app/core/data_loader.py`) is configured to force CPU usage for model inference, ensuring compatibility with Streamlit Cloud's CPU-only containers.
 
 ## License
 
