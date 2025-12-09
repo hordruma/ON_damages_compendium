@@ -96,7 +96,7 @@ def get_all_categories(cases: List[Dict[str, Any]]) -> Dict[str, List[str]]:
                         injury_categories.add(r_upper)
 
         # FLA relationship types
-        fla_claims = extended_data.get('family_law_act_claims', [])
+        fla_claims = extended_data.get('family_law_act_claims', []) or []
         for claim in fla_claims:
             relationship = claim.get('relationship', '').strip()
             is_fla_award = claim.get('is_fla_award', True)
@@ -132,7 +132,7 @@ def get_category_cases(cases: List[Dict[str, Any]], category_name: str) -> List[
 
         for case in cases:
             extended_data = case.get('extended_data', {})
-            fla_claims = extended_data.get('family_law_act_claims', [])
+            fla_claims = extended_data.get('family_law_act_claims', []) or []
 
             # Check if this case has this FLA relationship (case-insensitive)
             for claim in fla_claims:
@@ -186,7 +186,7 @@ def calculate_category_statistics(category_cases: List[Dict[str, Any]], category
         for case in category_cases:
             year = case.get('year')
             extended_data = case.get('extended_data', {})
-            fla_claims = extended_data.get('family_law_act_claims', [])
+            fla_claims = extended_data.get('family_law_act_claims', []) or []
 
             for claim in fla_claims:
                 if claim.get('relationship', '').strip().lower() == relationship_name:
@@ -566,7 +566,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
                         if is_fla_category:
                             relationship_name = category_name[5:].strip().lower()
                             extended_data = case.get('extended_data', {})
-                            fla_claims = extended_data.get('family_law_act_claims', [])
+                            fla_claims = extended_data.get('family_law_act_claims', []) or []
                             for claim in fla_claims:
                                 if claim.get('relationship', '').strip().lower() == relationship_name:
                                     fla_description = claim.get('description', '')
@@ -690,7 +690,7 @@ def display_category_analytics_page(cases: List[Dict[str, Any]], include_outlier
         if is_fla_category:
             relationship_name = selected_category[5:].strip().lower()
             extended_data = case.get('extended_data', {})
-            fla_claims = extended_data.get('family_law_act_claims', [])
+            fla_claims = extended_data.get('family_law_act_claims', []) or []
             for claim in fla_claims:
                 if claim.get('relationship', '').strip().lower() == relationship_name:
                     fla_description = claim.get('description', '')
