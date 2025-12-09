@@ -147,13 +147,22 @@ def convert_to_dashboard_format(
         if isinstance(source_page, list):
             source_page = source_page[0] if source_page else None
 
-        # Calculate total damages across all plaintiffs
+        # Calculate total non-pecuniary damages across all plaintiffs
+        # Non-pecuniary = general damages (pain & suffering, loss of enjoyment)
         total_non_pecuniary = 0
-        total_pecuniary = 0
 
         for p in plaintiffs:
             total_non_pecuniary += p.get('non_pecuniary_damages') or 0
-            total_pecuniary += p.get('pecuniary_damages') or 0
+
+        # Calculate total pecuniary damages from other_damages array
+        # Pecuniary = economic damages (lost income, care costs, etc.)
+        total_pecuniary = 0
+        other_damages_list = case.get('other_damages', [])
+
+        for damage in other_damages_list:
+            amount = damage.get('amount', 0)
+            if amount:
+                total_pecuniary += amount
 
         total_award = total_non_pecuniary + total_pecuniary if (total_non_pecuniary or total_pecuniary) else None
 
@@ -174,10 +183,10 @@ def convert_to_dashboard_format(
             'source_page': source_page,
             'category': primary_category,  # Primary category for compatibility
             'region': primary_region,  # Primary region for compatibility
-            'damages': total_non_pecuniary,  # Total damages for sorting/filtering
-            'non_pecuniary_damages': total_non_pecuniary,
-            'pecuniary_damages': total_pecuniary,
-            'total_award': total_award,
+            'damages': total_non_pecuniary,  # NON-PECUNIARY ONLY (general damages) - used for charts/sorting
+            'non_pecuniary_damages': total_non_pecuniary,  # General damages (pain & suffering)
+            'pecuniary_damages': total_pecuniary,  # Economic damages (lost income, care costs)
+            'total_award': total_award,  # Total of both non-pecuniary + pecuniary
             'comments': case.get('comments', ''),
             'extended_data': {
                 'injuries': case.get('injuries', []),
@@ -185,7 +194,7 @@ def convert_to_dashboard_format(
                 'categories': categories,  # ALL categories
                 'sex': plaintiffs[0].get('sex') if plaintiffs else None,  # Primary plaintiff
                 'age': plaintiffs[0].get('age') if plaintiffs else None,  # Primary plaintiff
-                'other_damages': [],
+                'other_damages': other_damages_list,  # Pecuniary damages (economic losses)
                 'num_plaintiffs': len(plaintiffs),
                 'plaintiffs': plaintiffs,  # Keep full plaintiff data
                 'comments': case.get('comments', ''),

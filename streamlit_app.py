@@ -214,18 +214,20 @@ def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
             for injury in unique_injuries[mid_point:]:
                 st.markdown(f"- {injury}")
 
-    # Other damages
+    # Pecuniary damages (economic losses)
     other_damages = extended_data.get('other_damages')
     if other_damages:
-        st.markdown("**Other Damages:**")
+        st.markdown("**Pecuniary Damages (Economic Losses):**")
         for damage in other_damages:
             damage_type = damage.get('type', 'Other')
+            # Format damage type for display
+            damage_type_display = damage_type.replace('_', ' ').title()
             amount = damage.get('amount')
             desc = damage.get('description', '')
             if amount:
-                st.markdown(f"- {damage_type}: ${amount:,.0f}" + (f" ({desc})" if desc else ""))
+                st.markdown(f"- {damage_type_display}: ${amount:,.0f}" + (f" ({desc})" if desc else ""))
             else:
-                st.markdown(f"- {damage_type}" + (f": {desc}" if desc else ""))
+                st.markdown(f"- {damage_type_display}" + (f": {desc}" if desc else ""))
 
     # Family Law Act claims - only show if show_fla is True
     fla_claims = extended_data.get('family_law_act_claims')
@@ -790,16 +792,16 @@ with tab1:
             st.divider()
 
             # Damages Cap Comparison Chart
-            st.subheader("📊 Awards Relative to Ontario Damages Cap")
+            st.subheader("📊 Non-Pecuniary Awards Relative to Ontario Damages Cap")
             cap_fig = create_damages_cap_chart(damages_values, DEFAULT_REFERENCE_YEAR)
             if cap_fig:
                 st.plotly_chart(cap_fig, use_container_width=True)
-                st.caption("💡 Bars are colored based on their proportion to the Ontario non-pecuniary damages cap")
+                st.caption("💡 Non-pecuniary damages (general damages for pain & suffering) - bars are colored based on their proportion to the Ontario cap")
 
             st.divider()
 
             # Inflation-Adjusted Timeline Chart
-            st.subheader("📈 Inflation-Adjusted Award Timeline")
+            st.subheader("📈 Inflation-Adjusted Non-Pecuniary Award Timeline")
 
             fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
 
@@ -827,9 +829,9 @@ with tab1:
 
                     with col1:
                         st.metric(
-                            f"Median Award ({DEFAULT_REFERENCE_YEAR}$)",
+                            f"Median Non-Pecuniary Award ({DEFAULT_REFERENCE_YEAR}$)",
                             f"${stats['median_adjusted']:,.0f}",
-                            help=f"Median of all awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
+                            help=f"Median of all non-pecuniary awards (general damages) adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
                         )
 
                     with col2:
@@ -840,8 +842,9 @@ with tab1:
                         )
 
                     st.caption(
-                        f"💡 All awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
-                        "Canadian CPI. Original amounts are not shown as they are not comparable across different years."
+                        f"💡 Non-pecuniary awards (general damages) adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
+                        "Canadian CPI. Original amounts are not shown as they are not comparable across different years. "
+                        "Charts exclude pecuniary damages (economic losses)."
                     )
             else:
                 st.info("Inflation adjustment requires case year information. Some cases may not have dates.")
@@ -862,7 +865,7 @@ with tab1:
 
             # Get damage value for expander title
             damage_val = extract_damages_value(case)
-            damage_display = f" | Award: ${damage_val:,.0f}" if damage_val else ""
+            damage_display = f" | Non-Pecuniary Award: ${damage_val:,.0f}" if damage_val else ""
 
             with st.expander(
                 f"**Case {idx}** - {case.get('case_name', 'Unknown')}{title_suffix} | "
@@ -887,7 +890,7 @@ with tab1:
                         st.markdown(f"**Court:** {case['court']}")
 
                     if damage_val:
-                        st.markdown(f"**Damages:** ${damage_val:,.0f}")
+                        st.markdown(f"**Non-Pecuniary Damages (General):** ${damage_val:,.0f}")
 
                     # Summary paragraph removed - pertinent info shown in enhanced data below
 
@@ -1045,7 +1048,8 @@ with tab4:
         search_fields.append('summary')
 
     # Damages filter
-    st.subheader("💰 Damages Filter")
+    st.subheader("💰 Non-Pecuniary Damages Filter")
+    st.caption("Filter by general damages (pain & suffering) - excludes pecuniary damages")
     col1, col2 = st.columns(2)
     with col1:
         min_damages_enabled = st.checkbox("Minimum Award", key="bool_min_damages_enabled")
@@ -1183,11 +1187,11 @@ with tab4:
                         st.divider()
 
                         # Damages Cap Comparison Chart
-                        st.subheader("📊 Awards Relative to Ontario Damages Cap")
+                        st.subheader("📊 Non-Pecuniary Awards Relative to Ontario Damages Cap")
                         cap_fig = create_damages_cap_chart(bool_damages_values, DEFAULT_REFERENCE_YEAR)
                         if cap_fig:
                             st.plotly_chart(cap_fig, use_container_width=True)
-                            st.caption("💡 Bars are colored based on their proportion to the Ontario non-pecuniary damages cap")
+                            st.caption("💡 Non-pecuniary damages (general damages) - bars are colored based on their proportion to the Ontario cap")
 
                     st.divider()
                     st.subheader("📋 Case Results")
@@ -1208,7 +1212,7 @@ with tab4:
                             with col2:
                                 damage_val = extract_damages_value(case)
                                 if damage_val:
-                                    st.metric("💰 Award", f"${damage_val:,.0f}")
+                                    st.metric("💰 Non-Pecuniary Award", f"${damage_val:,.0f}")
 
                             # Case details
                             ext = case.get('extended_data', {})

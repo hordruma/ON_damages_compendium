@@ -125,9 +125,9 @@ def create_inflation_chart(
 
     # Update layout for professional appearance with dark mode support
     fig.update_layout(
-        title=f'Damage Awards Over Time (Inflation-Adjusted to {reference_year}$)',
+        title=f'Non-Pecuniary Damage Awards Over Time (Inflation-Adjusted to {reference_year}$)',
         xaxis_title='Year of Award',
-        yaxis_title=f'Award Amount ({reference_year}$)',
+        yaxis_title=f'Non-Pecuniary Award Amount ({reference_year}$)',
         yaxis=dict(tickformat='$,.0f'),
         xaxis=dict(
             tickmode='linear',
@@ -253,9 +253,9 @@ def create_damages_cap_chart(
     )
 
     fig.update_layout(
-        title=f'Award Statistics Relative to Ontario Damages Cap ({reference_year})',
+        title=f'Non-Pecuniary Award Statistics Relative to Ontario Damages Cap ({reference_year})',
         xaxis_title='Statistic',
-        yaxis_title=f'Award Amount ({reference_year}$)',
+        yaxis_title=f'Non-Pecuniary Award Amount ({reference_year}$)',
         yaxis=dict(tickformat='$,.0f'),
         height=400,
         showlegend=False,
