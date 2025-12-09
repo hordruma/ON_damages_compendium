@@ -747,13 +747,27 @@ with tab1:
     if st.session_state.search_results:
         results = st.session_state.search_results['results']
 
+        # Filter out dismissed cases FIRST (before charts and display)
+        results = [(case, emb_sim, score) for case, emb_sim, score in results
+                   if case.get('id') not in st.session_state.dismissed_cases]
+
+        # Apply outlier filtering based on current checkbox state
+        # (Re-filter in case checkbox state changed after search)
+        if not include_outliers and len(results) > 4:
+            result_cases = [case for case, _, _ in results]
+            filtered_cases = filter_outliers(result_cases)
+            # Rebuild results with only non-outlier cases
+            filtered_case_ids = {case.get('id') for case in filtered_cases}
+            results = [(case, emb_sim, score) for case, emb_sim, score in results
+                       if case.get('id') in filtered_case_ids]
+
         st.divider()
         st.header("Search Results")
 
         # Display search info
         st.info(f"🔍 Showing {len(results)} comparable cases (sorted by relevance)")
 
-        # Extract damages for charts
+        # Extract damages for charts (now using filtered results)
         damages_values = []
         for case, emb_sim, combined_score in results:
             damage_val = extract_damages_value(case)
@@ -823,17 +837,13 @@ with tab1:
 
         st.divider()
 
-        # Filter out dismissed cases
-        active_results = [(case, emb_sim, score) for case, emb_sim, score in results
-                        if case.get('id') not in st.session_state.dismissed_cases]
-
-        # Display individual cases
-        st.subheader(f"Top {len(active_results)} Comparable Cases")
+        # Display individual cases (results already filtered above)
+        st.subheader(f"Top {len(results)} Comparable Cases")
 
         if len(st.session_state.dismissed_cases) > 0:
-            st.caption(f"💡 {len(st.session_state.dismissed_cases)} case(s) dismissed. Click 'Find Comparable Cases' again to see more results.")
+            st.caption(f"💡 {len(st.session_state.dismissed_cases)} case(s) dismissed.")
 
-        for idx, (case, emb_sim, combined_score) in enumerate(active_results, 1):
+        for idx, (case, emb_sim, combined_score) in enumerate(results, 1):
             # Build expander title with multi-plaintiff indicator and award amount
             extended_data = case.get('extended_data', {})
             num_plaintiffs = extended_data.get('num_plaintiffs', 0)
