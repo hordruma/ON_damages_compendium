@@ -26,44 +26,62 @@ cd ON_damages_compendium
 pip install -r requirements.txt
 ```
 
-### 3. Prepare your data
+### 3. Parse PDF and Generate Embeddings
 
-Place your source data file (e.g., `damages_table_based.json`) in the project root. This should contain the parsed case data from the Ontario Damages Compendium.
+You have two options depending on your workflow:
 
-### 4. Generate embeddings
+#### Option A: All-in-One (Recommended for first-time setup)
 
-Run the embedding generation script to create the searchable database:
+Use the Jupyter notebook to parse PDF and generate embeddings in one go:
+
+```bash
+jupyter notebook parse_and_embed.ipynb
+```
+
+**What this does:**
+1. **Parses PDF** using Camelot (table extraction) + LLM (row parsing)
+2. Outputs `damages_table_based.json` (raw parsed data)
+3. **Generates embeddings** and converts to dashboard format
+4. Outputs searchable database to `data/` directory
+
+**Requirements:**
+- Source PDF file (e.g., `2024damagescompendium.pdf`)
+- Azure/OpenAI API key for LLM parsing
+- GPU recommended for faster embedding generation
+
+#### Option B: Two-Step Process (If you already have parsed data)
+
+If you already have `damages_table_based.json`, just generate embeddings:
 
 ```bash
 python build_embeddings.py
 ```
 
+**What this does:**
+1. Loads existing `damages_table_based.json`
+2. Converts to dashboard format
+3. Generates semantic embeddings using `all-mpnet-base-v2` model
+4. Creates injury-focused search indices
+5. Outputs to `data/` directory
+
 **Hardware Requirements:**
-- **GPU recommended** for faster embedding generation (~10-20 minutes with GPU vs 1-2 hours on CPU)
+- **GPU recommended** (~10-20 minutes with GPU vs 1-2 hours on CPU)
 - Supports CUDA GPUs (NVIDIA) - automatically detected
 - Falls back to CPU if no GPU available
 - Requires ~2GB RAM during processing
 
-**What this does:**
-1. Loads the source case data
-2. Converts to dashboard format
-3. Generates semantic embeddings for all cases using `all-mpnet-base-v2` model
-4. Creates injury-focused search indices
-5. Outputs to `data/` directory
-
-**Output files:**
+**Output files (both options):**
 - `data/damages_with_embeddings.json` - Main dashboard data with full embeddings
 - `data/compendium_inj.json` - Injury-focused case data
 - `data/embeddings_inj.npy` - Pre-computed embedding matrix for fast search
 - `data/ids.json` - Case ID mapping
 
-**Alternative (for development/debugging):**
-If you prefer using Jupyter notebooks:
-```bash
-jupyter notebook parse_and_embed.ipynb
-```
+**Use `build_embeddings.py` when:**
+- You already have parsed JSON data
+- You want to re-generate embeddings with different settings
+- You're updating embeddings after fixing data issues
 
-### 5. Run the Streamlit app
+### 4. Run the Streamlit app
 
 ```bash
 streamlit run streamlit_app.py
@@ -108,7 +126,7 @@ ON_damages_compendium/
 
 #### Basic Workflow
 
-1. **Ensure Data is Generated**: Run `python build_embeddings.py` if you haven't already (see Installation step 4)
+1. **Ensure Data is Generated**: Run either the notebook or `build_embeddings.py` if you haven't already (see Installation step 3)
 2. **Launch App**:
    ```bash
    streamlit run streamlit_app.py
