@@ -34,7 +34,7 @@ def load_embedding_model() -> SentenceTransformer:
     Returns:
         Loaded SentenceTransformer model
     """
-    return SentenceTransformer(EMBEDDING_MODEL_NAME)
+    return SentenceTransformer(EMBEDDING_MODEL_NAME, device='cpu')
 
 
 @st.cache_data
