@@ -62,6 +62,17 @@ st.set_page_config(
 # Custom CSS for professional styling with improved UX and dark mode support
 st.markdown("""
 <style>
+    /* Prevent sidebar from collapsing on desktop */
+    @media (min-width: 768px) {
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+        section[data-testid="stSidebar"] {
+            min-width: 300px !important;
+            max-width: 300px !important;
+        }
+    }
+
     /* Light mode defaults */
     .main-header {
         font-size: 2.5rem;
