@@ -105,7 +105,7 @@ def main():
     print(f"\n🔄 Step 2: Loading embedding model (all-mpnet-base-v2)...")
     print(f"   This model provides excellent medical terminology understanding")
     print(f"   (First run will download ~400MB model)")
-    model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2", device='cpu')
+    model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
     print(f"   ✓ Model loaded")
 
     # STEP 3: Convert to dashboard format
