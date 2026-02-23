@@ -1,1254 +1,1414 @@
 """
-Ontario Damages Compendium - AI Search Tool
-A professional legal tool for searching comparable personal injury awards
+Ontario Damages Compendium — Legal Reference Tool
 
-Main application file - handles UI and user interactions only.
-Business logic has been moved to app/ modules for better organization.
+Redesigned UI v3.0: flat console aesthetic, collapsible sidebar navigation,
+browsable compendium with ToC, fuzzy/boolean search, and integrated analytics.
 """
 
 import streamlit as st
 import numpy as np
 import tempfile
 import os
+import io
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple, Any
+import re
 
-# Import custom modules (refactored into app/ package)
+# Core modules
 from app.core.config import *
 from app.core.data_loader import initialize_data
-from app.core.search import search_cases, extract_damages_value, boolean_search, filter_outliers
-from app.ui.visualizations import create_inflation_chart, calculate_chart_statistics, create_damages_cap_chart
+from app.core.search import (
+    search_cases, extract_damages_value, boolean_search, filter_outliers
+)
+from app.ui.visualizations import (
+    create_inflation_chart, calculate_chart_statistics, create_damages_cap_chart
+)
 from app.ui.judge_analytics import display_judge_analytics_page
 from app.ui.category_analytics import display_category_analytics_page
+from app.ui.fla_analytics import display_fla_analytics_page
 
-# Import other application modules
 from expert_report_analyzer import analyze_expert_report
 from pdf_report_generator import generate_damages_report
 from inflation_adjuster import (
-    DEFAULT_REFERENCE_YEAR,
-    get_data_source,
-    get_cpi_data,
-    BOC_CPI_CSV,
-    reload_cpi_data
+    DEFAULT_REFERENCE_YEAR, get_data_source, get_cpi_data,
+    BOC_CPI_CSV, reload_cpi_data, adjust_for_inflation
 )
 
 # =============================================================================
-# VERSION AND CACHE MANAGEMENT
+# VERSION & CACHE
 # =============================================================================
 
-# Version identifier to force cache refresh when code changes
-APP_VERSION = "2.1.0"  # Updated for injury_embedding_weight parameter
+APP_VERSION = "3.0.0"
 
-# Clear caches on startup to ensure fresh deployment
-# This prevents Streamlit Cloud from using stale cached code
-if 'app_version' not in st.session_state or st.session_state.get('app_version') != APP_VERSION:
+if "app_version" not in st.session_state or st.session_state.app_version != APP_VERSION:
     st.cache_resource.clear()
     st.cache_data.clear()
     st.session_state.app_version = APP_VERSION
 
 # =============================================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # =============================================================================
 
 st.set_page_config(
-    page_title="Ontario Damages Compendium",
-    page_icon="⚖️",
+    page_title="ON Damages Compendium",
+    page_icon="⚖",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Custom CSS for professional styling with improved UX and dark mode support
+# =============================================================================
+# CSS — FLAT / CONSOLE AESTHETIC
+# =============================================================================
+
 st.markdown("""
 <style>
-    /* Prevent sidebar from collapsing on desktop */
-    @media (min-width: 768px) {
-        [data-testid="collapsedControl"] {
-            display: none !important;
-        }
-        section[data-testid="stSidebar"] {
-            min-width: 300px !important;
-            max-width: 300px !important;
-        }
-    }
+/* ─── FONTS ──────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-    /* Light mode defaults */
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-    }
-    .sub-header {
-        font-size: 1.15rem;
-        margin-bottom: 2rem;
-        line-height: 1.6;
-    }
-    .region-badge {
-        display: inline-block;
-        padding: 0.35rem 0.85rem;
-        margin: 0.25rem;
-        background-color: #2563eb;
-        color: #ffffff;
-        border-radius: 0.375rem;
-        font-size: 0.9rem;
-        font-weight: 600;
-    }
-    .case-card {
-        border: 2px solid #d1d5db;
-        border-radius: 0.625rem;
-        padding: 1.25rem;
-        margin-bottom: 1.25rem;
-    }
-    .damage-summary {
-        border-left: 5px solid #059669;
-        padding: 1.25rem;
-        margin: 1rem 0;
-        border-radius: 0.375rem;
-    }
-    .metric-value {
-        font-size: 1.75rem;
-        font-weight: 700;
-    }
-    .similarity-score {
-        color: #4f46e5;
-        font-weight: 700;
-        font-size: 1.1rem;
-    }
-    /* Improve readability */
-    .stMarkdown {
-        font-size: 1.05rem;
-        line-height: 1.7;
-    }
-    /* Better expander visibility */
-    .streamlit-expanderHeader {
-        font-size: 1.1rem !important;
-        font-weight: 600 !important;
-    }
-    /* Improve metric contrast */
-    [data-testid="stMetricValue"] {
-        font-size: 1.8rem;
-        font-weight: 700;
-    }
-    /* Better button contrast */
-    .stButton>button {
-        font-weight: 600;
-        font-size: 1rem;
-    }
+html, body, [class*="css"] {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
 
-    /* Dark mode overrides - use Streamlit's color variables instead of hardcoded colors */
-    [data-theme="dark"] .case-card {
-        border-color: #4b5563;
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-    [data-theme="dark"] .damage-summary {
-        background-color: rgba(5, 150, 105, 0.15);
-    }
+/* ─── GLOBAL CHROME ──────────────────────────────────────────────────────── */
+#MainMenu, footer, .stDeployButton { visibility: hidden; display: none; }
+
+.main .block-container {
+  padding: 1.25rem 2rem 2rem !important;
+  max-width: 100% !important;
+}
+
+/* ─── SIDEBAR ────────────────────────────────────────────────────────────── */
+section[data-testid="stSidebar"] {
+  background: #0d1117 !important;
+  border-right: 1px solid #21262d !important;
+}
+
+/* All text inside sidebar forced light */
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] div {
+  color: #8b949e !important;
+}
+
+/* Sidebar nav buttons — full-width, flush, no rounded box */
+section[data-testid="stSidebar"] .stButton > button {
+  width: 100% !important;
+  text-align: left !important;
+  background: transparent !important;
+  border: none !important;
+  border-left: 2px solid transparent !important;
+  border-radius: 0 !important;
+  color: #8b949e !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.82rem !important;
+  font-weight: 400 !important;
+  padding: 0.42rem 0.9rem !important;
+  margin: 0 0 1px 0 !important;
+  letter-spacing: 0.01em !important;
+  transition: all 0.12s ease !important;
+  box-shadow: none !important;
+}
+
+section[data-testid="stSidebar"] .stButton > button:hover {
+  background: #161b22 !important;
+  border-left-color: #3b82f6 !important;
+  color: #c9d1d9 !important;
+}
+
+section[data-testid="stSidebar"] .stButton > button:focus {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Active nav item — set via CSS on the container div */
+.nav-active .stButton > button {
+  border-left: 2px solid #3b82f6 !important;
+  color: #e6edf3 !important;
+  background: #161b22 !important;
+  font-weight: 600 !important;
+}
+
+/* Sidebar checkbox & radio */
+section[data-testid="stSidebar"] .stCheckbox label,
+section[data-testid="stSidebar"] .stRadio label {
+  font-size: 0.8rem !important;
+  color: #8b949e !important;
+}
+
+section[data-testid="stSidebar"] .stExpander {
+  border: 1px solid #21262d !important;
+  border-radius: 3px !important;
+}
+
+/* ─── VIEW HEADERS ───────────────────────────────────────────────────────── */
+.view-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  margin-bottom: 0.2rem;
+}
+
+.view-heading {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #111827;
+  margin-bottom: 0.15rem;
+  line-height: 1.2;
+}
+
+.view-sub {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-bottom: 1.25rem;
+}
+
+/* ─── STATS BAR ──────────────────────────────────────────────────────────── */
+.stat-block {
+  border: 1px solid #e5e7eb;
+  padding: 0.6rem 0.9rem;
+  text-align: center;
+  border-radius: 3px;
+  background: #fafafa;
+}
+
+.stat-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+  display: block;
+}
+
+.stat-lbl {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #9ca3af;
+  display: block;
+  margin-top: 0.1rem;
+}
+
+/* ─── TABLE (Compendium) ─────────────────────────────────────────────────── */
+.case-table { width: 100%; border-collapse: collapse; }
+
+.table-header-row {
+  display: grid;
+  grid-template-columns: 3fr 3.5rem 4.5rem 2.5fr 8rem;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem 0.35rem;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.case-row-grid {
+  display: grid;
+  grid-template-columns: 3fr 3.5rem 4.5rem 2.5fr 8rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 0.855rem;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.08s;
+}
+
+.case-row-grid:hover { background: #f9fafb; }
+
+.case-row-grid.selected {
+  background: #eff6ff;
+  border-left: 2px solid #3b82f6;
+  padding-left: 0.3rem;
+}
+
+.cn { font-weight: 500; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cy { font-family: 'JetBrains Mono', monospace; color: #6b7280; font-size: 0.78rem; }
+.cc { color: #6b7280; font-size: 0.78rem; }
+.ccat { color: #6b7280; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.caw {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: #059669;
+  font-size: 0.83rem;
+  text-align: right;
+}
+
+/* ─── DETAIL PANEL ───────────────────────────────────────────────────────── */
+.detail-panel {
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #3b82f6;
+  padding: 1.25rem 1.5rem;
+  border-radius: 0 3px 3px 0;
+  background: #f8fafc;
+  margin: 0.25rem 0 0.5rem 0;
+}
+
+.detail-award {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #059669;
+  display: block;
+}
+
+.detail-meta-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+/* ─── TAGS ───────────────────────────────────────────────────────────────── */
+.tag {
+  display: inline-block;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.12rem 0.45rem;
+  border-radius: 2px;
+  margin: 0.1rem 0.1rem 0.1rem 0;
+  letter-spacing: 0.02em;
+}
+
+.tag-green { background: #d1fae5; color: #065f46; }
+.tag-gray  { background: #f3f4f6; color: #374151; }
+.tag-amber { background: #fef3c7; color: #92400e; }
+
+/* ─── RESULT CARDS (AI Search) ───────────────────────────────────────────── */
+.result-card {
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #3b82f6;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.6rem;
+  border-radius: 0 3px 3px 0;
+  background: #ffffff;
+}
+
+/* ─── TOC NAVIGATION ─────────────────────────────────────────────────────── */
+.toc-section-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  padding: 0.6rem 0 0.2rem 0;
+  display: block;
+}
+
+/* ─── METRICS OVERRIDE ───────────────────────────────────────────────────── */
+[data-testid="stMetricValue"] {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 1.3rem !important;
+  font-weight: 600 !important;
+}
+
+[data-testid="stMetricLabel"] {
+  font-size: 0.7rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: #6b7280 !important;
+}
+
+/* ─── MISC ───────────────────────────────────────────────────────────────── */
+hr {
+  border: none !important;
+  border-top: 1px solid #f3f4f6 !important;
+  margin: 0.75rem 0 !important;
+}
+
+.stExpander > summary {
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+}
+
+/* ─── DARK MODE ──────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  .view-heading { color: #f9fafb; }
+  .cn { color: #f3f4f6; }
+  .stat-block { background: #1f2937; border-color: #374151; }
+  .stat-val { color: #f9fafb; }
+  .detail-panel { background: #1e293b; border-color: #334155; }
+  .result-card { background: #1e293b; border-color: #334155; }
+  .table-header-row, .case-row-grid { border-color: #374151; }
+  .case-row-grid:hover { background: #1f2937; }
+  .case-row-grid.selected { background: #1e3a5f; }
+}
 </style>
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# INITIALIZE DATA
+# DATA
 # =============================================================================
 
 model, cases, region_map = initialize_data()
+
+# =============================================================================
+# SESSION STATE
+# =============================================================================
+
+VIEWS = ["compendium", "ai_search", "judges", "categories", "fla"]
+
+VIEW_META = {
+    "compendium": {"icon": "⊞", "label": "Compendium",       "num": "01"},
+    "ai_search":  {"icon": "◈", "label": "AI Search",         "num": "02"},
+    "judges":     {"icon": "◷", "label": "Judge Analytics",   "num": "03"},
+    "categories": {"icon": "◫", "label": "Category Stats",    "num": "04"},
+    "fla":        {"icon": "◻", "label": "FLA Claims",        "num": "05"},
+}
+
+_defaults = {
+    "current_view":           "compendium",
+    "search_results":         None,
+    "analysis_data":          None,
+    "dismissed_cases":        set(),
+    "toc_selection":          None,
+    "toc_group_by":           "category",
+    "comp_search":            "",
+    "comp_search_mode":       "fuzzy",
+    "comp_sort":              "year_desc",
+    "comp_selected_case_id":  None,
+    "comp_page":              0,
+    "_last_filter_key":       None,
+}
+
+for _k, _v in _defaults.items():
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
 
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
 
 def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
-    """Display enhanced AI-parsed data if available.
-
-    Args:
-        case: Case dictionary
-        show_fla: Whether to display Family Law Act claims section
-    """
-    extended_data = case.get('extended_data')
-    if not extended_data:
+    """Render structured case detail from extended_data."""
+    ext = case.get("extended_data") or {}
+    if not ext:
         return
 
-    # Multi-plaintiff information
-    num_plaintiffs = extended_data.get('num_plaintiffs', 0)
-    if num_plaintiffs > 1:
-        st.info(f"⚠️ Multi-Plaintiff Case ({num_plaintiffs} plaintiffs)")
+    num_p = ext.get("num_plaintiffs", 0)
+    if num_p > 1:
+        st.info(f"Multi-Plaintiff Case ({num_p} plaintiffs)")
 
-    # Plaintiff-specific details
-    plaintiff_id = extended_data.get('plaintiff_id')
-    if plaintiff_id:
-        st.markdown(f"**Plaintiff:** {plaintiff_id}")
+    demo = []
+    if ext.get("plaintiff_id"):
+        demo.append(f"Plaintiff {ext['plaintiff_id']}")
+    if ext.get("sex"):
+        demo.append(f"Sex: {ext['sex']}")
+    if ext.get("age"):
+        demo.append(f"Age at injury: {ext['age']}")
+    if demo:
+        st.markdown(f"**Demographics:** {'  ·  '.join(demo)}")
 
-    sex = extended_data.get('sex')
-    age = extended_data.get('age')
-    if sex or age:
-        demo = []
-        if sex:
-            demo.append(f"Sex: {sex}")
-        if age:
-            demo.append(f"Age: {age}")
-        st.markdown(f"**Demographics:** {', '.join(demo)}")
-
-    # Injuries (deduplicated, displayed in 2 columns)
-    injuries = extended_data.get('injuries')
+    injuries = ext.get("injuries") or []
     if injuries:
-        st.markdown("**Injuries:**")
-        # Deduplicate while preserving order
-        seen = set()
-        unique_injuries = []
-        for injury in injuries:
-            # Normalize for comparison (case-insensitive, strip whitespace)
-            injury_normalized = injury.strip().lower()
-            if injury_normalized not in seen:
-                seen.add(injury_normalized)
-                unique_injuries.append(injury)
+        st.markdown("**Injuries & Diagnoses:**")
+        seen, uniq = set(), []
+        for inj in injuries:
+            key = inj.strip().lower()
+            if key not in seen:
+                seen.add(key)
+                uniq.append(inj)
+        col_a, col_b = st.columns(2)
+        mid = (len(uniq) + 1) // 2
+        with col_a:
+            for inj in uniq[:mid]:
+                st.markdown(f"- {inj}")
+        with col_b:
+            for inj in uniq[mid:]:
+                st.markdown(f"- {inj}")
 
-        # Display injuries in 2 columns
-        col1, col2 = st.columns(2)
-        mid_point = (len(unique_injuries) + 1) // 2
-
-        with col1:
-            for injury in unique_injuries[:mid_point]:
-                st.markdown(f"- {injury}")
-
-        with col2:
-            for injury in unique_injuries[mid_point:]:
-                st.markdown(f"- {injury}")
-
-    # Pecuniary damages (economic losses)
-    other_damages = extended_data.get('other_damages')
-    if other_damages:
+    other_dmg = ext.get("other_damages") or []
+    if other_dmg:
         st.markdown("**Pecuniary Damages (Economic Losses):**")
-        for damage in other_damages:
-            damage_type = damage.get('type', 'Other')
-            # Format damage type for display
-            damage_type_display = damage_type.replace('_', ' ').title()
-            amount = damage.get('amount')
-            desc = damage.get('description', '')
-            if amount:
-                st.markdown(f"- {damage_type_display}: ${amount:,.0f}" + (f" ({desc})" if desc else ""))
-            else:
-                st.markdown(f"- {damage_type_display}" + (f": {desc}" if desc else ""))
+        for d in other_dmg:
+            dtype = d.get("type", "Other").replace("_", " ").title()
+            amt   = d.get("amount")
+            desc  = d.get("description", "")
+            line  = f"- {dtype}"
+            if amt:
+                line += f": ${amt:,.0f}"
+            if desc:
+                line += f" ({desc})"
+            st.markdown(line)
 
-    # Family Law Act claims - only show if show_fla is True
-    fla_claims = extended_data.get('family_law_act_claims')
-    if show_fla and fla_claims:
-        st.markdown("**Family Law Act Claims:**")
-        for claim in fla_claims:
-            relationship = claim.get('relationship', 'FLA claim')
-            description = claim.get('description', '')
-            amount = claim.get('amount')
+    if show_fla:
+        fla = ext.get("family_law_act_claims") or []
+        if fla:
+            st.markdown("**Family Law Act Claims:**")
+            for claim in fla:
+                rel  = claim.get("relationship", "FLA claim")
+                desc = claim.get("description", "")
+                amt  = claim.get("amount")
+                text = f"- {rel}" + (f" ({desc})" if desc else "")
+                text += f": ${amt:,.0f}" if amt else ""
+                st.markdown(text)
 
-            # Build display string with relationship and comments
-            display_parts = [relationship]
-            if description:
-                display_parts.append(f"({description})")
-            display_str = ' '.join(display_parts)
+    cites = ext.get("citations") or []
+    if cites:
+        st.markdown(f"**Citation(s):** {', '.join(cites)}")
 
-            if amount:
-                st.markdown(f"- {display_str}: ${amount:,.0f}")
-            else:
-                st.markdown(f"- {display_str}")
-
-    # Citations
-    citations = extended_data.get('citations')
-    if citations:
-        st.markdown(f"**Citations:** {', '.join(citations)}")
-
-    # Judges
-    judges = extended_data.get('judges')
+    judges = ext.get("judges") or []
     if judges:
-        st.markdown(f"**Judges:** {', '.join(judges)}")
+        st.markdown(f"**Judge(s):** {', '.join(judges)}")
 
-    # Provisional damages flag
-    is_provisional = extended_data.get('is_provisional')
-    if is_provisional:
-        st.warning("⚠️ Provisional damages award")
+    if ext.get("is_provisional"):
+        st.warning("Provisional damages award")
 
-    # Comments (check both top-level and extended_data)
-    comments = extended_data.get('comments') or case.get('comments')
+    comments = ext.get("comments") or case.get("comments") or ""
     if comments:
         st.markdown(f"**Comments:** {comments}")
 
+
+def fuzzy_score(case: Dict, query: str) -> float:
+    """Score a case against a free-text query. Returns 0–1."""
+    if not query.strip():
+        return 1.0
+    q = query.lower()
+    words = re.findall(r"\w+", q)
+    if not words:
+        return 1.0
+
+    ext = case.get("extended_data") or {}
+    injuries_text = " ".join(ext.get("injuries") or [])
+    blob = " ".join([
+        str(case.get("case_name", "")),
+        str(case.get("citation", "")),
+        str(case.get("comments", "")),
+        str(case.get("summary_text", "")),
+        injuries_text,
+        str(ext.get("comments", "")),
+    ]).lower()
+
+    hit = sum(1 for w in words if w in blob)
+    phrase_bonus = 0.25 if q in blob else 0.0
+    return min((hit / len(words)) + phrase_bonus, 1.0)
+
+
+def get_case_categories(case: Dict) -> List[str]:
+    """Return display category list for a case."""
+    ext = case.get("extended_data") or {}
+    cats = ext.get("categories") or []
+    if not cats:
+        region = case.get("region") or case.get("category") or ""
+        cats = [region] if region else []
+    return [c.strip() for c in cats if c.strip()]
+
+
+def build_toc_categories(cases_list: List[Dict]) -> Dict[str, int]:
+    """Category → count mapping, sorted by count desc."""
+    counts: Dict[str, int] = {}
+    for c in cases_list:
+        for cat in get_case_categories(c):
+            key = cat.upper()
+            counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items(), key=lambda x: x[1], reverse=True))
+
+
+def build_toc_years(cases_list: List[Dict]) -> Dict[str, int]:
+    """Decade → count mapping, sorted by decade desc."""
+    counts: Dict[str, int] = {}
+    for c in cases_list:
+        yr = c.get("year")
+        if yr:
+            decade = f"{(yr // 10) * 10}s"
+            counts[decade] = counts.get(decade, 0) + 1
+    return dict(sorted(counts.items(), reverse=True))
+
+
+def filter_and_sort_cases(
+    cases: List[Dict],
+    query: str,
+    search_mode: str,
+    toc_selection: Optional[str],
+    toc_group_by: str,
+    sort: str,
+) -> List[Dict]:
+    """Apply ToC filter, search query, and sort to the case list."""
+    filtered = list(cases)
+
+    # ── ToC filter ────────────────────────────────────────────────
+    if toc_selection:
+        sel = toc_selection.upper()
+        if toc_group_by == "category":
+            filtered = [
+                c for c in filtered
+                if sel in [cat.upper() for cat in get_case_categories(c)]
+            ]
+        elif toc_group_by == "year":
+            decade_start = int(toc_selection.replace("s", ""))
+            filtered = [
+                c for c in filtered
+                if c.get("year") and decade_start <= c["year"] < decade_start + 10
+            ]
+
+    # ── Query filter ──────────────────────────────────────────────
+    if query.strip():
+        if search_mode == "fuzzy":
+            scored = [(c, fuzzy_score(c, query)) for c in filtered]
+            filtered = [c for c, s in scored if s >= 0.3]
+            # sort by relevance; we return early here
+            filtered.sort(key=lambda c: fuzzy_score(c, query), reverse=True)
+            return filtered
+        elif search_mode == "boolean":
+            try:
+                filtered = boolean_search(
+                    query=query,
+                    cases=filtered,
+                    search_fields=["case_name", "injuries", "comments", "summary"],
+                )
+            except Exception:
+                pass  # fall through with unfiltered on parse error
+
+    # ── Sort ──────────────────────────────────────────────────────
+    if sort == "year_desc":
+        filtered.sort(key=lambda c: c.get("year") or 0, reverse=True)
+    elif sort == "year_asc":
+        filtered.sort(key=lambda c: c.get("year") or 0)
+    elif sort == "award_desc":
+        filtered.sort(key=lambda c: extract_damages_value(c) or 0, reverse=True)
+    elif sort == "award_asc":
+        filtered.sort(key=lambda c: extract_damages_value(c) or 0)
+    elif sort == "name_asc":
+        filtered.sort(key=lambda c: (c.get("case_name") or "").lower())
+
+    return filtered
+
+
+def render_stat_bar(values: List[float], n_cases: int) -> None:
+    """Render a 4-column stats bar for a list of award values."""
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(
+            f'<div class="stat-block"><span class="stat-val">{n_cases:,}</span>'
+            f'<span class="stat-lbl">Cases</span></div>',
+            unsafe_allow_html=True,
+        )
+    if values:
+        median = int(np.median(values))
+        lo = int(min(values))
+        hi = int(max(values))
+        with c2:
+            st.markdown(
+                f'<div class="stat-block"><span class="stat-val">${median:,}</span>'
+                f'<span class="stat-lbl">Median Award</span></div>',
+                unsafe_allow_html=True,
+            )
+        with c3:
+            st.markdown(
+                f'<div class="stat-block"><span class="stat-val">${lo:,}</span>'
+                f'<span class="stat-lbl">Min Award</span></div>',
+                unsafe_allow_html=True,
+            )
+        with c4:
+            st.markdown(
+                f'<div class="stat-block"><span class="stat-val">${hi:,}</span>'
+                f'<span class="stat-lbl">Max Award</span></div>',
+                unsafe_allow_html=True,
+            )
+
+
 # =============================================================================
-# INITIALIZE SESSION STATE
+# SIDEBAR — NAVIGATION
 # =============================================================================
 
-if 'search_results' not in st.session_state:
-    st.session_state.search_results = None
-if 'analysis_data' not in st.session_state:
-    st.session_state.analysis_data = None
-if 'dismissed_cases' not in st.session_state:
-    st.session_state.dismissed_cases = set()
+with st.sidebar:
+    n_cases_total = len(cases) if cases else 0
+
+    st.markdown(
+        f"""
+        <div style="padding:1rem 0.75rem 0.75rem;border-bottom:1px solid #21262d;margin-bottom:0.5rem;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:0.6rem;
+                      letter-spacing:0.22em;text-transform:uppercase;color:#484f58;
+                      margin-bottom:0.25rem;">Ontario</div>
+          <div style="font-size:1rem;font-weight:700;color:#e6edf3;letter-spacing:-0.01em;
+                      line-height:1.2;">Damages<br>Compendium</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:0.6rem;
+                      color:#484f58;margin-top:0.35rem;">v{APP_VERSION} · {n_cases_total:,} cases</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<span style="font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;'
+        'color:#484f58;padding:0 0.25rem;display:block;margin-bottom:0.25rem;">Views</span>',
+        unsafe_allow_html=True,
+    )
+
+    for vid in VIEWS:
+        meta   = VIEW_META[vid]
+        active = st.session_state.current_view == vid
+        prefix = "▶" if active else "  "
+        label  = f"{prefix}  {meta['icon']}  {meta['label']}"
+        # Wrap in a div we can target with CSS for the active state
+        if active:
+            st.markdown('<div class="nav-active">', unsafe_allow_html=True)
+        if st.button(label, key=f"nav_{vid}"):
+            st.session_state.current_view = vid
+            st.rerun()
+        if active:
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        '<div style="border-top:1px solid #21262d;margin:0.75rem 0 0.5rem;"></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<span style="font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;'
+        'color:#484f58;padding:0 0.25rem;display:block;margin-bottom:0.25rem;">Settings</span>',
+        unsafe_allow_html=True,
+    )
+
+    include_outliers = st.checkbox(
+        "Include outliers",
+        value=True,
+        key="include_outliers_global",
+        help="When unchecked, awards outside 1.5×IQR are excluded from analytics and AI search.",
+    )
+
+    with st.expander("CPI Data", expanded=False):
+        st.caption(get_data_source())
+        cpi_raw = get_cpi_data()
+        buf = io.StringIO()
+        buf.write("Year,CPI\n")
+        for yr_k in sorted(cpi_raw.keys()):
+            buf.write(f"{yr_k},{cpi_raw[yr_k]:.2f}\n")
+        st.download_button(
+            "↓ Download CPI CSV",
+            buf.getvalue(),
+            "cpi_data.csv",
+            "text/csv",
+            key="dl_cpi_sb",
+        )
+        cpi_upload = st.file_uploader(
+            "Upload updated CPI CSV",
+            type=["csv"],
+            key="cpi_upload_sb",
+        )
+        if cpi_upload:
+            try:
+                BOC_CPI_CSV.parent.mkdir(parents=True, exist_ok=True)
+                with open(BOC_CPI_CSV, "wb") as _f:
+                    _f.write(cpi_upload.getbuffer())
+                new_cpi = reload_cpi_data()
+                st.success(f"Updated: {len(new_cpi)} years of CPI data")
+            except Exception as _e:
+                st.error(str(_e))
+
+    st.markdown(
+        '<div style="border-top:1px solid #21262d;margin-top:0.75rem;padding:0.75rem 0.5rem 0;">'
+        '<span style="font-size:0.62rem;color:#484f58;line-height:1.6;display:block;">'
+        "Reference only. Always verify case details<br>and consult primary sources."
+        "</span></div>",
+        unsafe_allow_html=True,
+    )
+
 
 # =============================================================================
-# MAIN UI
+# VIEW 01 — COMPENDIUM BROWSER
 # =============================================================================
 
-# Header
-st.markdown('<div class="main-header">⚖️ Ontario Damages Compendium</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">AI search tool for comparable personal injury awards in Ontario</div>', unsafe_allow_html=True)
+def render_compendium() -> None:
+    """Browsable compendium with ToC, fuzzy search, boolean search."""
+    st.markdown('<div class="view-label">View 01</div>', unsafe_allow_html=True)
+    st.markdown('<div class="view-heading">Compendium Browser</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="view-sub">'
+        "Browse all cases · Fuzzy and boolean search · Navigate by category or decade"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-# Create tabs for different pages
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Case Search", "👨‍⚖️ Judge Analytics", "🩺 Category Statistics", "🕵️ Boolean Search"])
+    # ── Search controls ───────────────────────────────────────────
+    sc1, sc2, sc3 = st.columns([6, 2, 2])
+    with sc1:
+        new_q = st.text_input(
+            "search",
+            value=st.session_state.comp_search,
+            placeholder="Search cases, injuries, comments, citations…",
+            label_visibility="collapsed",
+            key="comp_q_input",
+        )
+        if new_q != st.session_state.comp_search:
+            st.session_state.comp_search = new_q
+            st.session_state.comp_page = 0
+
+    with sc2:
+        mode_idx = 0 if st.session_state.comp_search_mode == "fuzzy" else 1
+        new_mode = st.selectbox(
+            "mode",
+            ["fuzzy", "boolean"],
+            index=mode_idx,
+            format_func=lambda x: "≈  Fuzzy" if x == "fuzzy" else "±  Boolean",
+            label_visibility="collapsed",
+            key="comp_mode_sel",
+        )
+        if new_mode != st.session_state.comp_search_mode:
+            st.session_state.comp_search_mode = new_mode
+            st.session_state.comp_page = 0
+
+    with sc3:
+        sort_opts = ["year_desc", "year_asc", "award_desc", "award_asc", "name_asc"]
+        sort_labels = {
+            "year_desc": "Year ↓",
+            "year_asc":  "Year ↑",
+            "award_desc": "Award ↓",
+            "award_asc":  "Award ↑",
+            "name_asc":   "Name A–Z",
+        }
+        cur_sort_idx = sort_opts.index(st.session_state.comp_sort) if st.session_state.comp_sort in sort_opts else 0
+        new_sort = st.selectbox(
+            "sort",
+            sort_opts,
+            index=cur_sort_idx,
+            format_func=lambda x: sort_labels[x],
+            label_visibility="collapsed",
+            key="comp_sort_sel",
+        )
+        if new_sort != st.session_state.comp_sort:
+            st.session_state.comp_sort = new_sort
+            st.session_state.comp_page = 0
+
+    if new_mode == "boolean" and st.session_state.comp_search:
+        st.caption("Boolean operators: `AND` · `OR` · `NOT` · `\"exact phrase\"`")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Layout: ToC | Cases ───────────────────────────────────────
+    toc_col, main_col = st.columns([1, 4], gap="medium")
+
+    # Build ToC data
+    toc_cats  = build_toc_categories(cases)
+    toc_years = build_toc_years(cases)
+
+    with toc_col:
+        st.markdown(
+            '<span class="toc-section-label">Group by</span>',
+            unsafe_allow_html=True,
+        )
+        new_grp = st.radio(
+            "group",
+            ["category", "year"],
+            index=0 if st.session_state.toc_group_by == "category" else 1,
+            format_func=lambda x: "Category" if x == "category" else "Decade",
+            horizontal=True,
+            label_visibility="collapsed",
+            key="toc_group_radio",
+        )
+        if new_grp != st.session_state.toc_group_by:
+            st.session_state.toc_group_by = new_grp
+            st.session_state.toc_selection = None
+            st.session_state.comp_page = 0
+
+        st.markdown(
+            '<span class="toc-section-label">'
+            + ("Categories" if new_grp == "category" else "Decades")
+            + "</span>",
+            unsafe_allow_html=True,
+        )
+
+        # "All" button
+        all_active = st.session_state.toc_selection is None
+        all_lbl = ("▶  All  " if all_active else "   All  ") + f"[{n_cases_total:,}]"
+        if st.button(all_lbl, key="toc_all", use_container_width=True):
+            st.session_state.toc_selection = None
+            st.session_state.comp_page = 0
+            st.rerun()
+
+        groups = toc_cats if new_grp == "category" else toc_years
+        for grp_label, grp_count in groups.items():
+            is_active = st.session_state.toc_selection == grp_label
+            btn_lbl = ("▶  " if is_active else "   ") + grp_label + f"  [{grp_count}]"
+            if st.button(btn_lbl, key=f"toc_{grp_label}", use_container_width=True):
+                if is_active:
+                    st.session_state.toc_selection = None
+                else:
+                    st.session_state.toc_selection = grp_label
+                st.session_state.comp_page = 0
+                st.rerun()
+
+    # ── Main case list ────────────────────────────────────────────
+    with main_col:
+        # Apply filters
+        filter_key = (
+            st.session_state.comp_search,
+            st.session_state.comp_search_mode,
+            st.session_state.toc_selection,
+            st.session_state.toc_group_by,
+            st.session_state.comp_sort,
+        )
+        if st.session_state._last_filter_key != filter_key:
+            st.session_state.comp_page = 0
+            st.session_state._last_filter_key = filter_key
+
+        filtered = filter_and_sort_cases(
+            cases,
+            st.session_state.comp_search,
+            st.session_state.comp_search_mode,
+            st.session_state.toc_selection,
+            st.session_state.toc_group_by,
+            st.session_state.comp_sort,
+        )
+
+        # Stats bar
+        award_vals = [extract_damages_value(c) for c in filtered]
+        award_vals = [a for a in award_vals if a]
+        render_stat_bar(award_vals, len(filtered))
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if not filtered:
+            st.info("No cases match the current filters. Try broadening your search or clearing the ToC selection.")
+            return
+
+        # Pagination
+        PAGE_SIZE = 50
+        total_pages = max(1, (len(filtered) + PAGE_SIZE - 1) // PAGE_SIZE)
+        page = min(st.session_state.comp_page, total_pages - 1)
+        st.session_state.comp_page = page
+
+        start = page * PAGE_SIZE
+        page_cases = filtered[start : start + PAGE_SIZE]
+
+        # Table header
+        st.markdown(
+            '<div class="table-header-row">'
+            "<span>Case Name</span>"
+            "<span>Year</span>"
+            "<span>Court</span>"
+            "<span>Category</span>"
+            "<span style='text-align:right'>Non-Pec. Award</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Case rows
+        for case in page_cases:
+            cid   = case.get("id", "")
+            name  = case.get("case_name", "Unknown")
+            year  = str(case.get("year", "—"))
+            court = case.get("court", "—")
+            cats  = get_case_categories(case)
+            cat   = cats[0] if cats else "—"
+            award = extract_damages_value(case)
+            award_str = f"${award:,.0f}" if award else "—"
+            selected  = st.session_state.comp_selected_case_id == cid
+            sel_class = " selected" if selected else ""
+
+            # Row HTML (visual only — click handled by button below)
+            st.markdown(
+                f'<div class="case-row-grid{sel_class}">'
+                f'<span class="cn">{name}</span>'
+                f'<span class="cy">{year}</span>'
+                f'<span class="cc">{court}</span>'
+                f'<span class="ccat">{cat}</span>'
+                f'<span class="caw">{award_str}</span>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            # Thin button row below the HTML row (expand/collapse)
+            btn_label = "▲ Close" if selected else "▼ View"
+            if st.button(btn_label, key=f"open_{cid}", help=f"Toggle detail for {name}"):
+                st.session_state.comp_selected_case_id = None if selected else cid
+                st.rerun()
+
+            # Inline detail panel
+            if selected:
+                with st.container():
+                    st.markdown('<div class="detail-panel">', unsafe_allow_html=True)
+                    h1, h2 = st.columns([3, 1])
+                    with h1:
+                        st.markdown(f"#### {name}")
+                        meta_parts = [p for p in [year, court, case.get("citation", "")] if p and p != "—"]
+                        st.caption("  ·  ".join(meta_parts))
+                    with h2:
+                        if award:
+                            st.markdown(
+                                f'<span class="detail-award">${award:,.0f}</span>'
+                                f'<span class="detail-meta-label">Non-Pecuniary Award</span>',
+                                unsafe_allow_html=True,
+                            )
+                    st.markdown("---")
+                    display_enhanced_data(case, show_fla=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+        # Pagination controls
+        if total_pages > 1:
+            st.markdown("<br>", unsafe_allow_html=True)
+            pg1, pg2, pg3 = st.columns([1, 3, 1])
+            with pg1:
+                if page > 0 and st.button("← Prev", key="pg_prev"):
+                    st.session_state.comp_page -= 1
+                    st.rerun()
+            with pg2:
+                range_start = start + 1
+                range_end = min(start + PAGE_SIZE, len(filtered))
+                st.markdown(
+                    f'<div style="text-align:center;font-size:0.78rem;color:#6b7280;padding-top:0.4rem;">'
+                    f"Showing {range_start}–{range_end} of {len(filtered):,} · "
+                    f"Page {page+1} of {total_pages}"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with pg3:
+                if page < total_pages - 1 and st.button("Next →", key="pg_next"):
+                    st.session_state.comp_page += 1
+                    st.rerun()
+
 
 # =============================================================================
-# TAB 1: CASE SEARCH
+# VIEW 02 — AI SEARCH
 # =============================================================================
 
-with tab1:
-    # Instructions - Always visible
-    st.info("""
-    **How to Search:** Describe the injury in detail below, optionally select demographics and injury categories in the sidebar, then click "Find Comparable Cases" to see similar awards.
+def render_ai_search() -> None:
+    """Semantic AI search with expert report upload and PDF export."""
+    st.markdown('<div class="view-label">View 02</div>', unsafe_allow_html=True)
+    st.markdown('<div class="view-heading">AI Search</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="view-sub">'
+        "Hybrid semantic search — injury embeddings · BM25 keywords · metadata matching"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-    **💡 Tips:** Use clinical terminology (e.g., "C5-C6 disc herniation"), include severity and chronicity, mention mechanism of injury if relevant.
-    """)
+    # ── Two-panel layout: controls | results ──────────────────────
+    ctrl_col, res_col = st.columns([1, 3], gap="large")
 
-    # =============================================================================
-    # EXPERT REPORT UPLOAD (OPTIONAL)
-    # =============================================================================
-
-    with st.expander("📄 **Optional:** Upload Expert/Medical Report for Auto-Extraction", expanded=False):
-        st.markdown("""
-        Upload a medical or expert report PDF, and the system will automatically extract injuries,
-        limitations, and other relevant information to populate the search fields.
-        """)
-
-        col_upload1, col_upload2 = st.columns([2, 1])
-
-        with col_upload1:
+    with ctrl_col:
+        # Expert report upload
+        with st.expander("Upload Expert Report  (optional)", expanded=False):
             uploaded_file = st.file_uploader(
-                "Choose a PDF file",
-                type=['pdf'],
-                help="Upload medical report, IME, expert opinion, or similar document"
+                "PDF report",
+                type=["pdf"],
+                key="ai_report_upload",
+                help="Upload a medical or expert report PDF to auto-populate the injury description.",
             )
-
-        with col_upload2:
             use_llm = st.checkbox(
-                "Use AI Analysis",
+                "Use AI analysis",
                 value=True,
-                help="Use LLM for more accurate extraction (requires API key in .env file)"
+                key="ai_use_llm",
+                help="Requires OPENAI_API_KEY or ANTHROPIC_API_KEY in environment.",
             )
-
-        if uploaded_file is not None:
-            if st.button("🔍 Analyze Expert Report", type="secondary"):
-                with st.spinner("Analyzing expert report..."):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-                        tmp_file.write(uploaded_file.getvalue())
-                        tmp_path = tmp_file.name
-
+            if uploaded_file and st.button("Analyze Report", key="ai_analyze_btn", type="secondary"):
+                with st.spinner("Analyzing report…"):
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                        tmp.write(uploaded_file.getvalue())
+                        tmp_path = tmp.name
                     try:
                         analysis = analyze_expert_report(tmp_path, use_llm=use_llm)
                         st.session_state.analysis_data = analysis
-
-                        st.success("✅ Expert report analyzed successfully!")
-
-                        st.subheader("Extracted Information")
-
-                        if analysis.get('injured_regions'):
-                            st.write("**Detected Categories:**")
-                            for region_id in analysis['injured_regions']:
-                                if region_id in region_map:
-                                    st.write(f"• {region_map[region_id]['label']}")
-
-                        if analysis.get('injury_description'):
-                            st.write("**Injury Description:**")
-                            st.write(analysis['injury_description'][:500])
-
-                        if analysis.get('limitations'):
-                            st.write("**Functional Limitations:**")
-                            for limitation in analysis['limitations'][:5]:
-                                st.write(f"• {limitation}")
-
-                        if analysis.get('chronicity'):
-                            st.write(f"**Chronicity:** {analysis['chronicity']}")
-
-                        if analysis.get('severity'):
-                            st.write(f"**Severity:** {analysis['severity']}")
-
-                        st.info("💡 Review the auto-populated injury description below and edit as needed before searching.")
-
+                        st.success("Report analyzed — injury description updated below.")
+                        detected = analysis.get("injured_regions", [])
+                        if detected:
+                            st.write("**Detected regions:**")
+                            for rid in detected:
+                                if rid in region_map:
+                                    st.write(f"  · {region_map[rid]['label']}")
+                        st.rerun()
                     except Exception as e:
-                        st.error(f"❌ Error analyzing report: {str(e)}")
-                        st.info("Try using the manual input field below instead.")
+                        st.error(f"Analysis failed: {e}")
+                        st.info("Try manual entry below, or disable AI analysis and retry.")
                     finally:
                         if os.path.exists(tmp_path):
                             os.unlink(tmp_path)
 
-    # =============================================================================
-    # INJURY DESCRIPTION - MAIN INPUT
-    # =============================================================================
+        # Injury description
+        st.markdown("**Injury Description**")
+        default_text = ""
+        if st.session_state.analysis_data:
+            injuries_ex = st.session_state.analysis_data.get("injuries", [])
+            sequelae_ex = st.session_state.analysis_data.get("sequelae", [])
+            parts = []
+            if injuries_ex:
+                parts.append("; ".join(injuries_ex))
+            if sequelae_ex:
+                parts.append("; ".join(sequelae_ex))
+            default_text = " | ".join(parts)
 
-    st.markdown("### 🔍 Describe the Injury")
-
-    # Pre-populate if analysis exists (from expert report analyzer)
-    default_injury_text = ""
-    if st.session_state.analysis_data:
-        # Build injury text from extracted injuries and sequelae
-        injuries = st.session_state.analysis_data.get('injuries', [])
-        sequelae = st.session_state.analysis_data.get('sequelae', [])
-        parts = []
-        if injuries:
-            parts.append("; ".join(injuries))
-        if sequelae:
-            parts.append("; ".join(sequelae))
-        default_injury_text = " | ".join(parts) if parts else ""
-
-    injury_text = st.text_area(
-        "Injury details",
-        value=default_injury_text,
-        height=180,
-        placeholder="Example: diffuse axonal injury, traumatic brain injury, post-concussion syndrome\n\nOr describe in detail: C5-C6 disc herniation with chronic radicular pain radiating to right upper extremity...",
-        help="For best results, use comma-separated injuries (e.g., 'diffuse axonal injury, traumatic brain injury'). You can also describe injuries in detail with their mechanism, anatomical structures, severity, chronicity, and functional impact.",
-        label_visibility="collapsed"
-    )
-
-    # Case Characteristics - moved from sidebar for better workflow
-    st.markdown("#### Case Characteristics (Optional)")
-    st.caption("Additional filters for case characteristics")
-
-    # FLA display toggle
-    show_fla = st.checkbox(
-        "Show Family Law Act claims",
-        value=False,
-        help="When checked, Family Law Act claims (spouse, children, etc.) will be displayed in case results. When unchecked, FLA claims are hidden from the display.",
-        key="show_fla_claims"
-    )
-
-    # Load compendium regions for status filters
-    status_filters = {}
-    compendium_regions_for_status = None
-    try:
-        with open("compendium_regions.json", "r") as f:
-            compendium_regions_for_status = json.load(f)
-    except:
-        pass
-
-    if compendium_regions_for_status and "status_filters" in compendium_regions_for_status:
-        # Create columns for better layout
-        num_filters = len(compendium_regions_for_status["status_filters"])
-        cols_per_row = 3
-        rows_needed = (num_filters + cols_per_row - 1) // cols_per_row
-
-        filters_list = list(compendium_regions_for_status["status_filters"].items())
-
-        for row_idx in range(rows_needed):
-            cols = st.columns(cols_per_row)
-            for col_idx in range(cols_per_row):
-                filter_idx = row_idx * cols_per_row + col_idx
-                if filter_idx < len(filters_list):
-                    filter_id, filter_data = filters_list[filter_idx]
-                    with cols[col_idx]:
-                        status_filters[filter_id] = st.checkbox(
-                            filter_data["label"],
-                            help=filter_data["description"],
-                            key=f"status_{filter_id}"
-                        )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        search_button = st.button("🔍 Find Comparable Cases", type="primary", width="stretch")
-
-# =============================================================================
-# SIDEBAR - SEARCH PARAMETERS
-# =============================================================================
-
-with st.sidebar:
-    st.header("Search Parameters")
-
-    # Outliers filter - at the top for visibility
-    include_outliers = st.checkbox(
-        "Include statistical outliers",
-        value=True,
-        help="Include outliers (very high or very low awards). When unchecked, cases outside 1.5×IQR are excluded for more accurate statistics. Applies to Case Search, Judge Analytics, and Category Statistics.",
-        key="include_outliers_global"
-    )
-
-    st.divider()
-
-    # Demographics - back in sidebar for better organization
-    st.subheader("Demographics")
-    gender = st.radio("Gender:", ["Male", "Female", "Not Specified"], index=2, horizontal=False)
-    age = st.slider("Age:", 5, 100, 35, help="Age of plaintiff at time of injury")
-
-    st.divider()
-
-    # Load compendium regions
-    compendium_regions = None
-    try:
-        with open("compendium_regions.json", "r") as f:
-            compendium_regions = json.load(f)
-    except:
-        pass
-
-    # Injury Categories (based on compendium structure)
-    st.subheader("Injury Categories")
-    st.caption("Select injury types based on compendium categories")
-
-    selected_injury_categories = []
-
-    if compendium_regions and "injury_categories" in compendium_regions:
-        for category_id, category_data in compendium_regions["injury_categories"].items():
-            with st.expander(category_data["label"]):
-                for subcategory in category_data["subcategories"]:
-                    key = f"cat_{category_id}_{subcategory}"
-                    if st.checkbox(subcategory, key=key):
-                        selected_injury_categories.append(subcategory)
-    else:
-        # Fallback to simple text input if config not available
-        st.info("Using simplified injury search - describe injuries in the text box below")
-
-    st.divider()
-
-    # Display selected categories
-    if selected_injury_categories:
-        st.subheader("Selected Categories")
-        for cat in selected_injury_categories[:5]:  # Show first 5
-            st.markdown(f'<span class="region-badge">{cat}</span>', unsafe_allow_html=True)
-        if len(selected_injury_categories) > 5:
-            st.caption(f"+ {len(selected_injury_categories) - 5} more...")
-    else:
-        st.info("No categories selected - will search all cases")
-
-    st.divider()
-
-    # CPI Data Upload Section
-    with st.expander("📊 Update CPI Data (Optional)", expanded=False):
-        st.caption("Upload Bank of Canada CPI data to ensure accurate inflation adjustments")
-        st.info(f"**Current:** {get_data_source()}")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("**Download current data:**")
-            import io
-            cpi_data = get_cpi_data()
-            csv_buffer = io.StringIO()
-            csv_buffer.write("Year,CPI\n")
-            for year in sorted(cpi_data.keys()):
-                csv_buffer.write(f"{year},{cpi_data[year]:.2f}\n")
-
-            st.download_button(
-                label="📥 Download Current CPI Data",
-                data=csv_buffer.getvalue(),
-                file_name="cpi_data_template.csv",
-                mime="text/csv",
-                help="Download the current CPI data as a CSV template"
-            )
-
-        with col2:
-            st.markdown("**Or get latest from:**")
-            st.markdown("[Bank of Canada](https://www.bankofcanada.ca/valet/observations/group/CPI_MONTHLY/csv)")
-
-        cpi_file = st.file_uploader(
-            "Upload CPI CSV",
-            type=['csv'],
-            help="Bank of Canada CPI monthly data in CSV format",
-            key="cpi_upload"
+        injury_text = st.text_area(
+            "Describe the injury",
+            value=default_text,
+            height=120,
+            placeholder=(
+                "e.g. C5-C6 disc herniation with radiculopathy, chronic cervicogenic headache, "
+                "whiplash grade II, PTSD"
+            ),
+            label_visibility="collapsed",
+            key="ai_injury_text",
         )
 
-        if cpi_file is not None:
-            try:
-                BOC_CPI_CSV.parent.mkdir(parents=True, exist_ok=True)
-                with open(BOC_CPI_CSV, 'wb') as f:
-                    f.write(cpi_file.getbuffer())
+        if st.session_state.analysis_data and st.button("Clear report data", key="ai_clear_analysis"):
+            st.session_state.analysis_data = None
+            st.rerun()
 
-                new_data = reload_cpi_data()
-                st.success(f"✓ CPI data updated successfully! Now have {len(new_data)} years of data.")
+        st.markdown("**Demographics**  *(optional)*")
+        gender = st.radio(
+            "Gender",
+            ["Not Specified", "Male", "Female"],
+            index=0,
+            horizontal=True,
+            key="ai_gender",
+        )
+        age = st.slider("Age at injury", 5, 100, 35, key="ai_age")
 
-            except Exception as e:
-                st.error(f"Failed to update CPI data: {e}")
+        st.markdown("**Results**")
+        num_results = st.slider("Number of results", 5, 50, 10, step=5, key="ai_num_results")
 
-    st.divider()
-
-    # Search filters
-    st.subheader("Search Filters")
-
-    num_results = st.slider(
-        "Number of results:",
-        min_value=5,
-        max_value=50,
-        value=10,
-        step=5,
-        help="Maximum number of cases to return"
-    )
-
-    st.divider()
-
-    # Search Weighting Controls
-    st.subheader("Search Weighting")
-    st.caption("Adjust how different aspects of cases are weighted in search results")
-
-    # Preset options - simplified to 3 meaningful presets + Custom
-    weight_preset = st.selectbox(
-        "Preset:",
-        options=[
-            "Balanced (Default)",
-            "Medical Focus",
-            "Symptom/Impact Focus",
-            "Custom"
-        ],
-        help="Choose a search strategy:\n"
-             "• Balanced: General-purpose search across all factors\n"
-             "• Medical Focus: Prioritize medical diagnoses and terminology\n"
-             "• Symptom/Impact: Focus on functional limitations and symptoms\n"
-             "• Custom: Manual weight adjustment"
-    )
-
-    # Define preset values (embeddings-only for injury matching with medical expansion)
-    presets = {
-        "Balanced (Default)": {
-            "injury_embedding": 0.40,
-            "keyword": 0.35,
-            "semantic": 0.15,
-            "meta": 0.10,
-            "description": "Balanced search across all factors - good starting point for most searches"
-        },
-        "Medical Focus": {
-            "injury_embedding": 0.65,
-            "keyword": 0.20,
-            "semantic": 0.10,
-            "meta": 0.05,
-            "description": "Emphasizes medical injury matching and terminology - best for specific diagnoses like 'C5-C6 disc herniation' or 'diffuse axonal injury'"
-        },
-        "Symptom/Impact Focus": {
-            "injury_embedding": 0.15,
-            "keyword": 0.60,
-            "semantic": 0.15,
-            "meta": 0.10,
-            "description": "Keyword-focused for narrative descriptions - best for functional limitations like 'chronic pain affecting daily activities' or 'unable to return to work'"
+        st.markdown("**Search Strategy**")
+        weight_preset = st.selectbox(
+            "Strategy",
+            ["Balanced (Default)", "Medical Focus", "Symptom/Impact Focus", "Custom"],
+            label_visibility="collapsed",
+            key="ai_weight_preset",
+            help=(
+                "Balanced: general-purpose · Medical: specific diagnoses · "
+                "Symptom/Impact: functional limitations · Custom: set weights manually"
+            ),
+        )
+        preset_map = {
+            "Balanced (Default)":    (0.40, 0.35, 0.15, 0.10),
+            "Medical Focus":          (0.65, 0.20, 0.10, 0.05),
+            "Symptom/Impact Focus":   (0.15, 0.60, 0.15, 0.10),
         }
-    }
-
-    # Initialize weights based on preset or use custom
-    if weight_preset != "Custom":
-        preset_values = presets[weight_preset]
-        injury_embedding_weight = preset_values["injury_embedding"]
-        keyword_weight = preset_values["keyword"]
-        semantic_weight = preset_values["semantic"]
-        meta_weight = preset_values["meta"]
-
-        # Display current preset weights with description (read-only)
-        st.info(
-            f"**{preset_values['description']}**\n\n"
-            f"**Current weights (with medical term expansion):**\n\n"
-            f"• Injury Embedding Matching: {injury_embedding_weight:.0%}\n\n"
-            f"• Keyword/Text Matching: {keyword_weight:.0%}\n\n"
-            f"• Semantic Similarity (Full Text): {semantic_weight:.0%}\n\n"
-            f"• Demographics/Metadata: {meta_weight:.0%}"
-        )
-    else:
-        # Custom sliders
-        st.caption("💡 Adjust individual weights (will be normalized to sum to 100%)")
-
-        injury_embedding_weight = st.slider(
-            "Injury Embedding Matching",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.40,
-            step=0.05,
-            help="Weight for AI-based injury similarity using embeddings of injury terms. Finds semantically similar injuries (e.g., 'TBI' matches 'brain injury', 'head trauma')."
-        )
-
-        keyword_weight = st.slider(
-            "Keyword/Text Matching",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.35,
-            step=0.05,
-            help="Weight for keyword matching in comments, case names, and summaries. Increase for narrative descriptions and functional limitations."
-        )
-
-        semantic_weight = st.slider(
-            "Semantic Similarity (Full Text)",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.15,
-            step=0.05,
-            help="Weight for AI-based similarity using full query text embeddings. Increase to find conceptually similar cases with different wording."
-        )
-
-        meta_weight = st.slider(
-            "Demographics/Metadata",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.10,
-            step=0.05,
-            help="Weight for gender, age, and injury overlap matching. Increase to prioritize cases with similar demographics."
-        )
-
-        # Normalize weights to sum to 1.0
-        total_weight = injury_embedding_weight + keyword_weight + semantic_weight + meta_weight
-        if total_weight > 0:
-            injury_embedding_weight = injury_embedding_weight / total_weight
-            keyword_weight = keyword_weight / total_weight
-            semantic_weight = semantic_weight / total_weight
-            meta_weight = meta_weight / total_weight
-
+        if weight_preset != "Custom":
+            inj_w, kw_w, sem_w, meta_w = preset_map[weight_preset]
+            desc_map = {
+                "Balanced (Default)":   "Balanced across all factors",
+                "Medical Focus":         "Prioritises specific diagnoses and clinical terms",
+                "Symptom/Impact Focus":  "Prioritises narrative and functional descriptions",
+            }
+            st.caption(desc_map[weight_preset])
+        else:
+            st.caption("Weights are normalised to sum to 100%")
+            inj_w  = st.slider("Injury Embedding", 0.0, 1.0, 0.40, 0.05, key="ai_w_inj")
+            kw_w   = st.slider("Keyword / BM25",   0.0, 1.0, 0.35, 0.05, key="ai_w_kw")
+            sem_w  = st.slider("Semantic (full)",   0.0, 1.0, 0.15, 0.05, key="ai_w_sem")
+            meta_w = st.slider("Demographics",      0.0, 1.0, 0.10, 0.05, key="ai_w_meta")
+            total  = inj_w + kw_w + sem_w + meta_w
+            if total > 0:
+                inj_w, kw_w, sem_w, meta_w = (
+                    inj_w / total, kw_w / total, sem_w / total, meta_w / total
+                )
             st.caption(
-                f"**Normalized weights:** "
-                f"Injury Embed: {injury_embedding_weight:.0%}, "
-                f"Keyword: {keyword_weight:.0%}, "
-                f"Semantic: {semantic_weight:.0%}, "
-                f"Meta: {meta_weight:.0%}"
+                f"Injury {inj_w:.0%} · Keyword {kw_w:.0%} · "
+                f"Semantic {sem_w:.0%} · Meta {meta_w:.0%}"
             )
 
-    # Wire injury categories to selected_regions for exclusive filtering
-    # selected_regions is used as an exclusive filter: only cases with at least one selected region
-    selected_regions = selected_injury_categories
+        # Injury category filter
+        st.markdown("**Category Filter**  *(optional — narrows search to selected regions)*")
+        compendium_regions = None
+        try:
+            with open("compendium_regions.json") as _f:
+                compendium_regions = json.load(_f)
+        except Exception:
+            pass
 
-with tab1:
-    # =============================================================================
-    # SEARCH EXECUTION AND RESULTS DISPLAY
-    # =============================================================================
-
-    if search_button:
-        if not injury_text.strip():
-            st.warning("⚠️ Please enter an injury description")
+        selected_regions: List[str] = []
+        if compendium_regions and "injury_categories" in compendium_regions:
+            for cat_id, cat_data in compendium_regions["injury_categories"].items():
+                with st.expander(cat_data["label"], expanded=False):
+                    for subcat in cat_data["subcategories"]:
+                        if st.checkbox(subcat, key=f"ai_cat_{cat_id}_{subcat}"):
+                            selected_regions.append(subcat)
         else:
-            with st.spinner("Searching comparable cases..."):
-                # Apply outlier filtering if requested - get more results first
-                # Get 3x the requested results to have enough data for outlier filtering
-                search_n = num_results * 3 if not include_outliers else num_results
+            st.caption("compendium_regions.json not found — category filter unavailable")
 
-                # Get search results (no minimum threshold - user sees all results)
-                results = search_cases(
-                    injury_text,
-                    selected_regions,
-                    cases,
-                    region_map,
-                    model,
-                    gender=gender if gender != "Not Specified" else None,
-                    age=age,
-                    top_n=search_n,
-                    semantic_weight=semantic_weight,
-                    keyword_weight=keyword_weight,
-                    meta_weight=meta_weight,
-                    injury_embedding_weight=injury_embedding_weight
-                )
+        show_fla = st.checkbox(
+            "Show Family Law Act claims in results",
+            value=False,
+            key="ai_show_fla",
+        )
 
-                # Apply outlier filtering if requested
-                if not include_outliers and len(results) > 4:
-                    result_cases = [case for case, _, _ in results]
-                    filtered_cases = filter_outliers(result_cases)
-                    # Rebuild results with only non-outlier cases
-                    filtered_case_ids = {case.get('id') for case in filtered_cases}
-                    results = [(case, emb_sim, score) for case, emb_sim, score in results
-                               if case.get('id') in filtered_case_ids]
-                    # Trim to requested number
+        st.markdown("<br>", unsafe_allow_html=True)
+        search_btn = st.button(
+            "Find Comparable Cases",
+            type="primary",
+            use_container_width=True,
+            key="ai_search_btn",
+        )
+
+    # ── Results panel ─────────────────────────────────────────────
+    with res_col:
+        if search_btn:
+            if not injury_text.strip():
+                st.warning("Please enter an injury description.")
+            else:
+                with st.spinner("Searching comparable cases…"):
+                    search_n = num_results * 3 if not include_outliers else num_results
+                    try:
+                        results = search_cases(
+                            injury_text,
+                            selected_regions,
+                            cases,
+                            region_map,
+                            model,
+                            gender=gender if gender != "Not Specified" else None,
+                            age=age,
+                            top_n=search_n,
+                            semantic_weight=sem_w,
+                            keyword_weight=kw_w,
+                            meta_weight=meta_w,
+                            injury_embedding_weight=inj_w,
+                        )
+                    except Exception as e:
+                        st.error(f"Search error: {e}")
+                        results = []
+
+                    if not include_outliers and len(results) > 4:
+                        kept_ids = {
+                            c.get("id")
+                            for c in filter_outliers([c for c, _, _ in results])
+                        }
+                        results = [
+                            (c, e, s) for c, e, s in results
+                            if c.get("id") in kept_ids
+                        ]
                     results = results[:num_results]
 
-            # Store results in session state
-            st.session_state.search_results = {
-                'results': results,
-                'injury_text': injury_text,
-                'selected_regions': selected_regions,
-                'gender': gender,
-                'age': age,
-                'num_results': num_results,
-                'timestamp': datetime.now()
-            }
+                st.session_state.search_results = {
+                    "results":          results,
+                    "injury_text":      injury_text,
+                    "selected_regions": selected_regions,
+                    "gender":           gender,
+                    "age":              age,
+                    "num_results":      num_results,
+                    "timestamp":        datetime.now(),
+                }
+                st.session_state.dismissed_cases = set()
 
-            # Clear dismissed cases for new search
-            st.session_state.dismissed_cases = set()
+        if st.session_state.search_results:
+            results = st.session_state.search_results["results"]
+            results = [
+                (c, e, s) for c, e, s in results
+                if c.get("id") not in st.session_state.dismissed_cases
+            ]
+            if not include_outliers and len(results) > 4:
+                kept_ids = {c.get("id") for c in filter_outliers([c for c, _, _ in results])}
+                results = [(c, e, s) for c, e, s in results if c.get("id") in kept_ids]
 
-    # =============================================================================
-    # DISPLAY SEARCH RESULTS (runs on every page load if results exist)
-    # =============================================================================
+            # Stats bar
+            dv = [extract_damages_value(c) for c, _, _ in results]
+            dv = [v for v in dv if v]
+            render_stat_bar(dv, len(results))
 
-    if st.session_state.search_results:
-        results = st.session_state.search_results['results']
+            st.markdown("<br>", unsafe_allow_html=True)
 
-        # Filter out dismissed cases FIRST (before charts and display)
-        results = [(case, emb_sim, score) for case, emb_sim, score in results
-                   if case.get('id') not in st.session_state.dismissed_cases]
+            if not results:
+                st.info("All results have been dismissed. Run a new search to start over.")
+                return
 
-        # Apply outlier filtering based on current checkbox state
-        # (Re-filter in case checkbox state changed after search)
-        if not include_outliers and len(results) > 4:
-            result_cases = [case for case, _, _ in results]
-            filtered_cases = filter_outliers(result_cases)
-            # Rebuild results with only non-outlier cases
-            filtered_case_ids = {case.get('id') for case in filtered_cases}
-            results = [(case, emb_sim, score) for case, emb_sim, score in results
-                       if case.get('id') in filtered_case_ids]
+            # Tabs: Charts | Cases
+            tab_charts, tab_cases = st.tabs(["Charts", "Cases"])
 
-        st.divider()
-        st.header("Search Results")
-
-        # Display search info
-        st.info(f"🔍 Showing {len(results)} comparable cases (sorted by relevance)")
-
-        # Extract damages for charts (now using filtered results)
-        damages_values = []
-        for case, emb_sim, combined_score in results:
-            damage_val = extract_damages_value(case)
-            if damage_val:
-                damages_values.append(damage_val)
-
-        # Charts Section (min/med/max shown in cap chart below)
-        if damages_values and len(results) > 0:
-            st.divider()
-
-            # Damages Cap Comparison Chart
-            st.subheader("📊 Non-Pecuniary Awards Relative to Ontario Damages Cap")
-            cap_fig = create_damages_cap_chart(damages_values, DEFAULT_REFERENCE_YEAR)
-            if cap_fig:
-                st.plotly_chart(cap_fig, use_container_width=True)
-                st.caption("💡 Non-pecuniary damages (general damages for pain & suffering) - bars are colored based on their proportion to the Ontario cap")
-
-            st.divider()
-
-            # Inflation-Adjusted Timeline Chart
-            st.subheader("📈 Inflation-Adjusted Non-Pecuniary Award Timeline")
-
-            fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
-
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Calculate and display statistics
-                chart_data = []
-                for case, emb_sim, combined_score in results[:CHART_MAX_CASES]:
-                    damage_val = extract_damages_value(case)
-                    year = case.get('year')
-                    if damage_val and year:
-                        from inflation_adjuster import adjust_for_inflation
-                        adjusted_val = adjust_for_inflation(damage_val, year, DEFAULT_REFERENCE_YEAR)
-                        if adjusted_val:
-                            chart_data.append({
-                                'original_award': damage_val,
-                                'adjusted_award': adjusted_val
-                            })
-
-                if chart_data:
-                    stats = calculate_chart_statistics(chart_data)
-
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        st.metric(
-                            f"Median Non-Pecuniary Award ({DEFAULT_REFERENCE_YEAR}$)",
-                            f"${stats['median_adjusted']:,.0f}",
-                            help=f"Median of all non-pecuniary awards (general damages) adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
+            with tab_charts:
+                if dv:
+                    cap_fig = create_damages_cap_chart(dv, DEFAULT_REFERENCE_YEAR)
+                    if cap_fig:
+                        st.plotly_chart(cap_fig, use_container_width=True)
+                        st.caption(
+                            "Non-pecuniary awards relative to Ontario damages cap "
+                            f"(inflation-adjusted to {DEFAULT_REFERENCE_YEAR})"
                         )
 
-                    with col2:
-                        st.metric(
-                            "Avg. Inflation Impact",
-                            f"+{stats['avg_inflation_impact']:.1f}%",
-                            help="Average percentage increase from original award year to current dollars"
+                    infl_fig = create_inflation_chart(results, DEFAULT_REFERENCE_YEAR)
+                    if infl_fig:
+                        st.plotly_chart(infl_fig, use_container_width=True)
+                        st.caption(
+                            f"Award timeline — all values adjusted to {DEFAULT_REFERENCE_YEAR} dollars (CPI)"
                         )
+                else:
+                    st.info("No award data available for charting.")
 
-                    st.caption(
-                        f"💡 Non-pecuniary awards (general damages) adjusted to {DEFAULT_REFERENCE_YEAR} dollars using "
-                        "Canadian CPI. Original amounts are not shown as they are not comparable across different years. "
-                        "Charts exclude pecuniary damages (economic losses)."
-                    )
-            else:
-                st.info("Inflation adjustment requires case year information. Some cases may not have dates.")
+            with tab_cases:
+                dismissed_count = len(st.session_state.dismissed_cases)
+                if dismissed_count:
+                    st.caption(f"{dismissed_count} case(s) dismissed from view")
 
-        st.divider()
+                for idx, (case, emb_sim, score) in enumerate(results, 1):
+                    ext = case.get("extended_data") or {}
+                    num_p = ext.get("num_plaintiffs", 0)
+                    pid_sfx = f" [P{ext.get('plaintiff_id','')}]" if num_p > 1 else ""
+                    award = extract_damages_value(case)
+                    award_str = f"${award:,.0f}" if award else "N/A"
 
-        # Display individual cases (results already filtered above)
-        st.subheader(f"Top {len(results)} Comparable Cases")
+                    with st.expander(
+                        f"{idx}.  {case.get('case_name','Unknown')}{pid_sfx}"
+                        f"   ·   {award_str}"
+                        f"   ·   Match {score*100:.0f}%",
+                        expanded=(idx <= EXPANDED_RESULTS_COUNT),
+                    ):
+                        dm_col, sc_col = st.columns([4, 1])
 
-        if len(st.session_state.dismissed_cases) > 0:
-            st.caption(f"💡 {len(st.session_state.dismissed_cases)} case(s) dismissed.")
+                        with dm_col:
+                            meta_parts = [
+                                p for p in [
+                                    str(case.get("year", "")),
+                                    case.get("court", ""),
+                                    case.get("region", ""),
+                                ]
+                                if p
+                            ]
+                            st.caption("  ·  ".join(meta_parts))
+                            if award:
+                                st.markdown(f"**Non-Pecuniary:** ${award:,.0f}")
+                            st.divider()
+                            display_enhanced_data(case, show_fla=show_fla)
 
-        for idx, (case, emb_sim, combined_score) in enumerate(results, 1):
-            # Build expander title with multi-plaintiff indicator and award amount
-            extended_data = case.get('extended_data', {})
-            num_plaintiffs = extended_data.get('num_plaintiffs', 0)
-            title_suffix = f" [P{extended_data.get('plaintiff_id', '')}]" if num_plaintiffs > 1 else ""
+                        with sc_col:
+                            st.metric("Match", f"{score*100:.0f}%")
+                            if emb_sim:
+                                st.metric("Embed", f"{emb_sim*100:.0f}%")
+                            if st.button(
+                                "Dismiss",
+                                key=f"dismiss_{case.get('id')}_{idx}",
+                                help="Hide this case from results",
+                            ):
+                                st.session_state.dismissed_cases.add(case.get("id"))
+                                st.rerun()
 
-            # Get damage value for expander title
-            damage_val = extract_damages_value(case)
-            damage_display = f" | Non-Pecuniary Award: ${damage_val:,.0f}" if damage_val else ""
-
-            with st.expander(
-                f"**Case {idx}** - {case.get('case_name', 'Unknown')}{title_suffix} | "
-                f"Category: {case.get('region', 'Unknown')}{damage_display} | "
-                f"Match: {combined_score*100:.1f}%",
-                expanded=(idx <= EXPANDED_RESULTS_COUNT)
-            ):
-                # Add dismiss button at the top
-                if st.button("✕ Dismiss this case", key=f"dismiss_{case.get('id')}_{idx}", type="secondary"):
-                    st.session_state.dismissed_cases.add(case.get('id'))
-                    st.rerun()
-
-                col1, col2 = st.columns([2, 1])
-
-                with col1:
-                    st.markdown(f"**Category:** {case.get('region', 'Unknown')}")
-
-                    if case.get('year'):
-                        st.markdown(f"**Year:** {case['year']}")
-
-                    if case.get('court'):
-                        st.markdown(f"**Court:** {case['court']}")
-
-                    if damage_val:
-                        st.markdown(f"**Non-Pecuniary Damages (General):** ${damage_val:,.0f}")
-
-                    # Summary paragraph removed - pertinent info shown in enhanced data below
-
-                    # Display enhanced AI-parsed data
-                    st.divider()
-                    display_enhanced_data(case, show_fla=show_fla)
-
-                with col2:
-                    st.metric("Match Score", f"{combined_score*100:.1f}%", help="Overall similarity based on injury description and categories")
-
-                    if case.get("region_score", 0) > 0:
-                        st.metric("Category Match", f"{case['region_score']*100:.0f}%")
-
-    # =============================================================================
-    # PDF REPORT GENERATION
-    # =============================================================================
-
-    if st.session_state.search_results:
-        st.divider()
-
-        st.subheader("📥 Generate PDF Report")
-        st.markdown("Create a professional PDF report with search parameters, damage analysis, and comparable cases.")
-
-        col_dl1, col_dl2 = st.columns([1, 3])
-
-        with col_dl1:
-            num_cases = st.number_input(
-                "Number of cases to include:",
-                min_value=1,
-                max_value=50,
-                value=10,
-                help="Number of top cases to include in PDF report"
+            # PDF Export
+            st.divider()
+            st.markdown("**Export**")
+            ex1, ex2 = st.columns([1, 2])
+            with ex1:
+                n_pdf = st.number_input(
+                    "Cases to include in PDF",
+                    min_value=1,
+                    max_value=50,
+                    value=min(10, len(results)),
+                    key="ai_pdf_n",
+                )
+            with ex2:
+                if st.button("Generate PDF Report", type="secondary", key="ai_pdf_btn"):
+                    with st.spinner("Generating PDF…"):
+                        try:
+                            sd  = st.session_state.search_results
+                            all_dv = [
+                                extract_damages_value(c)
+                                for c, _, _ in sd["results"]
+                                if extract_damages_value(c)
+                            ]
+                            region_labels = {
+                                rid: region_map[rid]["label"]
+                                for rid in sd["selected_regions"]
+                                if rid in region_map
+                            }
+                            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            pf = f"damages_report_{ts}.pdf"
+                            with tempfile.TemporaryDirectory() as td:
+                                pp = os.path.join(td, pf)
+                                generate_damages_report(
+                                    output_path=pp,
+                                    selected_regions=sd["selected_regions"],
+                                    region_labels=region_labels,
+                                    injury_description=sd["injury_text"],
+                                    results=sd["results"],
+                                    damages_values=all_dv,
+                                    gender=(
+                                        sd["gender"]
+                                        if sd["gender"] != "Not Specified"
+                                        else None
+                                    ),
+                                    age=sd["age"],
+                                    max_cases=int(n_pdf),
+                                )
+                                pdf_bytes = open(pp, "rb").read()
+                            st.success("PDF ready to download")
+                            st.download_button(
+                                "Download PDF Report",
+                                pdf_bytes,
+                                pf,
+                                "application/pdf",
+                                key="ai_pdf_dl",
+                            )
+                        except Exception as e:
+                            st.error(f"PDF generation failed: {e}")
+                            st.info("Ensure reportlab is installed: pip install reportlab")
+        else:
+            st.info(
+                "Enter an injury description in the left panel and click "
+                "**Find Comparable Cases** to begin."
             )
 
-        with col_dl2:
-            if st.button("📄 Generate PDF Report", type="primary", width="stretch"):
-                with st.spinner("Generating PDF report..."):
-                    try:
-                        search_data = st.session_state.search_results
-                        results = search_data['results']
-
-                        damages_values = []
-                        for case, emb_sim, combined_score in results:
-                            damage_val = extract_damages_value(case)
-                            if damage_val:
-                                damages_values.append(damage_val)
-
-                        region_labels = {
-                            rid: region_map[rid]["label"]
-                            for rid in search_data['selected_regions']
-                            if rid in region_map
-                        }
-
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        pdf_filename = f"damages_report_{timestamp}.pdf"
-
-                        with tempfile.TemporaryDirectory() as tmpdir:
-                            pdf_path = os.path.join(tmpdir, pdf_filename)
-
-                            generate_damages_report(
-                                output_path=pdf_path,
-                                selected_regions=search_data['selected_regions'],
-                                region_labels=region_labels,
-                                injury_description=search_data['injury_text'],
-                                results=results,
-                                damages_values=damages_values,
-                                gender=search_data['gender'] if search_data['gender'] != "Not Specified" else None,
-                                age=search_data['age'],
-                                max_cases=num_cases
-                            )
-
-                            with open(pdf_path, 'rb') as pdf_file:
-                                pdf_data = pdf_file.read()
-
-                            st.success("✅ PDF report generated successfully!")
-
-                            st.download_button(
-                                label="💾 Download PDF Report",
-                                data=pdf_data,
-                                file_name=pdf_filename,
-                                mime="application/pdf",
-                                type="primary",
-                                width="stretch"
-                            )
-
-                    except Exception as e:
-                        st.error(f"❌ Error generating PDF: {str(e)}")
-                        st.info("Please ensure all dependencies are installed: pip install reportlab")
 
 # =============================================================================
-# TAB 2: JUDGE ANALYTICS
+# VIEW 03 — JUDGE ANALYTICS
 # =============================================================================
 
-with tab2:
+def render_judges() -> None:
+    st.markdown('<div class="view-label">View 03</div>', unsafe_allow_html=True)
+    st.markdown('<div class="view-heading">Judge Analytics</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="view-sub">'
+        "Award statistics, timelines, and comparisons by presiding judge"
+        "</div>",
+        unsafe_allow_html=True,
+    )
     display_judge_analytics_page(cases, include_outliers)
 
+
 # =============================================================================
-# TAB 3: CATEGORY STATISTICS (includes injury categories and FLA relationships)
+# VIEW 04 — CATEGORY ANALYTICS
 # =============================================================================
 
-with tab3:
+def render_categories() -> None:
+    st.markdown('<div class="view-label">View 04</div>', unsafe_allow_html=True)
+    st.markdown('<div class="view-heading">Category Analytics</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="view-sub">'
+        "Award statistics by injury category, anatomical region, and FLA relationship"
+        "</div>",
+        unsafe_allow_html=True,
+    )
     display_category_analytics_page(cases, include_outliers)
 
+
 # =============================================================================
-# TAB 4: BOOLEAN SEARCH
+# VIEW 05 — FLA CLAIMS
 # =============================================================================
 
-with tab4:
-    st.info("""
-    **Boolean Search:** Use logical operators to find specific cases with field-specific search and damage filters.
-
-    **Operators:**
-    - **AND**: Both terms must be present (e.g., `whiplash AND herniation`)
-    - **OR**: At least one term must be present (e.g., `fracture OR break`)
-    - **NOT**: Term must not be present (e.g., `spine NOT surgery`)
-    - **Quotes**: Exact phrase matching (e.g., `"disc herniation"`)
-
-    **💡 Examples:**
-    - Search for `MVA` in **Comments only** with awards over **$100,000**
-    - Search for `neck AND "disc herniation"` in **Injuries** field
-    - Search for `(fracture OR break) AND spine` across **all fields**
-    - Search for `brain NOT surgery` in **Comments** with awards between **$50k-$200k**
-    """)
-
-    # Boolean query input
-    st.subheader("Enter Boolean Query")
-    boolean_query = st.text_input(
-        "Boolean Query",
-        placeholder='e.g., MVA, neck AND herniation, (fracture OR break) AND spine',
-        help="Use AND, OR, NOT operators to combine search terms. Use quotes for exact phrases.",
-        label_visibility="collapsed"
+def render_fla() -> None:
+    st.markdown('<div class="view-label">View 05</div>', unsafe_allow_html=True)
+    st.markdown('<div class="view-heading">FLA Claims</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="view-sub">'
+        "Family Law Act claims — fatal injuries, dependency awards, spousal and child claims"
+        "</div>",
+        unsafe_allow_html=True,
     )
+    display_fla_analytics_page(cases, include_outliers)
 
-    # Field selection
-    st.subheader("🔍 Search In (select fields to search)")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        search_case_name = st.checkbox("Case Name", value=True, key="bool_search_case_name")
-    with col2:
-        search_injuries = st.checkbox("Injuries", value=True, key="bool_search_injuries")
-    with col3:
-        search_comments = st.checkbox("Comments", value=True, key="bool_search_comments")
-    with col4:
-        search_summary = st.checkbox("Summary", value=True, key="bool_search_summary")
-
-    # Build search_fields list
-    search_fields = []
-    if search_case_name:
-        search_fields.append('case_name')
-    if search_injuries:
-        search_fields.append('injuries')
-    if search_comments:
-        search_fields.append('comments')
-    if search_summary:
-        search_fields.append('summary')
-
-    # Damages filter
-    st.subheader("💰 Non-Pecuniary Damages Filter")
-    st.caption("Filter by general damages (pain & suffering) - excludes pecuniary damages")
-    col1, col2 = st.columns(2)
-    with col1:
-        min_damages_enabled = st.checkbox("Minimum Award", key="bool_min_damages_enabled")
-        min_damages = None
-        if min_damages_enabled:
-            min_damages = st.number_input(
-                "Min Amount ($)",
-                min_value=0,
-                max_value=10_000_000,
-                value=100_000,
-                step=10_000,
-                key="bool_min_damages"
-            )
-
-    with col2:
-        max_damages_enabled = st.checkbox("Maximum Award", key="bool_max_damages_enabled")
-        max_damages = None
-        if max_damages_enabled:
-            max_damages = st.number_input(
-                "Max Amount ($)",
-                min_value=0,
-                max_value=10_000_000,
-                value=500_000,
-                step=10_000,
-                key="bool_max_damages"
-            )
-
-    # Year range filter
-    st.subheader("📅 Year Range Filter")
-    year_filter_enabled = st.checkbox("Filter by year range", key="bool_year_filter_enabled")
-    min_year = None
-    max_year = None
-    if year_filter_enabled:
-        # Get min/max years from cases for slider range
-        all_years = [case.get('year') for case in cases if case.get('year')]
-        if all_years:
-            min_case_year = min(all_years)
-            max_case_year = max(all_years)
-            year_range = st.slider(
-                "Select year range",
-                min_value=min_case_year,
-                max_value=max_case_year,
-                value=(min_case_year, max_case_year),
-                key="bool_year_range"
-            )
-            min_year, max_year = year_range
-
-    # Additional filters section
-    st.subheader("🔍 Additional Filters (Optional)")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        # Category filter
-        bool_selected_regions = []
-        with st.expander("🎯 Injury Categories", expanded=False):
-            if region_map:
-                for category_id, category_data in region_map.items():
-                    if st.checkbox(
-                        category_data.get('label', category_id),
-                        key=f"bool_category_{category_id}"
-                    ):
-                        # Add main category
-                        bool_selected_regions.append(category_data.get('label', category_id))
-
-                        # Add subcategories if available
-                        subcats = category_data.get('subcategories', [])
-                        if subcats:
-                            bool_selected_regions.extend(subcats)
-
-    with col2:
-        # Demographics
-        with st.expander("👤 Demographics", expanded=False):
-            bool_gender = st.selectbox(
-                "Gender",
-                options=["Any", "Male", "Female"],
-                key="bool_gender"
-            )
-            if bool_gender == "Any":
-                bool_gender = None
-
-            bool_use_age = st.checkbox("Filter by age", key="bool_use_age")
-            bool_age = None
-            if bool_use_age:
-                bool_age = st.slider(
-                    "Age (±5 years)",
-                    min_value=0,
-                    max_value=100,
-                    value=40,
-                    key="bool_age"
-                )
-
-    # Search button
-    if st.button("🔍 Search Cases", type="primary", key="bool_search_btn"):
-        if not boolean_query.strip():
-            st.warning("⚠️ Please enter a Boolean query to search.")
-        elif not search_fields:
-            st.warning("⚠️ Please select at least one field to search in.")
-        else:
-            with st.spinner("Searching cases..."):
-                # Perform Boolean search with field-specific, damage, and year filters
-                bool_results = boolean_search(
-                    query=boolean_query,
-                    cases=cases,
-                    selected_regions=bool_selected_regions if bool_selected_regions else None,
-                    gender=bool_gender,
-                    age=bool_age,
-                    search_fields=search_fields,
-                    min_damages=min_damages,
-                    max_damages=max_damages,
-                    min_year=min_year,
-                    max_year=max_year
-                )
-
-                # Apply outlier filtering if requested
-                if not include_outliers:
-                    bool_results = filter_outliers(bool_results)
-
-                st.divider()
-                st.header("Search Results")
-
-                # Display search info
-                st.info(f"🔍 Found {len(bool_results)} matching cases")
-
-                if bool_results:
-                    # Extract damages for charts
-                    bool_damages_values = []
-                    for case in bool_results:
-                        damage_val = extract_damages_value(case)
-                        if damage_val:
-                            bool_damages_values.append(damage_val)
-
-                    # Display charts if we have damages data
-                    if bool_damages_values:
-                        st.divider()
-
-                        # Damages Cap Comparison Chart
-                        st.subheader("📊 Non-Pecuniary Awards Relative to Ontario Damages Cap")
-                        cap_fig = create_damages_cap_chart(bool_damages_values, DEFAULT_REFERENCE_YEAR)
-                        if cap_fig:
-                            st.plotly_chart(cap_fig, use_container_width=True)
-                            st.caption("💡 Non-pecuniary damages (general damages) - bars are colored based on their proportion to the Ontario cap")
-
-                    st.divider()
-                    st.subheader("📋 Case Results")
-
-                    # Display cases
-                    for idx, case in enumerate(bool_results, 1):
-                        with st.container():
-                            # Case header
-                            col1, col2 = st.columns([3, 1])
-
-                            with col1:
-                                case_name = case.get('case_name', 'Unknown Case')
-                                year = case.get('year', 'N/A')
-                                court = case.get('court', 'N/A')
-                                st.markdown(f"### {idx}. {case_name}")
-                                st.caption(f"📅 {year} | 🏛️ {court}")
-
-                            with col2:
-                                damage_val = extract_damages_value(case)
-                                if damage_val:
-                                    st.metric("💰 Non-Pecuniary Award", f"${damage_val:,.0f}")
-
-                            # Case details
-                            ext = case.get('extended_data', {})
-
-                            # Injuries
-                            injuries = ext.get('injuries', [])
-                            if injuries:
-                                st.markdown("**🩹 Injuries:**")
-                                for injury in injuries[:5]:  # Show first 5 injuries
-                                    st.markdown(f"- {injury}")
-                                if len(injuries) > 5:
-                                    st.caption(f"... and {len(injuries) - 5} more")
-
-                            # Comments
-                            comments = ext.get('comments') or case.get('comments')
-                            if comments:
-                                st.markdown(f"**💬 Comments:** {comments}")
-
-                            # Categories
-                            regions = case.get('regions') or ext.get('regions', [])
-                            if regions:
-                                st.markdown(f"**📍 Categories:** {', '.join(regions[:5])}")
-
-                            # Citation
-                            citation = case.get('citation', '')
-                            if citation:
-                                st.caption(f"📖 Citation: {citation}")
-
-                            st.divider()
-                else:
-                    st.warning("No cases found matching your Boolean query. Try adjusting your search terms or operators.")
 
 # =============================================================================
-# FOOTER
+# ROUTER
 # =============================================================================
 
-st.divider()
-st.caption("© 2025 Ontario Damages Compendium Tool | Built for legal professionals | Data source: CCLA Damages Compendium 2024")
-st.caption("⚠️ This tool provides reference information only. Always verify case details and consult primary sources.")
+_view = st.session_state.current_view
+
+if _view == "compendium":
+    render_compendium()
+elif _view == "ai_search":
+    render_ai_search()
+elif _view == "judges":
+    render_judges()
+elif _view == "categories":
+    render_categories()
+elif _view == "fla":
+    render_fla()
+else:
+    # Fallback — shouldn't happen
+    st.session_state.current_view = "compendium"
+    st.rerun()
