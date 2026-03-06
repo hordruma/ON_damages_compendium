@@ -58,3 +58,5 @@ Thumbs.db
 # Streamlit
 .streamlit/*
 !.streamlit/config.toml
+damages_parsed.json
+data/page_sections.json
