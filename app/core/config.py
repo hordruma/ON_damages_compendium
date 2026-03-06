@@ -90,13 +90,13 @@ PARSER_RATE_LIMIT_DELAY = 0.5          # Delay between API calls (seconds)
 PARSER_MAX_RETRIES = 3                 # Maximum retries on API failure
 
 # ============================================================================
-# UI STYLING
+# UI STYLING — MATERIAL DESIGN 3
 # ============================================================================
 
-# Primary colors (matching Streamlit theme)
-PRIMARY_COLOR = "#3b82f6"      # Blue
-SUCCESS_COLOR = "#10b981"      # Green
-WARNING_COLOR = "#f59e0b"      # Amber
-ERROR_COLOR = "#ef4444"        # Red
+# Primary colors (Google Material Design 3)
+PRIMARY_COLOR = "#1a73e8"      # MD3 Blue
+SUCCESS_COLOR = "#1e8e3e"      # MD3 Green
+WARNING_COLOR = "#e8710a"      # MD3 Orange
+ERROR_COLOR = "#d93025"        # MD3 Red
 
 # ============================================================================
