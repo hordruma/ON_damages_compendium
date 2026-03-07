@@ -111,12 +111,19 @@ CRITICAL RULES:
 
 4. FLA Claims:
    - FLA = Family Law Act claims for family members
-   - Use gender-specific terms when clear (son/daughter, father/mother)
+   - CRITICAL: Use SPECIFIC relationship values from enum: father, mother, parent, spouse, son, daughter, child, brother, sister, sibling, grandfather, grandmother, grandparent, grandchild, unknown
+   - Use gender-specific terms: "son" (not "child") when text says "Son", "daughter" (not "child") when text says "Daughter"
+   - Use "spouse" for both "Husband" and "Wife" FLA claims
+   - Use "grandchild" (singular) for grandchildren claims
+   - Use "grandparent" (singular) for grandparents claims
    - Mark is_fla_award: false for insurance/subrogation
    - Mark is_fla_award: true for true FLA claims
    - CRITICAL: Extract Comments field EVEN FOR FLA-ONLY CASES
    - For FLA cases, comments describe the underlying injury/circumstances (e.g., "No liability", "Alleged medical negligence")
    - DO NOT leave comments empty if the Comments column has text
+   - When the ANATOMICAL CATEGORY is a family relationship (e.g., "HUSBAND AND FATHER", "SON/DAUGHTER", "BROTHER/SISTER", "WIFE & MOTHER"), the row IS an FLA claim
+   - For FLA section rows: extract the non-pecuniary damages as an FLA claim amount, with relationship matching the section category
+   - FLA section rows may have $0 non-pecuniary damages if damages were not awarded
 
 5. DATA QUALITY:
    - Parse monetary amounts as numbers only (no $ or commas)
@@ -208,7 +215,8 @@ CRITICAL RULES:
                             "properties": {
                                 "relationship": {
                                     "type": "string",
-                                    "enum": ["father", "mother", "parent", "spouse", "son", "daughter", "child", "brother", "sister", "sibling", "grandfather", "grandmother", "grandparent", "grandchild", "unknown"]
+                                    "enum": ["father", "mother", "parent", "spouse", "son", "daughter", "child", "brother", "sister", "sibling", "grandfather", "grandmother", "grandparent", "grandchild", "unknown"],
+                                    "description": "Use gender-specific: 'son'/'daughter' (not 'child') when text specifies. Use 'spouse' for husband/wife. Use 'grandchild' for grandchildren, 'grandparent' for grandparents."
                                 },
                                 "amount": {"type": "number"},
                                 "description": {"type": "string"},
@@ -625,6 +633,13 @@ CRITICAL RULES:
             "PSYCHOLOGICAL", "PSYCHIATRIC",
             "MULTIPLE INJURIES",
             "SOFT TISSUE",
+            # FLA (Family Law Act) sections
+            "HUSBAND AND FATHER", "WIFE AND MOTHER", "WIFE & MOTHER",
+            "SON/DAUGHTER", "SON OR DAUGHTER",
+            "BROTHER/SISTER", "BROTHER OR SISTER",
+            "GRANDPARENT", "GRANDCHILD",
+            "FATHER", "MOTHER",
+            "HUSBAND", "WIFE",
         ]
 
         # Look for section header in first 500 chars
@@ -1072,7 +1087,13 @@ CRITICAL RULES:
         main_sections = [
             "HEAD", "BRAIN", "SKULL",
             "ARMS", "SPINE", "BODY", "LEGS", "SKIN",
-            "FATAL INJURIES", "MOST SEVERE INJURIES", "MISCELLANEOUS"
+            "FATAL INJURIES", "MOST SEVERE INJURIES", "MISCELLANEOUS",
+            # FLA sections are standalone (not subsections)
+            "HUSBAND AND FATHER", "WIFE AND MOTHER", "WIFE & MOTHER",
+            "SON/DAUGHTER", "SON OR DAUGHTER",
+            "BROTHER/SISTER", "BROTHER OR SISTER",
+            "GRANDPARENT", "GRANDCHILD",
+            "FATHER", "MOTHER", "HUSBAND", "WIFE",
         ]
 
         # Subsection-only keywords that should be combined with parent
