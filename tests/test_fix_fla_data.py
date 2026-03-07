@@ -11,33 +11,37 @@ from fix_fla_data import (
 
 
 class TestFixRelationshipFromDescription:
-    def test_son_from_description(self):
-        claim = {"relationship": "child", "description": "Son: $5,000.00"}
-        assert fix_relationship_from_description(claim) == "son"
-
-    def test_daughter_from_description(self):
-        claim = {"relationship": "child", "description": "Family Law Act: daughter - $10,000.00"}
-        assert fix_relationship_from_description(claim) == "daughter"
-
-    def test_keeps_already_specific(self):
+    def test_son_genericized_to_child(self):
         claim = {"relationship": "son", "description": "Son: $5,000.00"}
-        assert fix_relationship_from_description(claim) == "son"
+        assert fix_relationship_from_description(claim) == "child"
 
-    def test_brother_from_description(self):
-        claim = {"relationship": "sibling", "description": "Brother: $3,000.00"}
-        assert fix_relationship_from_description(claim) == "brother"
+    def test_daughter_genericized_to_child(self):
+        claim = {"relationship": "daughter", "description": "Daughter: $10,000.00"}
+        assert fix_relationship_from_description(claim) == "child"
 
-    def test_sister_from_description(self):
-        claim = {"relationship": "sibling", "description": "Sister: $3,000.00"}
-        assert fix_relationship_from_description(claim) == "sister"
-
-    def test_father_from_description(self):
-        claim = {"relationship": "parent", "description": "Father: $50,000.00"}
-        assert fix_relationship_from_description(claim) == "father"
-
-    def test_child_stays_if_generic(self):
+    def test_child_stays_child(self):
         claim = {"relationship": "child", "description": "Children: $30,000.00"}
         assert fix_relationship_from_description(claim) == "child"
+
+    def test_brother_genericized_to_sibling(self):
+        claim = {"relationship": "brother", "description": "Brother: $3,000.00"}
+        assert fix_relationship_from_description(claim) == "sibling"
+
+    def test_sister_genericized_to_sibling(self):
+        claim = {"relationship": "sister", "description": "Sister: $3,000.00"}
+        assert fix_relationship_from_description(claim) == "sibling"
+
+    def test_father_genericized_to_parent(self):
+        claim = {"relationship": "father", "description": "Father: $50,000.00"}
+        assert fix_relationship_from_description(claim) == "parent"
+
+    def test_mother_genericized_to_parent(self):
+        claim = {"relationship": "mother", "description": "Mother: $25,000.00"}
+        assert fix_relationship_from_description(claim) == "parent"
+
+    def test_grandfather_genericized_to_grandparent(self):
+        claim = {"relationship": "grandfather", "description": "Grandfather: $5,000.00"}
+        assert fix_relationship_from_description(claim) == "grandparent"
 
     def test_spouse_stays(self):
         claim = {"relationship": "spouse", "description": "Wife: $5,000.00"}
@@ -57,6 +61,30 @@ class TestFixInvalidRelationships:
         claim = {"relationship": "grandson"}
         assert fix_invalid_relationships(claim) == "grandchild"
 
+    def test_son_to_child(self):
+        claim = {"relationship": "son"}
+        assert fix_invalid_relationships(claim) == "child"
+
+    def test_daughter_to_child(self):
+        claim = {"relationship": "daughter"}
+        assert fix_invalid_relationships(claim) == "child"
+
+    def test_father_to_parent(self):
+        claim = {"relationship": "father"}
+        assert fix_invalid_relationships(claim) == "parent"
+
+    def test_mother_to_parent(self):
+        claim = {"relationship": "mother"}
+        assert fix_invalid_relationships(claim) == "parent"
+
+    def test_brother_to_sibling(self):
+        claim = {"relationship": "brother"}
+        assert fix_invalid_relationships(claim) == "sibling"
+
+    def test_sister_to_sibling(self):
+        claim = {"relationship": "sister"}
+        assert fix_invalid_relationships(claim) == "sibling"
+
     def test_valid_unchanged(self):
         claim = {"relationship": "spouse"}
         assert fix_invalid_relationships(claim) == "spouse"
@@ -74,11 +102,11 @@ class TestExtractFlaFromComments:
         assert claims[0]["relationship"] == "spouse"
         assert claims[0]["amount"] == 5000.0
 
-    def test_extracts_son_amount(self):
+    def test_extracts_son_as_child(self):
         comments = "Son - $15,000.00"
         claims = extract_fla_from_comments(comments, ["Son/Daughter"])
         assert len(claims) == 1
-        assert claims[0]["relationship"] == "son"
+        assert claims[0]["relationship"] == "child"
         assert claims[0]["amount"] == 15000.0
 
     def test_empty_comments(self):
@@ -118,7 +146,7 @@ class TestFixFlaData:
                 "extended_data": {
                     "categories": ["General"],
                     "family_law_act_claims": [
-                        {"relationship": "child", "amount": 5000.0,
+                        {"relationship": "son", "amount": 5000.0,
                          "description": "Son: $5,000.00", "is_fla_award": True},
                         {"relationship": "grandchildren", "amount": 3000.0,
                          "description": "Grandchildren: $3,000.00", "is_fla_award": True},
@@ -128,7 +156,7 @@ class TestFixFlaData:
         ]
         fixed, stats = fix_fla_data(cases, verbose=False)
         claims = fixed[0]["extended_data"]["family_law_act_claims"]
-        assert claims[0]["relationship"] == "son"
+        assert claims[0]["relationship"] == "child"
         assert claims[1]["relationship"] == "grandchild"
 
     def test_creates_fla_from_category_and_npd(self):
@@ -147,3 +175,4 @@ class TestFixFlaData:
         claims = fixed[0]["extended_data"]["family_law_act_claims"]
         assert len(claims) >= 1
         assert claims[0]["amount"] == 15000.0
+        assert claims[0]["relationship"] == "child"

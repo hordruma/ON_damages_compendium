@@ -112,7 +112,7 @@ CRITICAL RULES:
 4. FLA Claims:
    - FLA = Family Law Act claims for family members
    - CRITICAL: Use SPECIFIC relationship values from enum: father, mother, parent, spouse, son, daughter, child, brother, sister, sibling, grandfather, grandmother, grandparent, grandchild, unknown
-   - Use gender-specific terms: "son" (not "child") when text says "Son", "daughter" (not "child") when text says "Daughter"
+   - Use GENERIC relationship terms: "child" for both "Son" and "Daughter", "sibling" for both "Brother" and "Sister", "parent" for both "Father" and "Mother"
    - Use "spouse" for both "Husband" and "Wife" FLA claims
    - Use "grandchild" (singular) for grandchildren claims
    - Use "grandparent" (singular) for grandparents claims
@@ -215,8 +215,8 @@ CRITICAL RULES:
                             "properties": {
                                 "relationship": {
                                     "type": "string",
-                                    "enum": ["father", "mother", "parent", "spouse", "son", "daughter", "child", "brother", "sister", "sibling", "grandfather", "grandmother", "grandparent", "grandchild", "unknown"],
-                                    "description": "Use gender-specific: 'son'/'daughter' (not 'child') when text specifies. Use 'spouse' for husband/wife. Use 'grandchild' for grandchildren, 'grandparent' for grandparents."
+                                    "enum": ["parent", "spouse", "child", "sibling", "grandparent", "grandchild", "unknown"],
+                                    "description": "Use GENERIC terms: 'child' for son/daughter, 'sibling' for brother/sister, 'parent' for father/mother. Use 'spouse' for husband/wife. Use 'grandchild' for grandchildren, 'grandparent' for grandparents."
                                 },
                                 "amount": {"type": "number"},
                                 "description": {"type": "string"},

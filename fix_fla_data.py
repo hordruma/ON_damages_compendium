@@ -25,34 +25,41 @@ RELATIONSHIP_FIXES = {
     "grandparents": "grandparent",
     "grandson": "grandchild",
     "granddaughter": "grandchild",
+    "grandfather": "grandparent",
+    "grandmother": "grandparent",
     "husband": "spouse",
     "wife": "spouse",
     "kids": "child",
     "children": "child",
-    "mom": "mother",
-    "dad": "father",
-    "bro": "brother",
-    "sis": "sister",
+    "son": "child",
+    "daughter": "child",
+    "mom": "parent",
+    "dad": "parent",
+    "mother": "parent",
+    "father": "parent",
+    "bro": "sibling",
+    "sis": "sibling",
+    "brother": "sibling",
+    "sister": "sibling",
 }
 
 # Valid relationship values per the schema enum
 VALID_RELATIONSHIPS = {
-    "father", "mother", "parent", "spouse", "son", "daughter", "child",
-    "brother", "sister", "sibling", "grandfather", "grandmother",
-    "grandparent", "grandchild", "unknown"
+    "parent", "spouse", "child",
+    "sibling", "grandparent", "grandchild", "unknown"
 }
 
 # FLA category to relationship mapping
 # These are the section headers in the compendium PDF
 FLA_CATEGORY_TO_RELATIONSHIP = {
-    "Son/Daughter": ["son", "daughter"],
-    "Husband and Father": ["spouse", "father"],
+    "Son/Daughter": ["child"],
+    "Husband and Father": ["spouse", "parent"],
     "Husband": ["spouse"],
     "Wife": ["spouse"],
-    "Wife & Mother": ["spouse", "mother"],
-    "Brother/Sister": ["brother", "sister"],
-    "Mother": ["mother"],
-    "Father": ["father"],
+    "Wife & Mother": ["spouse", "parent"],
+    "Brother/Sister": ["sibling"],
+    "Mother": ["parent"],
+    "Father": ["parent"],
     "Grandparent": ["grandparent"],
     "Grandchild": ["grandchild"],
 }
@@ -60,54 +67,30 @@ FLA_CATEGORY_TO_RELATIONSHIP = {
 
 def fix_relationship_from_description(claim: Dict[str, Any]) -> str:
     """
-    Fix the relationship field using the description text.
+    Genericize the relationship field to canonical categories.
 
-    When the LLM maps "Son: $5,000" to relationship="child" instead of "son",
-    this function corrects it by parsing the description.
+    Maps gender-specific relationships to generic ones:
+    son/daughter -> child, father/mother -> parent,
+    brother/sister -> sibling, grandfather/grandmother -> grandparent.
 
     Args:
         claim: FLA claim dict with 'relationship' and 'description' fields
 
     Returns:
-        Corrected relationship string
+        Genericized relationship string
     """
-    relationship = claim.get("relationship", "unknown")
-    description = (claim.get("description") or "").lower()
+    relationship = claim.get("relationship", "unknown").lower().strip()
 
-    # If relationship is already gender-specific, no fix needed
-    if relationship in ("son", "daughter", "father", "mother",
-                        "brother", "sister", "grandfather", "grandmother"):
-        return relationship
+    # Genericize gender-specific to generic categories
+    if relationship in ("son", "daughter"):
+        return "child"
+    if relationship in ("father", "mother"):
+        return "parent"
+    if relationship in ("brother", "sister"):
+        return "sibling"
+    if relationship in ("grandfather", "grandmother"):
+        return "grandparent"
 
-    # Fix "child" -> "son" or "daughter" based on description
-    if relationship == "child":
-        if re.search(r'\bson\b', description):
-            return "son"
-        if re.search(r'\bdaughter\b', description):
-            return "daughter"
-
-    # Fix "sibling" -> "brother" or "sister" based on description
-    if relationship == "sibling":
-        if re.search(r'\bbrother\b', description):
-            return "brother"
-        if re.search(r'\bsister\b', description):
-            return "sister"
-
-    # Fix "parent" -> "father" or "mother" based on description
-    if relationship == "parent":
-        if re.search(r'\bfather\b', description):
-            return "father"
-        if re.search(r'\bmother\b', description):
-            return "mother"
-
-    # Fix "grandparent" -> "grandfather" or "grandmother" based on description
-    if relationship == "grandparent":
-        if re.search(r'\bgrandfather\b', description):
-            return "grandfather"
-        if re.search(r'\bgrandmother\b', description):
-            return "grandmother"
-
-    # Fix "spouse" -> keep as spouse (we can't infer husband vs wife reliably)
     return relationship
 
 
@@ -228,21 +211,21 @@ def _map_text_to_relationship(text: str) -> Optional[str]:
         "wife": "spouse",
         "husband": "spouse",
         "spouse": "spouse",
-        "mother": "mother",
-        "father": "father",
-        "son": "son",
-        "daughter": "daughter",
+        "mother": "parent",
+        "father": "parent",
+        "son": "child",
+        "daughter": "child",
         "child": "child",
         "children": "child",
-        "brother": "brother",
-        "sister": "sister",
+        "brother": "sibling",
+        "sister": "sibling",
         "sibling": "sibling",
         "grandchild": "grandchild",
         "grandchildren": "grandchild",
         "grandparent": "grandparent",
         "grandparents": "grandparent",
-        "grandmother": "grandmother",
-        "grandfather": "grandfather",
+        "grandmother": "grandparent",
+        "grandfather": "grandparent",
         "grandson": "grandchild",
         "granddaughter": "grandchild",
     }

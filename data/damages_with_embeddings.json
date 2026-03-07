@@ -3386,7 +3386,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "grandfather",
+          "relationship": "grandparent",
           "amount": 1500.0,
           "description": "Grandfather: $1,500.00",
           "is_fla_award": true
@@ -5061,13 +5061,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 65000.0,
           "description": "Mother: $65,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 50000.0,
           "description": "Father: $50,000.00",
           "is_fla_award": true
@@ -9240,13 +9240,13 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 7500.0,
           "description": "Family Law Act: Son - $7,500.00",
           "is_fla_award": true
         },
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 10000.0,
           "description": "Family Law Act: daughter - $10,000.00",
           "is_fla_award": true
@@ -10943,13 +10943,13 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 7500.0,
           "description": "Family Law Act: Son - $7,500.00",
           "is_fla_award": true
         },
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 10000.0,
           "description": "Family Law Act: daughter - $10,000.00",
           "is_fla_award": true
@@ -12623,13 +12623,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 140800.0,
           "description": "Family Law Act: Mother-  $140,800.00",
           "is_fla_award": true
         },
         {
-          "relationship": "sister",
+          "relationship": "sibling",
           "amount": 97360.0,
           "description": "sister: $97,360.00",
           "is_fla_award": true
@@ -13494,7 +13494,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 15000.0,
           "description": "Son: $15,000.00",
           "is_fla_award": true
@@ -14324,13 +14324,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "son",
-          "amount": 15000.0,
-          "description": "Son/Daughter: $15,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 15000.0,
           "description": "Son/Daughter: $15,000.00",
           "is_fla_award": true
@@ -26916,13 +26910,13 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 5000.0,
           "description": "Son: $5,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 500.0,
           "description": "Daughter: $500.00",
           "is_fla_award": true
@@ -27756,7 +27750,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 10000.0,
           "description": "Daughter: $10,000.00",
           "is_fla_award": true
@@ -32040,13 +32034,13 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 2000.0,
           "description": "Son: $2,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 15000.0,
           "description": "Son: $15,000.00",
           "is_fla_award": true
@@ -37969,13 +37963,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "brother",
-          "amount": 145000.0,
-          "description": "Brother/Sister: $145,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "sister",
+          "relationship": "sibling",
           "amount": 145000.0,
           "description": "Brother/Sister: $145,000.00",
           "is_fla_award": true
@@ -48848,19 +48836,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 18000.0,
           "description": "Mother: $18,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
-          "amount": 18000.0,
-          "description": "Father: $18,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "sister",
+          "relationship": "sibling",
           "amount": 8000.0,
           "description": "Sister: $8,000.00",
           "is_fla_award": true
@@ -49707,7 +49689,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 10000.0,
           "description": "Family Law Act claim: Brother - $10,000.00",
           "is_fla_award": true
@@ -50543,7 +50525,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 216000.0,
           "description": "Mother: $216,000.00",
           "is_fla_award": true
@@ -51367,7 +51349,7 @@
       "judges": [],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 65000.0,
           "description": "Father: $65,000.00",
           "is_fla_award": true
@@ -55631,21 +55613,15 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 75000.0,
           "description": "Family Law Act: Father - $75,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 60000.0,
           "description": "Family Law Act: Father -  $60,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "mother",
-          "amount": 75000.0,
-          "description": "Family Law Act: Mother - $75,000.00",
           "is_fla_award": true
         }
       ],
@@ -59007,13 +58983,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 100000.0,
           "description": "Family Law Act: Father - $100,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 175000.0,
           "description": "Family Law Act: Mother - $175,000.00",
           "is_fla_award": true
@@ -59856,7 +59832,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 35000.0,
           "description": "Family Law Act claim: Mother - $35,000.00",
           "is_fla_award": true
@@ -61543,15 +61519,9 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 60000.0,
           "description": "Father: $60,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "mother",
-          "amount": 60000.0,
-          "description": "Mother: $60,000.00",
           "is_fla_award": true
         }
       ],
@@ -65754,13 +65724,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 80000.0,
           "description": "Father: $80,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 11730.0,
           "description": "Brother: $11,730.00",
           "is_fla_award": true
@@ -69085,7 +69055,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 2500.0,
           "description": "Son: $2,500.00",
           "is_fla_award": true
@@ -76561,7 +76531,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 2500.0,
           "description": "Family Law Act Son- $2,500.00",
           "is_fla_award": true
@@ -81544,13 +81514,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 20000.0,
           "description": "mother: $20,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 17.0,
           "description": "father: $17.00",
           "is_fla_award": true
@@ -82397,7 +82367,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 1500.0,
           "description": "Family Law Act: daughter- $1,500.00",
           "is_fla_award": true
@@ -85741,7 +85711,7 @@
       "judges": [],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 10000.0,
           "description": "Family Law Act:  Mother - $10,000",
           "is_fla_award": true
@@ -91594,13 +91564,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 60000.0,
           "description": "Family Law Act: Mother - $60,000",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 30000.0,
           "description": "Father: $30,000.00",
           "is_fla_award": true
@@ -99095,7 +99065,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 25000.0,
           "description": "Son: $25,000.00",
           "is_fla_award": true
@@ -109065,7 +109035,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 15000.0,
           "description": "Family Law Act: Daughter- $15,000.00",
           "is_fla_award": true
@@ -115714,7 +115684,7 @@
       "judges": [],
       "family_law_act_claims": [
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 15000.0,
           "description": "Family Law Act: Son - $15,000.00",
           "is_fla_award": true
@@ -128215,7 +128185,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 20000.0,
           "description": "Family Law Act: Son- $20,000.00",
           "is_fla_award": true
@@ -129072,13 +129042,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 7500.0,
           "description": "daughter: $7,500.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 7500.0,
           "description": "Mother: $7,500.00",
           "is_fla_award": true
@@ -147228,7 +147198,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 500.0,
           "description": "Brother: $500.00",
           "is_fla_award": true
@@ -161316,7 +161286,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 85000.0,
           "description": "Husband and Father: $85,000.00",
           "is_fla_award": true
@@ -163009,7 +162979,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "grandmother",
+          "relationship": "grandparent",
           "amount": 2500.0,
           "description": "Family Law Act Grandmother- $2,500.00",
           "is_fla_award": true
@@ -172169,7 +172139,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 25000.0,
           "description": "Daughter: $25,000.00",
           "is_fla_award": true
@@ -173912,7 +173882,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 25000.0,
           "description": "Daughter: $25,000.00",
           "is_fla_award": true
@@ -176427,7 +176397,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 15000.0,
           "description": "Son: $15,000.00",
           "is_fla_award": true
@@ -178947,7 +178917,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 20000.0,
           "description": "FLA Claim Daughter: $20,000",
           "is_fla_award": true
@@ -183082,7 +183052,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 1500.0,
           "description": "Family Law Act daughter: $1,500.00",
           "is_fla_award": true
@@ -192215,13 +192185,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 4500.0,
           "description": "Family Law Act Claim Father - $4,500.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 10000.0,
           "description": "Family Law Act Claim: Mother - $10,000.00",
           "is_fla_award": true
@@ -204711,15 +204681,9 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 15000.0,
           "description": "Mother: $15,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "father",
-          "amount": 15000.0,
-          "description": "Father: $15,000.00",
           "is_fla_award": true
         }
       ],
@@ -205558,7 +205522,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 2000.0,
           "description": "Family Law Act Son - $2,000.00",
           "is_fla_award": true
@@ -214671,25 +214635,25 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 7500.0,
           "description": "Family Law Act Claim:  Mother - $7,500",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 20000.0,
           "description": "mother: $20,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 1000.0,
           "description": "Father: $1,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 1000.0,
           "description": "Brother: $1,000.00",
           "is_fla_award": true
@@ -217167,7 +217131,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 5000.0,
           "description": "Daughter: $5,000.00",
           "is_fla_award": true
@@ -223792,19 +223756,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 60000.0,
           "description": "Father: $60,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
-          "amount": 60000.0,
-          "description": "Mother: $60,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 15000.0,
           "description": "Brother: $15,000.00",
           "is_fla_award": true
@@ -242085,7 +242043,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 35000.0,
           "description": "Son: $35,000.00",
           "is_fla_award": true
@@ -243772,25 +243730,25 @@
       "judges": [],
       "family_law_act_claims": [
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 22000.0,
           "description": "loss of care, Appeal allowed in part. H.S. LaForme JJ.A. SFather ister Past Wage Loss: $22,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 200000.0,
           "description": "Loss of care, guidance and companionship: $200,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 50000.0,
           "description": "Loss of care, guidance and companionship: $50,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 25000.0,
           "description": "Loss of care, guidance and companionship: $25,000.00",
           "is_fla_award": true
@@ -244632,13 +244590,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "son",
-          "amount": 90000.0,
-          "description": "Son/Daughter: $90,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 90000.0,
           "description": "Son/Daughter: $90,000.00",
           "is_fla_award": true
@@ -245507,7 +245459,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 25000.0,
           "description": "Son: $25,000.00",
           "is_fla_award": true
@@ -247174,7 +247126,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 80000.0,
           "description": "Father: $80,000.00",
           "is_fla_award": true
@@ -249669,19 +249621,19 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 25000.0,
           "description": "Family Law Act Father -$25,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 50000.0,
           "description": "Family Law Act Mother- $50,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 10000.0,
           "description": "Family Law Act Brother -$10,000.00",
           "is_fla_award": true
@@ -337037,7 +336989,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 15000.0,
           "description": "Family Law Act Claim:  Mother - $15,000.00",
           "is_fla_award": true
@@ -344596,13 +344548,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 30000.0,
           "description": "Mother: $30,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 12000.0,
           "description": "Father: $12,000.00",
           "is_fla_award": true
@@ -354591,7 +354543,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 8000.0,
           "description": "Daughter: $8,000.00",
           "is_fla_award": true
@@ -357101,13 +357053,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 1500.0,
           "description": "Mother: $1,500.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 500.0,
           "description": "Father: $500.00",
           "is_fla_award": true
@@ -360445,7 +360397,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 5000.0,
           "description": "Daughter: $5,000.00",
           "is_fla_award": true
@@ -362947,7 +362899,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 2500.0,
           "description": "Family Law Act Son- $2,500.00",
           "is_fla_award": true
@@ -387020,13 +386972,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 10500.0,
           "description": "Father: $10,500.00",
           "is_fla_award": true
         },
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 7500.0,
           "description": "Daughter: $7,500.00",
           "is_fla_award": true
@@ -390338,13 +390290,13 @@
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 35000.0,
           "description": "father: $35,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 10000.0,
           "description": "mother: $10,000.00",
           "is_fla_award": true
@@ -391997,13 +391949,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 3500.0,
           "description": "Mother: $3,500.00",
           "is_fla_award": true
         },
         {
-          "relationship": "sister",
+          "relationship": "sibling",
           "amount": 2000.0,
           "description": "Sister: $2,000.00",
           "is_fla_award": true
@@ -393720,7 +393672,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 120000.0,
           "description": "Wife & Mother: $120,000.00",
           "is_fla_award": true
@@ -394552,7 +394504,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 100000.0,
           "description": "son: $100,000.00",
           "is_fla_award": true
@@ -399534,13 +399486,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 5000.0,
           "description": "Mother: $5,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "sister",
+          "relationship": "sibling",
           "amount": 500.0,
           "description": "Sister: $500.00",
           "is_fla_award": true
@@ -406127,7 +406079,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 800.0,
           "description": "Family Law Act Claim: son-  $800.00",
           "is_fla_award": true
@@ -421034,7 +420986,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 200000.0,
           "description": "Loss of care, guidance, and companionship: $200,000.00",
           "is_fla_award": true
@@ -421857,7 +421809,7 @@
       "judges": [],
       "family_law_act_claims": [
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 35000.0,
           "description": "daughter: $35,000.00",
           "is_fla_award": true
@@ -427627,7 +427579,7 @@
       "judges": [],
       "family_law_act_claims": [
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 250000.0,
           "description": "Loss of care, guidance and companionship: $250,000.00",
           "is_fla_award": true
@@ -430926,13 +430878,13 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 30000.0,
           "description": "Son: $30,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "brother",
+          "relationship": "sibling",
           "amount": 10000.0,
           "description": "Brother: $10,000.00",
           "is_fla_award": true
@@ -439262,7 +439214,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 45000.0,
           "description": "Mother: $45,000.00",
           "is_fla_award": true
@@ -440105,7 +440057,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "son",
+          "relationship": "child",
           "amount": 10000.0,
           "description": "Son: $10,000.00",
           "is_fla_award": true
@@ -440931,7 +440883,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "daughter",
+          "relationship": "child",
           "amount": 2250.0,
           "description": "Family Law Act Claim: Daughter-$2,250.00",
           "is_fla_award": true
