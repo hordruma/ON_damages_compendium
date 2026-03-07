@@ -1,7 +1,8 @@
 """
-Data transformer for Ontario Damages Compendium - FIXED VERSION
+Data transformer for Ontario Damages Compendium
 
-Consolidates duplicate cases and keeps plaintiffs/regions as attributes.
+Converts parsed case data to dashboard format with embeddings.
+Handles both the new CSV parser output and legacy AI-parsed format.
 """
 
 import json
@@ -10,208 +11,143 @@ from pathlib import Path
 from collections import defaultdict
 
 
-def consolidate_cases(ai_cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Consolidate duplicate cases that appear multiple times with different categories/regions.
-
-    Groups by: case_name + year + court
-    Merges: plaintiffs, regions, categories from all duplicates
-
-    Args:
-        ai_cases: List of potentially duplicate cases
-
-    Returns:
-        List of consolidated unique cases
-    """
-    # Group cases by unique identifier
-    case_groups = defaultdict(list)
-
-    for case in ai_cases:
-        # Create unique key (case_name + year + court)
-        key = (
-            case.get('case_name', 'Unknown'),
-            case.get('year'),
-            case.get('court')
-        )
-        case_groups[key].append(case)
-
-    consolidated = []
-
-    for (case_name, year, court), cases in case_groups.items():
-        # Use first case as base
-        base_case = cases[0]
-
-        # Collect all unique plaintiffs
-        all_plaintiffs = []
-        seen_plaintiff_ids = set()
-
-        for case in cases:
-            plaintiffs = case.get('plaintiffs', [])
-            if not plaintiffs:
-                # Single plaintiff case
-                plaintiffs = [case]
-
-            for p in plaintiffs:
-                p_id = p.get('plaintiff_id') or f"P{len(all_plaintiffs)+1}"
-                if p_id not in seen_plaintiff_ids:
-                    seen_plaintiff_ids.add(p_id)
-                    all_plaintiffs.append(p)
-
-        # Collect all unique regions/categories
-        all_regions = set()
-        all_categories = set()
-
-        for case in cases:
-            cat = case.get('category')
-            if cat and cat != 'UNKNOWN':
-                all_categories.add(cat)
-
-            regions = case.get('region', [])
-            if isinstance(regions, list):
-                all_regions.update(r for r in regions if r and r != 'UNKNOWN')
-            elif regions and regions != 'UNKNOWN':
-                all_regions.add(regions)
-
-        # Collect all injuries from all plaintiffs
-        all_injuries = set()
-        for p in all_plaintiffs:
-            injuries = p.get('injuries', [])
-            if isinstance(injuries, list):
-                all_injuries.update(injuries)
-
-        # Also check case-level injuries
-        for case in cases:
-            injuries = case.get('injuries', [])
-            if isinstance(injuries, list):
-                all_injuries.update(injuries)
-
-        # Build consolidated case
-        consolidated_case = {
-            'case_name': case_name,
-            'year': year,
-            'court': court,
-            'judge': base_case.get('judge') or base_case.get('judges', []),
-            'citation': base_case.get('citation') or base_case.get('citations', []),
-            'source_page': base_case.get('source_page') or base_case.get('source_pages', []),
-            'categories': sorted(list(all_categories)) if all_categories else ['UNKNOWN'],
-            'regions': sorted(list(all_regions)) if all_regions else ['UNKNOWN'],
-            'injuries': sorted(list(all_injuries)),
-            'plaintiffs': all_plaintiffs,
-            'family_law_act_claims': base_case.get('family_law_act_claims', []),
-            'comments': base_case.get('comments', '')
-        }
-
-        consolidated.append(consolidated_case)
-
-    return consolidated
-
-
 def convert_to_dashboard_format(
-    ai_cases: List[Dict[str, Any]],
+    parsed_cases: List[Dict[str, Any]],
     model
 ) -> List[Dict[str, Any]]:
     """
-    Convert AI-parsed format to dashboard format with embeddings.
+    Convert parsed cases to dashboard format with embeddings.
 
-    FIXED: Consolidates duplicate cases and keeps plaintiffs as nested data.
+    Handles the output from damages_parser_csv.py which already contains
+    deduplicated cases with merged regions/categories.
 
     Args:
-        ai_cases: List of cases in AI-parsed format
+        parsed_cases: List of parsed case dicts (already deduplicated)
         model: SentenceTransformer model for generating embeddings
 
     Returns:
         List of cases in dashboard format with embeddings
     """
-    # First, consolidate duplicate cases
-    print("   🔄 Consolidating duplicate cases...")
-    consolidated_cases = consolidate_cases(ai_cases)
-    print(f"   ✓ Consolidated {len(ai_cases)} records → {len(consolidated_cases)} unique cases")
-
     dashboard_cases = []
 
-    for case_idx, case in enumerate(consolidated_cases, 1):
-        plaintiffs = case.get('plaintiffs', [])
+    for case_idx, case in enumerate(parsed_cases, 1):
+        # Get case identifiers
+        case_name = case.get('case_name', 'Unknown')
+        year = case.get('year')
+        court = case.get('court')
 
-        # Get citation (handle list)
-        citation = case.get('citation', [])
+        # Get citation (handle both string and list)
+        citation = case.get('citation', '')
         if isinstance(citation, list):
             citation = '; '.join(str(c) for c in citation if c)
 
-        # Get judges (handle list)
+        # Get judges (handle both list and single value)
         judges = case.get('judge', [])
         if not isinstance(judges, list):
             judges = [judges] if judges else []
 
-        # Get source page (use first if list)
+        # Get source page
         source_page = case.get('source_page')
         if isinstance(source_page, list):
             source_page = source_page[0] if source_page else None
 
-        # Calculate total non-pecuniary damages across all plaintiffs
-        # Non-pecuniary = general damages (pain & suffering, loss of enjoyment)
-        total_non_pecuniary = 0
+        # Get categories and regions (may already be merged lists from dedup)
+        categories = case.get('categories', [])
+        if not categories:
+            cat = case.get('category')
+            categories = [cat] if cat else ['General']
 
-        for p in plaintiffs:
-            total_non_pecuniary += p.get('non_pecuniary_damages') or 0
+        regions = case.get('region', [])
+        if isinstance(regions, str):
+            regions = [regions]
+        if not regions:
+            regions = categories.copy()
 
-        # Calculate total pecuniary damages from other_damages array
-        # Pecuniary = economic damages (lost income, care costs, etc.)
-        total_pecuniary = 0
+        primary_category = categories[0] if categories else 'General'
+        primary_region = regions[0] if regions else 'General'
+
+        # Get injuries (already extracted by parser)
+        injuries = case.get('injuries', [])
+
+        # Get demographics
+        sex = case.get('sex')
+        age = case.get('age')
+
+        # Get damages — use top-level value directly (already correct from parser)
+        non_pecuniary = case.get('non_pecuniary_damages') or 0
+        is_provisional = case.get('is_provisional', False)
+
+        # Handle multi-plaintiff cases
+        plaintiffs = case.get('plaintiffs', [])
+        if plaintiffs:
+            # Multi-plaintiff: damages is already the total
+            # Get sex/age from first plaintiff if not at case level
+            if not sex and plaintiffs[0].get('sex'):
+                sex = plaintiffs[0]['sex']
+            if not age and plaintiffs[0].get('age'):
+                age = plaintiffs[0]['age']
+        else:
+            # Single plaintiff: create a basic plaintiff record
+            plaintiffs = [{
+                'plaintiff_id': 'P1',
+                'plaintiff_name': case.get('plaintiff_name', case_name.split(' v. ')[0] if ' v. ' in case_name else case_name),
+                'non_pecuniary_damages': non_pecuniary,
+                'sex': sex,
+                'age': age,
+            }]
+
+        # Get other damages
         other_damages_list = case.get('other_damages', [])
+        total_pecuniary = sum(d.get('amount', 0) for d in other_damages_list)
 
-        for damage in other_damages_list:
-            amount = damage.get('amount', 0)
-            if amount:
-                total_pecuniary += amount
+        total_award = (non_pecuniary + total_pecuniary) if (non_pecuniary or total_pecuniary) else None
 
-        total_award = total_non_pecuniary + total_pecuniary if (total_non_pecuniary or total_pecuniary) else None
+        # Get FLA claims
+        fla_claims = case.get('family_law_act_claims', [])
 
-        # Get primary category and region
-        categories = case.get('categories', ['UNKNOWN'])
-        regions = case.get('regions', ['UNKNOWN'])
-        primary_category = categories[0] if categories else 'UNKNOWN'
-        primary_region = regions[0] if regions else 'UNKNOWN'
+        # Get comments
+        comments = case.get('comments', '')
 
         # Create dashboard case
         dashboard_case = {
             'id': f"case_{case_idx:04d}",
-            'case_name': case.get('case_name', 'Unknown'),
-            'year': case.get('year'),
-            'court': case.get('court'),
+            'case_name': case_name,
+            'year': year,
+            'court': court,
             'judge': judges,
             'citation': citation,
             'source_page': source_page,
-            'category': primary_category,  # Primary category for compatibility
-            'region': primary_region,  # Primary region for compatibility
-            'damages': total_non_pecuniary,  # NON-PECUNIARY ONLY (general damages) - used for charts/sorting
-            'non_pecuniary_damages': total_non_pecuniary,  # General damages (pain & suffering)
-            'pecuniary_damages': total_pecuniary,  # Economic damages (lost income, care costs)
-            'total_award': total_award,  # Total of both non-pecuniary + pecuniary
-            'comments': case.get('comments', ''),
+            'category': primary_category,
+            'region': primary_region,
+            'damages': non_pecuniary,
+            'non_pecuniary_damages': non_pecuniary,
+            'pecuniary_damages': total_pecuniary,
+            'total_award': total_award,
+            'comments': comments,
             'extended_data': {
-                'injuries': case.get('injuries', []),
-                'regions': regions,  # ALL regions
-                'categories': categories,  # ALL categories
-                'sex': plaintiffs[0].get('sex') if plaintiffs else None,  # Primary plaintiff
-                'age': plaintiffs[0].get('age') if plaintiffs else None,  # Primary plaintiff
-                'other_damages': other_damages_list,  # Pecuniary damages (economic losses)
+                'injuries': injuries,
+                'regions': regions,
+                'categories': categories,
+                'sex': sex,
+                'age': age,
+                'other_damages': other_damages_list,
                 'num_plaintiffs': len(plaintiffs),
-                'plaintiffs': plaintiffs,  # Keep full plaintiff data
-                'comments': case.get('comments', ''),
+                'plaintiffs': plaintiffs,
+                'comments': comments,
                 'judges': judges,
-                'family_law_act_claims': case.get('family_law_act_claims', [])
+                'family_law_act_claims': fla_claims,
+                'is_provisional': is_provisional,
             }
         }
 
         # Generate summary text for embedding
         summary_parts = []
-        injuries = case.get('injuries', [])
         if injuries:
-            summary_parts.append(f"Injuries: {', '.join(injuries[:10])}")  # Limit to 10 for embedding
-        if categories and categories != ['UNKNOWN']:
+            summary_parts.append(f"Injuries: {', '.join(injuries[:10])}")
+        if categories and categories != ['General']:
             summary_parts.append(f"Categories: {', '.join(categories)}")
-        if case.get('comments'):
-            summary_parts.append(f"Comments: {case.get('comments')}")
+        if comments:
+            summary_parts.append(f"Comments: {comments}")
 
         summary_text = ' | '.join(summary_parts) if summary_parts else 'No summary available'
         dashboard_case['summary_text'] = summary_text
@@ -221,8 +157,7 @@ def convert_to_dashboard_format(
             embedding = model.encode(summary_text, convert_to_numpy=True)
             dashboard_case['embedding'] = embedding.tolist()
         except Exception as e:
-            print(f"⚠️  Warning: Could not generate embedding for case {dashboard_case['id']}: {e}")
-            # Use zero vector as fallback (768 dimensions for all-mpnet-base-v2)
+            print(f"Warning: Could not generate embedding for case {dashboard_case['id']}: {e}")
             dashboard_case['embedding'] = [0.0] * 768
 
         dashboard_cases.append(dashboard_case)

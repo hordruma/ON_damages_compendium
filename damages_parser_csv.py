@@ -5,8 +5,11 @@ Parses the raw Camelot-extracted CSV without requiring an LLM.
 Uses regex patterns for structured field extraction (names, citations,
 damages amounts, demographics, injuries, FLA claims).
 
-This parser captures ~1400 cases vs the ~635 from the LLM pipeline,
-and runs in seconds instead of hours.
+Key features:
+- Cleans corrupted case names (Appeal/Action text bleeding into plaintiff names)
+- Deduplicates cases that appear across multiple PDF pages/sections
+- Consolidates multiple body-region appearances into single case records
+- Maps citations to PDF section headers for accurate category assignment
 """
 
 import csv
@@ -14,6 +17,7 @@ import json
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
+from collections import defaultdict
 
 
 # ─── Known section headers from the PDF ─────────────────────────────────────
@@ -71,6 +75,26 @@ _JUDGE_RE = re.compile(
     r'(?:J\.|J\.A\.|J\.J\.A\.|C\.J\.|C\.J\.O\.)',
 )
 _PROVISIONAL_RE = re.compile(r'provisionally|provisional', re.IGNORECASE)
+
+# Patterns for legal status text that bleeds into case names from Camelot
+_LEGAL_STATUS_FRAGMENTS = re.compile(
+    r'(?:^[A-Z]?\s*)?'  # Optional eaten first char
+    r'(?:'
+    r'ppeal(?:ed)?\s+(?:allowed|dismissed|by)|'
+    r'ction\s+dismissed|'
+    r'laintiff[\u2019\']?s?\s+appeal|'
+    r'efendant[\u2019\']?s?\s+appeal|'
+    r'o\s+liability|'
+    r'ew\s+trial\s+ordered|'
+    r'ppealed\s+by|'
+    r'dditional\s+reasons?|'
+    r'upplementary\s+[Rr]easons?|'
+    r'otion\s+to\s+set|'
+    r'amages\s+assessed|'
+    r'osts\s+assessed'
+    r')',
+    re.IGNORECASE,
+)
 
 # FLA relationship patterns
 _FLA_PATTERNS = [
@@ -321,6 +345,150 @@ def _extract_injuries(comments: str) -> List[str]:
     return injuries[:20]  # Cap at 20
 
 
+def _clean_plaintiff_name(name: str) -> str:
+    """
+    Clean plaintiff name by removing legal status text that Camelot
+    concatenated from continuation lines.
+
+    Examples:
+        "AMomand ppeal allowed in part." -> "Momand"
+        "AGeorge ction dismissed." -> "George"
+        "PElmardy laintiff's appeal" -> "Elmardy"
+        "ACrawford (Litigation Guardian) ppeal affirmed" -> "Crawford (Litigation Guardian)"
+    """
+    original = name
+
+    # Strip leading junk: single uppercase chars separated by spaces
+    # e.g., "A          AMustapha..." -> "AMustapha..."
+    # These are eaten first chars from multiple legal status lines
+    name = re.sub(r'^(?:[A-Z]\s+)+', '', name).strip()
+
+    # Known truncated legal words that bleed from continuation rows.
+    # The first char gets eaten by Camelot and prepended to the name.
+    # Pattern: [eaten char][RealName] [truncated legal word]...
+    # e.g., "AMomand ppeal" = A(ppeal) eaten, real name = Momand
+    #        "PElmardy laintiff" = P(laintiff) eaten, real name = Elmardy
+    #        "AK.K. ppeal" = A(ppeal) eaten, real name = K.K.
+    #        "D  PCalin efendant..." = D(efendant) + P(laintiff), real name = Calin
+
+    # First: detect if legal fragments are present
+    # These are truncated words where the first letter was eaten by Camelot
+    # e.g., "Appeal" -> "ppeal", "Plaintiff" -> "laintiff"
+    # Use negative lookbehind to avoid matching complete words like "plaintiffs"
+    legal_fragments = re.compile(
+        r'(?<![Aa])ppeal|(?<![Aa])ction\s+dismiss|(?<![Pp])laintiff|(?<![Dd])efendant|'
+        r'(?<![Nn])o\s+liab|(?<![Nn])ew\s+trial|'
+        r'(?<![Aa])ppealed|(?<![Aa])dditional|(?<![Ss])upplementary|(?<![Mm])otion\s+to|'
+        r'(?<![Dd])amages\s+assess|(?<![Cc])osts\s+assess|'
+        r'(?<![Oo])n\s+appeal|(?<![Ll])eave\s+to|(?<![Jj])ury\s+trial',
+        re.IGNORECASE,
+    )
+
+    if legal_fragments.search(name):
+        # Strategy: find the real name by looking for a name-like token
+        # before the first legal fragment. The eaten char is at position 0.
+
+        # Remove everything after (and including) the legal fragment
+        # But first, handle the eaten first character
+
+        # Strategy: find where the legal fragment starts and take everything before it
+        # as the (possibly corrupted) name, then clean the eaten first char.
+
+        # Find the position of the first truncated legal word
+        frag_match = legal_fragments.search(name)
+        if frag_match:
+            before_frag = name[:frag_match.start()].strip()
+
+            # The text before the fragment is the name (possibly with eaten char)
+            # e.g., "AMustapha " or "ACrawford (Litigation Guardian) "
+            # or "PKingston Road Animal Hospital Professional Corp. "
+
+            if before_frag:
+                # Remove eaten first char: if first char is uppercase and
+                # removing it still leaves a valid name start
+                real_name = before_frag
+                if len(real_name) > 1 and real_name[0].isupper():
+                    without_first = real_name[1:].strip()
+                    if without_first and (without_first[0].isupper() or re.match(r'^[A-Z]\.', without_first)):
+                        real_name = without_first
+
+                # Clean trailing punctuation and whitespace
+                # But preserve trailing dots on initials (e.g., "K.K.")
+                real_name = real_name.rstrip(':;, ')
+                # Only strip trailing dot if it's not part of an initial
+                if real_name.endswith('.') and not re.search(r'[A-Z]\.$', real_name):
+                    real_name = real_name.rstrip('.')
+
+                # Remove any "(by Hospital)" style annotations that aren't part of the name
+                real_name = re.sub(r'\s*\(by\s+\w+\)', '', real_name)
+                # Remove "(father)", "(mother)" etc. legal context annotations
+                real_name = re.sub(r'\s*\((?:father|mother|daughter|son|husband|wife)\)', '', real_name, flags=re.IGNORECASE)
+
+                if real_name and len(real_name) > 1:
+                    return real_name
+        if m:
+            real_name = m.group(1).strip()
+            # The first char might be an eaten letter prepended to the name
+            # e.g., "AMikolik" -> the A is from "Appeal", real name is "Mikolik"
+            # Check if removing first char still leaves a valid name
+            if len(real_name) > 2 and real_name[0].isupper():
+                without_first = real_name[1:].strip()
+                if without_first and without_first[0].isupper():
+                    real_name = without_first
+                # Handle initials: "AK.K." -> remove A, keep "K.K."
+                elif without_first and re.match(r'^[A-Z]\.', without_first):
+                    real_name = without_first
+            return real_name
+
+        # Fallback: more aggressive cleanup for really messy names
+        # Just take the first capitalized word(s) before any legal text
+        tokens = re.split(r'\s+', name)
+        clean_tokens = []
+        for t in tokens:
+            # Stop at legal fragment tokens
+            if re.match(r'^(?:ppeal|ction|laintiff|efendant|ppealed|dditional|'
+                        r'upplementary|otion|amages|osts|eave|ury|affirm|dismiss)',
+                        t, re.IGNORECASE):
+                break
+            # Skip single eaten chars unless they're initials
+            if len(t) == 1 and not t.endswith('.'):
+                continue
+            # Skip noise
+            if t.strip() in ('', 'A', 'P', 'D', 'S', 'N', 'O', 'L', 'M'):
+                continue
+            clean_tokens.append(t)
+
+        if clean_tokens:
+            result = ' '.join(clean_tokens).strip()
+            # Remove leading eaten char if present
+            if len(result) > 2 and result[0].isupper() and result[1:2].isupper():
+                # Like "AMikolik" -> could be eaten A
+                pass  # already handled above
+            if result:
+                return result
+
+    # Clean up "(two plaintiffs)" and similar annotations — always apply
+    name = re.sub(r'\s*\(two\s+plaintiffs?\)', '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\s*\(three\s+plaintiffs?\)', '', name, flags=re.IGNORECASE)
+
+    # Clean up trailing legal fragments (full words, not truncated)
+    name = re.sub(
+        r'\s+(?:Appeal\s+(?:allowed|dismissed)|Action\s+dismissed|'
+        r'No\s+liability|New\s+trial|Appealed\s+by|'
+        r'Additional\s+reasons?|Supplementary\s+[Rr]easons?|'
+        r'Motion\s+to\s+set|Damages\s+assessed|Costs\s+assessed).*$',
+        '', name, flags=re.IGNORECASE
+    ).strip()
+
+    return name if name else original
+
+
+def _extract_oj_number(citation: str) -> Optional[str]:
+    """Extract first O.J. number from citation for deduplication."""
+    m = re.search(r'\[\d{4}\]\s*O\.?J\.?\s*No\.?\s*(\d+)', citation)
+    return m.group(1) if m else None
+
+
 def _is_section_header(row: List[str]) -> Optional[str]:
     """Check if a CSV row is a section header. Returns section name or None."""
     non_empty = [c.strip() for c in row if c.strip()]
@@ -372,7 +540,7 @@ def parse_csv(csv_path: str = "data/damages_raw.csv") -> List[Dict[str, Any]]:
         csv_path: Path to the raw CSV file
 
     Returns:
-        List of parsed case dictionaries in AI-parsed format
+        List of parsed case dictionaries (raw records, not yet deduplicated)
     """
     with open(csv_path, 'r', encoding='utf-8') as f:
         reader = csv.reader(f)
@@ -438,7 +606,7 @@ def _parse_data_row(row: List[str], section: str) -> Dict[str, Any]:
     def get(idx):
         return row[idx].strip() if idx < len(row) and row[idx].strip() else ""
 
-    plaintiff = get(0)
+    plaintiff_raw = get(0)
     defendant = get(1)
     year_text = get(2)
     citation = get(3)
@@ -457,6 +625,9 @@ def _parse_data_row(row: List[str], section: str) -> Dict[str, Any]:
             overflow.append(val)
     if overflow:
         comments_text = comments_text + " " + " ".join(overflow) if comments_text else " ".join(overflow)
+
+    # Clean plaintiff name (remove legal status fragments)
+    plaintiff = _clean_plaintiff_name(plaintiff_raw)
 
     # Parse structured fields
     case_name = f"{plaintiff} v. {defendant}" if defendant else plaintiff
@@ -577,6 +748,184 @@ def _merge_continuation(case: Dict[str, Any], row: List[str]) -> None:
     case['injuries'] = _extract_injuries(case['comments'])
 
 
+def deduplicate_cases(cases: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Deduplicate cases that appear multiple times across PDF pages/sections.
+
+    The same case often appears under multiple body-region sections
+    (e.g., a patient with knee AND back injuries appears under both).
+    Camelot also splits multi-page cases into separate rows.
+
+    Strategy:
+    1. Primary key: O.J. citation number (most reliable)
+    2. Fallback key: case_name + year
+    3. Merge: collect all regions/categories, keep best data from each record
+    """
+    # Group by O.J. number first
+    oj_groups: Dict[str, List[Dict]] = defaultdict(list)
+    no_oj: List[Dict] = []
+
+    for case in cases:
+        oj = _extract_oj_number(case.get('citation', ''))
+        if oj:
+            oj_groups[oj].append(case)
+        else:
+            no_oj.append(case)
+
+    # Group no-OJ cases by case_name + year
+    name_groups: Dict[Tuple, List[Dict]] = defaultdict(list)
+    truly_unique: List[Dict] = []
+
+    for case in no_oj:
+        name = case.get('case_name', '').strip()
+        year = case.get('year')
+        if name and year:
+            name_groups[(name, year)].append(case)
+        elif name:
+            # No year, try name alone but be conservative
+            name_groups[(name, None)].append(case)
+        else:
+            truly_unique.append(case)
+
+    # Merge each group into a single consolidated case
+    result = []
+
+    for oj_num, group in oj_groups.items():
+        merged = _merge_case_group(group)
+        result.append(merged)
+
+    for key, group in name_groups.items():
+        merged = _merge_case_group(group)
+        result.append(merged)
+
+    result.extend(truly_unique)
+
+    return result
+
+
+def _merge_case_group(group: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Merge a group of duplicate case records into one consolidated record."""
+    if len(group) == 1:
+        return group[0]
+
+    # Use the record with the most data as base
+    # Score by: has damages + has injuries + has comments + has citation
+    def score(c):
+        s = 0
+        if c.get('non_pecuniary_damages'):
+            s += 10
+        if c.get('injuries'):
+            s += len(c['injuries'])
+        if c.get('comments'):
+            s += min(len(c['comments']) // 50, 5)
+        if c.get('citation'):
+            s += 3
+        if c.get('judge'):
+            s += 2
+        if c.get('sex'):
+            s += 1
+        if c.get('age'):
+            s += 1
+        return s
+
+    group.sort(key=score, reverse=True)
+    base = group[0].copy()
+
+    # Collect all regions/categories across all records
+    all_regions = set()
+    all_categories = set()
+    all_injuries = set()
+    all_fla = []
+    seen_fla_keys = set()
+    all_other_damages = []
+    all_citations = set()
+
+    for case in group:
+        # Regions
+        regions = case.get('region', [])
+        if isinstance(regions, list):
+            all_regions.update(r for r in regions if r)
+        elif regions:
+            all_regions.add(regions)
+
+        # Categories
+        cat = case.get('category')
+        if cat:
+            all_categories.add(cat)
+
+        # Injuries
+        inj = case.get('injuries', [])
+        if isinstance(inj, list):
+            all_injuries.update(inj)
+
+        # FLA claims (deduplicate by relationship + amount)
+        for claim in case.get('family_law_act_claims', []):
+            key = (claim.get('relationship'), claim.get('amount'))
+            if key not in seen_fla_keys:
+                seen_fla_keys.add(key)
+                all_fla.append(claim)
+
+        # Other damages (deduplicate by type + amount)
+        for dam in case.get('other_damages', []):
+            all_other_damages.append(dam)
+
+        # Citations
+        cit = case.get('citation', '')
+        if cit:
+            all_citations.add(cit)
+
+        # Fill in missing fields from other records
+        if not base.get('year') and case.get('year'):
+            base['year'] = case['year']
+        if not base.get('sex') and case.get('sex'):
+            base['sex'] = case['sex']
+        if not base.get('age') and case.get('age'):
+            base['age'] = case['age']
+        if not base.get('judge') and case.get('judge'):
+            base['judge'] = case['judge']
+        if not base.get('court') and case.get('court'):
+            base['court'] = case['court']
+
+        # Keep longest comments
+        if len(case.get('comments', '')) > len(base.get('comments', '')):
+            base['comments'] = case['comments']
+
+    # NON-PECUNIARY DAMAGES: use the base record's value only (don't sum across dupes)
+    # The base is already the best-scored record
+
+    # Merge multi-plaintiff data — keep from the record that has them
+    for case in group:
+        if case.get('plaintiffs') and not base.get('plaintiffs'):
+            base['plaintiffs'] = case['plaintiffs']
+            break
+
+    # Update merged fields
+    base['region'] = sorted(all_regions) if all_regions else base.get('region', [])
+    base['categories'] = sorted(all_categories) if all_categories else [base.get('category', 'General')]
+    base['injuries'] = sorted(all_injuries) if all_injuries else base.get('injuries', [])
+    base['family_law_act_claims'] = all_fla
+    if all_other_damages:
+        # Deduplicate other damages by (type, amount)
+        seen = set()
+        unique_od = []
+        for d in all_other_damages:
+            key = (d.get('type'), d.get('amount'))
+            if key not in seen:
+                seen.add(key)
+                unique_od.append(d)
+        base['other_damages'] = unique_od
+
+    # Merge citations
+    if len(all_citations) > 1:
+        base['citation'] = '; '.join(sorted(all_citations))
+
+    # Re-extract injuries from merged comments
+    if base.get('comments') and not base.get('injuries'):
+        base['injuries'] = _extract_injuries(base['comments'])
+
+    return base
+
+
 def fix_categories_from_pdf(
     cases: List[Dict[str, Any]],
     pdf_path: str = "2024damagescompendium.pdf",
@@ -597,7 +946,7 @@ def fix_categories_from_pdf(
     try:
         import PyPDF2
     except ImportError:
-        print("PyPDF2 not available — skipping PDF section mapping")
+        print("PyPDF2 not available -- skipping PDF section mapping")
         return 0
 
     reader = PyPDF2.PdfReader(pdf_path)
@@ -631,31 +980,36 @@ def fix_categories_from_pdf(
                 prev_section = s
         all_page_sections[pg] = prev_section
 
-    # Build citation O.J. number -> section lookup
-    citation_section: Dict[str, str] = {}
+    # Build citation O.J. number -> set of sections lookup
+    # A case can appear in multiple sections (e.g., Knee AND Back)
+    citation_sections: Dict[str, set] = defaultdict(set)
     for pg_num in range(4, len(reader.pages) + 1):
         text = reader.pages[pg_num - 1].extract_text() or ""
         section = all_page_sections.get(pg_num, "General")
         for m in re.finditer(r"\[\d{4}\]\s*O\.J\.\s*No\.\s*(\d+)", text):
             oj_num = m.group(1)
-            citation_section[oj_num] = section
+            citation_sections[oj_num].add(section)
 
     # Apply to parsed cases
     improved = 0
     for case in cases:
         cit = case.get("citation", "")
-        m = re.search(r"\[\d{4}\]\s*O\.J\.\s*No\.\s*(\d+)", cit)
-        if m:
-            oj_num = m.group(1)
-            if oj_num in citation_section:
-                new_section = citation_section[oj_num]
-                # Normalize case
-                if new_section == "PAIN AND SUFFERING – MINOR CASES":
-                    new_section = "Pain and Suffering – Minor Cases"
-                if case.get("category") != new_section:
-                    improved += 1
-                case["category"] = new_section
-                case["region"] = [new_section]
+        oj_num = _extract_oj_number(cit)
+        if oj_num and oj_num in citation_sections:
+            sections = citation_sections[oj_num]
+            # Normalize section names
+            normalized = set()
+            for s in sections:
+                if s == "PAIN AND SUFFERING \u2013 MINOR CASES":
+                    s = "Pain and Suffering \u2013 Minor Cases"
+                normalized.add(s)
+
+            primary = sorted(normalized)[0]
+            if case.get("category") != primary:
+                improved += 1
+            case["category"] = primary
+            case["region"] = sorted(normalized)
+            case["categories"] = sorted(normalized)
 
         # Recover missing years from citation
         if not case.get("year"):
@@ -681,7 +1035,13 @@ if __name__ == "__main__":
     output_path = sys.argv[3] if len(sys.argv) > 3 else "damages_parsed.json"
 
     print(f"Parsing {csv_path}...")
-    cases = parse_csv(csv_path)
+    raw_cases = parse_csv(csv_path)
+    print(f"  Raw records from CSV: {len(raw_cases)}")
+
+    # Deduplicate cases that appear across multiple pages/sections
+    print(f"\nDeduplicating...")
+    cases = deduplicate_cases(raw_cases)
+    print(f"  Unique cases after dedup: {len(cases)}")
 
     # Fix categories using PDF section headers
     if Path(pdf_path).exists():
@@ -689,7 +1049,7 @@ if __name__ == "__main__":
         improved = fix_categories_from_pdf(cases, pdf_path)
         print(f"  Improved {improved} category assignments")
     else:
-        print(f"\nPDF not found at {pdf_path} — skipping section mapping")
+        print(f"\nPDF not found at {pdf_path} -- skipping section mapping")
 
     # Statistics
     with_damages = sum(1 for c in cases if c.get('non_pecuniary_damages'))
@@ -698,14 +1058,16 @@ if __name__ == "__main__":
     with_judges = sum(1 for c in cases if c.get('judge'))
     with_citation = sum(1 for c in cases if c.get('citation'))
     with_year = sum(1 for c in cases if c.get('year'))
+    with_multi_region = sum(1 for c in cases if len(c.get('region', [])) > 1)
 
-    print(f"\nParsed {len(cases)} cases:")
-    print(f"  With damages:    {with_damages} ({with_damages/len(cases)*100:.0f}%)")
-    print(f"  With injuries:   {with_injuries} ({with_injuries/len(cases)*100:.0f}%)")
-    print(f"  With FLA claims: {with_fla} ({with_fla/len(cases)*100:.0f}%)")
-    print(f"  With judges:     {with_judges} ({with_judges/len(cases)*100:.0f}%)")
-    print(f"  With citations:  {with_citation} ({with_citation/len(cases)*100:.0f}%)")
-    print(f"  With year:       {with_year} ({with_year/len(cases)*100:.0f}%)")
+    print(f"\nParsed {len(cases)} unique cases:")
+    print(f"  With damages:      {with_damages} ({with_damages/len(cases)*100:.0f}%)")
+    print(f"  With injuries:     {with_injuries} ({with_injuries/len(cases)*100:.0f}%)")
+    print(f"  With FLA claims:   {with_fla} ({with_fla/len(cases)*100:.0f}%)")
+    print(f"  With judges:       {with_judges} ({with_judges/len(cases)*100:.0f}%)")
+    print(f"  With citations:    {with_citation} ({with_citation/len(cases)*100:.0f}%)")
+    print(f"  With year:         {with_year} ({with_year/len(cases)*100:.0f}%)")
+    print(f"  Multi-region:      {with_multi_region} ({with_multi_region/len(cases)*100:.0f}%)")
 
     from collections import Counter
     cats = Counter(c.get('category', 'UNKNOWN') for c in cases)
