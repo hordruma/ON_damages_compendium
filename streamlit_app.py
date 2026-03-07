@@ -1,8 +1,8 @@
 """
 Ontario Damages Compendium — Legal Reference Tool
 
-Redesigned UI v3.0: flat console aesthetic, collapsible sidebar navigation,
-browsable compendium with ToC, fuzzy/boolean search, and integrated analytics.
+Material Design 3 UI v4.0: clean surfaces, elevation, proper typography,
+consistent spacing, accessible color system.
 """
 
 import streamlit as st
@@ -40,7 +40,7 @@ from inflation_adjuster import (
 # VERSION & CACHE
 # =============================================================================
 
-APP_VERSION = "3.0.0"
+APP_VERSION = "4.0.0"
 
 if "app_version" not in st.session_state or st.session_state.app_version != APP_VERSION:
     st.cache_resource.clear()
@@ -53,69 +53,120 @@ if "app_version" not in st.session_state or st.session_state.app_version != APP_
 
 st.set_page_config(
     page_title="ON Damages Compendium",
-    page_icon="⚖",
+    page_icon="balance_scale",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # =============================================================================
-# CSS — FLAT / CONSOLE AESTHETIC
+# MATERIAL DESIGN 3 — CSS
 # =============================================================================
 
 st.markdown("""
 <style>
+/* ─── MD3 DESIGN TOKENS ─────────────────────────────────────────────────── */
+:root {
+  /* Primary */
+  --md-primary: #1a73e8;
+  --md-on-primary: #ffffff;
+  --md-primary-container: #d3e3fd;
+  --md-on-primary-container: #041e49;
+
+  /* Secondary */
+  --md-secondary: #5f6368;
+  --md-on-secondary: #ffffff;
+  --md-secondary-container: #e8eaed;
+  --md-on-secondary-container: #1f1f1f;
+
+  /* Tertiary */
+  --md-tertiary: #1e8e3e;
+  --md-on-tertiary: #ffffff;
+  --md-tertiary-container: #ceead6;
+  --md-on-tertiary-container: #0d652d;
+
+  /* Error */
+  --md-error: #d93025;
+  --md-error-container: #fce8e6;
+
+  /* Surface */
+  --md-surface: #ffffff;
+  --md-surface-dim: #f8f9fa;
+  --md-surface-container: #f1f3f4;
+  --md-surface-container-high: #e8eaed;
+  --md-surface-container-highest: #dadce0;
+  --md-on-surface: #202124;
+  --md-on-surface-variant: #5f6368;
+  --md-outline: #dadce0;
+  --md-outline-variant: #e8eaed;
+
+  /* Elevation */
+  --md-elevation-1: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  --md-elevation-2: 0 1px 2px 0 rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15);
+  --md-elevation-3: 0 4px 8px 3px rgba(60,64,67,0.15), 0 1px 3px rgba(60,64,67,0.3);
+
+  /* Typography */
+  --md-font: 'Google Sans', 'Segoe UI', Roboto, -apple-system, sans-serif;
+  --md-font-mono: 'Google Sans Mono', 'Roboto Mono', 'SF Mono', monospace;
+
+  /* Shape */
+  --md-shape-xs: 4px;
+  --md-shape-sm: 8px;
+  --md-shape-md: 12px;
+  --md-shape-lg: 16px;
+  --md-shape-xl: 28px;
+}
+
 /* ─── FONTS ──────────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Mono:wght@400;500&family=Roboto:wght@300;400;500;700&display=swap');
 
 html, body, [class*="css"] {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--md-font) !important;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ─── GLOBAL CHROME ──────────────────────────────────────────────────────── */
 #MainMenu, footer, .stDeployButton { visibility: hidden; display: none; }
 
 .main .block-container {
-  padding: 1.25rem 2rem 2rem !important;
+  padding: 1.5rem 2rem 2rem !important;
   max-width: 100% !important;
 }
 
-/* ─── SIDEBAR ────────────────────────────────────────────────────────────── */
+/* ─── SIDEBAR — MD3 NAVIGATION DRAWER ────────────────────────────────────── */
 section[data-testid="stSidebar"] {
-  background: #0d1117 !important;
-  border-right: 1px solid #21262d !important;
+  background: var(--md-surface) !important;
+  border-right: 1px solid var(--md-outline-variant) !important;
 }
 
-/* All text inside sidebar forced light */
 section[data-testid="stSidebar"] label,
 section[data-testid="stSidebar"] p,
 section[data-testid="stSidebar"] span,
 section[data-testid="stSidebar"] div {
-  color: #8b949e !important;
+  color: var(--md-on-surface-variant) !important;
 }
 
-/* Sidebar nav buttons — full-width, flush, no rounded box */
+/* Nav buttons — MD3 nav item pattern */
 section[data-testid="stSidebar"] .stButton > button {
   width: 100% !important;
   text-align: left !important;
   background: transparent !important;
   border: none !important;
-  border-left: 2px solid transparent !important;
-  border-radius: 0 !important;
-  color: #8b949e !important;
-  font-family: 'Inter', sans-serif !important;
-  font-size: 0.82rem !important;
-  font-weight: 400 !important;
-  padding: 0.42rem 0.9rem !important;
-  margin: 0 0 1px 0 !important;
+  border-radius: var(--md-shape-xl) !important;
+  color: var(--md-on-surface-variant) !important;
+  font-family: var(--md-font) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  padding: 0.625rem 1rem !important;
+  margin: 2px 0.5rem !important;
   letter-spacing: 0.01em !important;
-  transition: all 0.12s ease !important;
+  transition: background 0.2s ease, color 0.15s ease !important;
   box-shadow: none !important;
+  line-height: 1.4 !important;
 }
 
 section[data-testid="stSidebar"] .stButton > button:hover {
-  background: #161b22 !important;
-  border-left-color: #3b82f6 !important;
-  color: #c9d1d9 !important;
+  background: var(--md-secondary-container) !important;
+  color: var(--md-on-secondary-container) !important;
 }
 
 section[data-testid="stSidebar"] .stButton > button:focus {
@@ -123,227 +174,329 @@ section[data-testid="stSidebar"] .stButton > button:focus {
   outline: none !important;
 }
 
-/* Active nav item — set via CSS on the container div */
+/* Active nav item — MD3 active indicator */
 .nav-active .stButton > button {
-  border-left: 2px solid #3b82f6 !important;
-  color: #e6edf3 !important;
-  background: #161b22 !important;
-  font-weight: 600 !important;
+  background: var(--md-primary-container) !important;
+  color: var(--md-on-primary-container) !important;
+  font-weight: 700 !important;
 }
 
-/* Sidebar checkbox & radio */
+/* Sidebar expander */
+section[data-testid="stSidebar"] .stExpander {
+  border: 1px solid var(--md-outline-variant) !important;
+  border-radius: var(--md-shape-sm) !important;
+}
+
 section[data-testid="stSidebar"] .stCheckbox label,
 section[data-testid="stSidebar"] .stRadio label {
-  font-size: 0.8rem !important;
-  color: #8b949e !important;
+  font-size: 0.8125rem !important;
+  color: var(--md-on-surface-variant) !important;
 }
 
-section[data-testid="stSidebar"] .stExpander {
-  border: 1px solid #21262d !important;
-  border-radius: 3px !important;
-}
-
-/* ─── VIEW HEADERS ───────────────────────────────────────────────────────── */
-.view-label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.65rem;
+/* ─── PAGE HEADERS ───────────────────────────────────────────────────────── */
+.page-overline {
+  font-family: var(--md-font);
+  font-size: 0.6875rem;
   font-weight: 500;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #9ca3af;
-  margin-bottom: 0.2rem;
+  color: var(--md-primary);
+  margin-bottom: 0.25rem;
 }
 
-.view-heading {
+.page-headline {
   font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: #111827;
-  margin-bottom: 0.15rem;
-  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--md-on-surface);
+  margin-bottom: 0.25rem;
+  line-height: 1.3;
 }
 
-.view-sub {
-  font-size: 0.85rem;
-  color: #6b7280;
-  margin-bottom: 1.25rem;
+.page-supporting {
+  font-size: 0.875rem;
+  color: var(--md-on-surface-variant);
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
 }
 
-/* ─── STATS BAR ──────────────────────────────────────────────────────────── */
-.stat-block {
-  border: 1px solid #e5e7eb;
-  padding: 0.6rem 0.9rem;
+/* ─── MD3 CARDS ──────────────────────────────────────────────────────────── */
+.md-card {
+  background: var(--md-surface);
+  border-radius: var(--md-shape-md);
+  box-shadow: var(--md-elevation-1);
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+  transition: box-shadow 0.2s ease;
+}
+
+.md-card:hover {
+  box-shadow: var(--md-elevation-2);
+}
+
+.md-card-outlined {
+  background: var(--md-surface);
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-md);
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+/* ─── STAT CARDS (KPI) ───────────────────────────────────────────────────── */
+.stat-card {
+  background: var(--md-surface);
+  border-radius: var(--md-shape-md);
+  box-shadow: var(--md-elevation-1);
+  padding: 1rem 1.25rem;
   text-align: center;
-  border-radius: 3px;
-  background: #fafafa;
 }
 
-.stat-val {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #111827;
+.stat-card-value {
+  font-family: var(--md-font-mono);
+  font-size: 1.375rem;
+  font-weight: 500;
+  color: var(--md-on-surface);
   display: block;
+  line-height: 1.3;
 }
 
-.stat-lbl {
-  font-size: 0.66rem;
+.stat-card-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #9ca3af;
+  letter-spacing: 0.06em;
+  color: var(--md-on-surface-variant);
   display: block;
-  margin-top: 0.1rem;
+  margin-top: 0.25rem;
 }
 
-/* ─── TABLE (Compendium) ─────────────────────────────────────────────────── */
-.case-table { width: 100%; border-collapse: collapse; }
+/* Accent variants */
+.stat-card-primary { border-top: 3px solid var(--md-primary); }
+.stat-card-tertiary { border-top: 3px solid var(--md-tertiary); }
 
-.table-header-row {
+/* ─── DATA TABLE (Compendium) ────────────────────────────────────────────── */
+.data-table-header {
   display: grid;
-  grid-template-columns: 3fr 3.5rem 4.5rem 2.5fr 8rem;
-  gap: 0.5rem;
-  padding: 0.3rem 0.5rem 0.35rem;
-  border-bottom: 2px solid #e5e7eb;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  grid-template-columns: 3fr 3.5rem 5rem 2.5fr 8rem;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--md-outline);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: var(--md-on-surface-variant);
+  background: var(--md-surface-dim);
+  border-radius: var(--md-shape-sm) var(--md-shape-sm) 0 0;
 }
 
-.case-row-grid {
+.data-table-row {
   display: grid;
-  grid-template-columns: 3fr 3.5rem 4.5rem 2.5fr 8rem;
-  gap: 0.5rem;
-  padding: 0.5rem 0.5rem;
-  border-bottom: 1px solid #f3f4f6;
-  font-size: 0.855rem;
+  grid-template-columns: 3fr 3.5rem 5rem 2.5fr 8rem;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--md-outline-variant);
+  font-size: 0.875rem;
   align-items: center;
   cursor: pointer;
-  transition: background 0.08s;
+  transition: background 0.15s ease;
 }
 
-.case-row-grid:hover { background: #f9fafb; }
-
-.case-row-grid.selected {
-  background: #eff6ff;
-  border-left: 2px solid #3b82f6;
-  padding-left: 0.3rem;
+.data-table-row:hover {
+  background: var(--md-surface-container);
 }
 
-.cn { font-weight: 500; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cy { font-family: 'JetBrains Mono', monospace; color: #6b7280; font-size: 0.78rem; }
-.cc { color: #6b7280; font-size: 0.78rem; }
-.ccat { color: #6b7280; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.caw {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 600;
-  color: #059669;
-  font-size: 0.83rem;
+.data-table-row.row-selected {
+  background: var(--md-primary-container);
+}
+
+.col-name { font-weight: 500; color: var(--md-on-surface); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-year { font-family: var(--md-font-mono); color: var(--md-on-surface-variant); font-size: 0.8125rem; }
+.col-court { color: var(--md-on-surface-variant); font-size: 0.8125rem; }
+.col-cat { color: var(--md-on-surface-variant); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-award {
+  font-family: var(--md-font-mono);
+  font-weight: 500;
+  color: var(--md-tertiary);
+  font-size: 0.875rem;
   text-align: right;
 }
 
 /* ─── DETAIL PANEL ───────────────────────────────────────────────────────── */
-.detail-panel {
-  border: 1px solid #e5e7eb;
-  border-left: 3px solid #3b82f6;
-  padding: 1.25rem 1.5rem;
-  border-radius: 0 3px 3px 0;
-  background: #f8fafc;
-  margin: 0.25rem 0 0.5rem 0;
+.detail-surface {
+  background: var(--md-surface-container);
+  border-radius: var(--md-shape-md);
+  padding: 1.5rem;
+  margin: 0.5rem 0 1rem 0;
+  border: 1px solid var(--md-outline-variant);
 }
 
-.detail-award {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #059669;
+.detail-award-display {
+  font-family: var(--md-font-mono);
+  font-size: 2rem;
+  font-weight: 500;
+  color: var(--md-tertiary);
   display: block;
 }
 
-.detail-meta-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #9ca3af;
-}
-
-/* ─── TAGS ───────────────────────────────────────────────────────────────── */
-.tag {
-  display: inline-block;
-  background: #dbeafe;
-  color: #1d4ed8;
-  font-size: 0.68rem;
+.detail-label {
+  font-size: 0.6875rem;
   font-weight: 500;
-  padding: 0.12rem 0.45rem;
-  border-radius: 2px;
-  margin: 0.1rem 0.1rem 0.1rem 0;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-variant);
 }
 
-.tag-green { background: #d1fae5; color: #065f46; }
-.tag-gray  { background: #f3f4f6; color: #374151; }
-.tag-amber { background: #fef3c7; color: #92400e; }
+/* ─── MD3 CHIPS ──────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--md-secondary-container);
+  color: var(--md-on-secondary-container);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--md-shape-xs);
+  margin: 0.125rem 0.25rem 0.125rem 0;
+  letter-spacing: 0.02em;
+  height: 1.75rem;
+}
+
+.chip-primary { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+.chip-success { background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); }
+.chip-warning { background: #fef7e0; color: #ea8600; }
 
 /* ─── RESULT CARDS (AI Search) ───────────────────────────────────────────── */
-.result-card {
-  border: 1px solid #e5e7eb;
-  border-left: 3px solid #3b82f6;
-  padding: 0.9rem 1.1rem;
-  margin-bottom: 0.6rem;
-  border-radius: 0 3px 3px 0;
-  background: #ffffff;
+.result-surface {
+  background: var(--md-surface);
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-md);
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+  transition: box-shadow 0.2s ease;
+}
+
+.result-surface:hover {
+  box-shadow: var(--md-elevation-1);
 }
 
 /* ─── TOC NAVIGATION ─────────────────────────────────────────────────────── */
-.toc-section-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
+.toc-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #9ca3af;
-  padding: 0.6rem 0 0.2rem 0;
+  color: var(--md-on-surface-variant);
+  padding: 0.75rem 0 0.375rem 0;
   display: block;
 }
 
 /* ─── METRICS OVERRIDE ───────────────────────────────────────────────────── */
 [data-testid="stMetricValue"] {
-  font-family: 'JetBrains Mono', monospace !important;
-  font-size: 1.3rem !important;
-  font-weight: 600 !important;
+  font-family: var(--md-font-mono) !important;
+  font-size: 1.25rem !important;
+  font-weight: 500 !important;
+  color: var(--md-on-surface) !important;
 }
 
 [data-testid="stMetricLabel"] {
-  font-size: 0.7rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  color: #6b7280 !important;
+  letter-spacing: 0.04em !important;
+  color: var(--md-on-surface-variant) !important;
 }
 
-/* ─── MISC ───────────────────────────────────────────────────────────────── */
+/* ─── DIVIDERS ───────────────────────────────────────────────────────────── */
 hr {
   border: none !important;
-  border-top: 1px solid #f3f4f6 !important;
-  margin: 0.75rem 0 !important;
+  border-top: 1px solid var(--md-outline-variant) !important;
+  margin: 1rem 0 !important;
+}
+
+/* ─── EXPANDERS ──────────────────────────────────────────────────────────── */
+.stExpander {
+  border: 1px solid var(--md-outline-variant) !important;
+  border-radius: var(--md-shape-sm) !important;
 }
 
 .stExpander > summary {
-  font-size: 0.88rem !important;
+  font-size: 0.875rem !important;
   font-weight: 500 !important;
+}
+
+/* ─── BUTTONS — MD3 ──────────────────────────────────────────────────────── */
+.stButton > button[kind="primary"],
+button[data-testid="stBaseButton-primary"] {
+  border-radius: var(--md-shape-xl) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.02em !important;
+  padding: 0.625rem 1.5rem !important;
+  text-transform: none !important;
+}
+
+/* ─── INPUTS — MD3 ───────────────────────────────────────────────────────── */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea {
+  border-radius: var(--md-shape-xs) !important;
+  border-color: var(--md-outline) !important;
+  font-family: var(--md-font) !important;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+  border-color: var(--md-primary) !important;
+  box-shadow: 0 0 0 1px var(--md-primary) !important;
+}
+
+.stSelectbox > div > div {
+  border-radius: var(--md-shape-xs) !important;
+}
+
+/* ─── TABS — MD3 ─────────────────────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+  gap: 0 !important;
+  border-bottom: 1px solid var(--md-outline-variant) !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+  font-family: var(--md-font) !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  letter-spacing: 0.02em !important;
+  padding: 0.75rem 1.25rem !important;
+}
+
+/* ─── DATAFRAMES ─────────────────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {
+  border-radius: var(--md-shape-sm) !important;
+  overflow: hidden;
 }
 
 /* ─── DARK MODE ──────────────────────────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
-  .view-heading { color: #f9fafb; }
-  .cn { color: #f3f4f6; }
-  .stat-block { background: #1f2937; border-color: #374151; }
-  .stat-val { color: #f9fafb; }
-  .detail-panel { background: #1e293b; border-color: #334155; }
-  .result-card { background: #1e293b; border-color: #334155; }
-  .table-header-row, .case-row-grid { border-color: #374151; }
-  .case-row-grid:hover { background: #1f2937; }
-  .case-row-grid.selected { background: #1e3a5f; }
+  :root {
+    --md-surface: #1e1e1e;
+    --md-surface-dim: #141414;
+    --md-surface-container: #252525;
+    --md-surface-container-high: #2d2d2d;
+    --md-surface-container-highest: #353535;
+    --md-on-surface: #e3e3e3;
+    --md-on-surface-variant: #c4c7c5;
+    --md-outline: #444746;
+    --md-outline-variant: #353535;
+    --md-primary: #a8c7fa;
+    --md-on-primary: #062e6f;
+    --md-primary-container: #0842a0;
+    --md-on-primary-container: #d3e3fd;
+    --md-secondary-container: #444746;
+    --md-on-secondary-container: #e3e3e3;
+    --md-tertiary: #81c995;
+    --md-tertiary-container: #0d652d;
+    --md-on-tertiary-container: #ceead6;
+    --md-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.15), 0 1px 2px 0 rgba(0,0,0,0.3);
+    --md-elevation-2: 0 2px 6px 2px rgba(0,0,0,0.15), 0 1px 2px 0 rgba(0,0,0,0.3);
+  }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -361,11 +514,11 @@ model, cases, region_map = initialize_data()
 VIEWS = ["compendium", "ai_search", "judges", "categories", "fla"]
 
 VIEW_META = {
-    "compendium": {"icon": "⊞", "label": "Compendium",       "num": "01"},
-    "ai_search":  {"icon": "◈", "label": "AI Search",         "num": "02"},
-    "judges":     {"icon": "◷", "label": "Judge Analytics",   "num": "03"},
-    "categories": {"icon": "◫", "label": "Category Stats",    "num": "04"},
-    "fla":        {"icon": "◻", "label": "FLA Claims",        "num": "05"},
+    "compendium": {"label": "Compendium",       "num": "01"},
+    "ai_search":  {"label": "AI Search",         "num": "02"},
+    "judges":     {"label": "Judge Analytics",   "num": "03"},
+    "categories": {"label": "Category Stats",    "num": "04"},
+    "fla":        {"label": "FLA Claims",        "num": "05"},
 }
 
 _defaults = {
@@ -391,6 +544,13 @@ for _k, _v in _defaults.items():
 # HELPER FUNCTIONS
 # =============================================================================
 
+def render_page_header(num: str, title: str, subtitle: str) -> None:
+    """Render a consistent MD3 page header."""
+    st.markdown(f'<div class="page-overline">Section {num}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="page-headline">{title}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="page-supporting">{subtitle}</div>', unsafe_allow_html=True)
+
+
 def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
     """Render structured case detail from extended_data."""
     ext = case.get("extended_data") or {}
@@ -399,7 +559,7 @@ def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
 
     num_p = ext.get("num_plaintiffs", 0)
     if num_p > 1:
-        st.info(f"Multi-Plaintiff Case ({num_p} plaintiffs)")
+        st.info(f"Multi-plaintiff case ({num_p} plaintiffs)")
 
     demo = []
     if ext.get("plaintiff_id"):
@@ -409,11 +569,11 @@ def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
     if ext.get("age"):
         demo.append(f"Age at injury: {ext['age']}")
     if demo:
-        st.markdown(f"**Demographics:** {'  ·  '.join(demo)}")
+        st.markdown(f"**Demographics:** {'  &middot;  '.join(demo)}")
 
     injuries = ext.get("injuries") or []
     if injuries:
-        st.markdown("**Injuries & Diagnoses:**")
+        st.markdown("**Injuries & Diagnoses**")
         seen, uniq = set(), []
         for inj in injuries:
             key = inj.strip().lower()
@@ -431,7 +591,7 @@ def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
 
     other_dmg = ext.get("other_damages") or []
     if other_dmg:
-        st.markdown("**Pecuniary Damages (Economic Losses):**")
+        st.markdown("**Pecuniary Damages (Economic Losses)**")
         for d in other_dmg:
             dtype = d.get("type", "Other").replace("_", " ").title()
             amt   = d.get("amount")
@@ -446,7 +606,7 @@ def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
     if show_fla:
         fla = ext.get("family_law_act_claims") or []
         if fla:
-            st.markdown("**Family Law Act Claims:**")
+            st.markdown("**Family Law Act Claims**")
             for claim in fla:
                 rel  = claim.get("relationship", "FLA claim")
                 desc = claim.get("description", "")
@@ -457,7 +617,7 @@ def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
 
     cites = ext.get("citations") or []
     if cites:
-        st.markdown(f"**Citation(s):** {', '.join(cites)}")
+        st.markdown(f"**Citations:** {', '.join(cites)}")
 
     judges = ext.get("judges") or []
     if judges:
@@ -472,7 +632,7 @@ def display_enhanced_data(case: Dict, show_fla: bool = False) -> None:
 
 
 def fuzzy_score(case: Dict, query: str) -> float:
-    """Score a case against a free-text query. Returns 0–1."""
+    """Score a case against a free-text query. Returns 0-1."""
     if not query.strip():
         return 1.0
     q = query.lower()
@@ -507,7 +667,7 @@ def get_case_categories(case: Dict) -> List[str]:
 
 
 def build_toc_categories(cases_list: List[Dict]) -> Dict[str, int]:
-    """Category → count mapping, sorted by count desc."""
+    """Category -> count mapping, sorted by count desc."""
     counts: Dict[str, int] = {}
     for c in cases_list:
         for cat in get_case_categories(c):
@@ -517,7 +677,7 @@ def build_toc_categories(cases_list: List[Dict]) -> Dict[str, int]:
 
 
 def build_toc_years(cases_list: List[Dict]) -> Dict[str, int]:
-    """Decade → count mapping, sorted by decade desc."""
+    """Decade -> count mapping, sorted by decade desc."""
     counts: Dict[str, int] = {}
     for c in cases_list:
         yr = c.get("year")
@@ -538,7 +698,6 @@ def filter_and_sort_cases(
     """Apply ToC filter, search query, and sort to the case list."""
     filtered = list(cases)
 
-    # ── ToC filter ────────────────────────────────────────────────
     if toc_selection:
         sel = toc_selection.upper()
         if toc_group_by == "category":
@@ -553,12 +712,10 @@ def filter_and_sort_cases(
                 if c.get("year") and decade_start <= c["year"] < decade_start + 10
             ]
 
-    # ── Query filter ──────────────────────────────────────────────
     if query.strip():
         if search_mode == "fuzzy":
             scored = [(c, fuzzy_score(c, query)) for c in filtered]
             filtered = [c for c, s in scored if s >= 0.3]
-            # sort by relevance; we return early here
             filtered.sort(key=lambda c: fuzzy_score(c, query), reverse=True)
             return filtered
         elif search_mode == "boolean":
@@ -569,9 +726,8 @@ def filter_and_sort_cases(
                     search_fields=["case_name", "injuries", "comments", "summary"],
                 )
             except Exception:
-                pass  # fall through with unfiltered on parse error
+                pass
 
-    # ── Sort ──────────────────────────────────────────────────────
     if sort == "year_desc":
         filtered.sort(key=lambda c: c.get("year") or 0, reverse=True)
     elif sort == "year_asc":
@@ -587,12 +743,13 @@ def filter_and_sort_cases(
 
 
 def render_stat_bar(values: List[float], n_cases: int) -> None:
-    """Render a 4-column stats bar for a list of award values."""
+    """Render a 4-column MD3 stat card bar."""
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown(
-            f'<div class="stat-block"><span class="stat-val">{n_cases:,}</span>'
-            f'<span class="stat-lbl">Cases</span></div>',
+            f'<div class="stat-card stat-card-primary">'
+            f'<span class="stat-card-value">{n_cases:,}</span>'
+            f'<span class="stat-card-label">Cases</span></div>',
             unsafe_allow_html=True,
         )
     if values:
@@ -601,26 +758,29 @@ def render_stat_bar(values: List[float], n_cases: int) -> None:
         hi = int(max(values))
         with c2:
             st.markdown(
-                f'<div class="stat-block"><span class="stat-val">${median:,}</span>'
-                f'<span class="stat-lbl">Median Award</span></div>',
+                f'<div class="stat-card">'
+                f'<span class="stat-card-value">${median:,}</span>'
+                f'<span class="stat-card-label">Median Award</span></div>',
                 unsafe_allow_html=True,
             )
         with c3:
             st.markdown(
-                f'<div class="stat-block"><span class="stat-val">${lo:,}</span>'
-                f'<span class="stat-lbl">Min Award</span></div>',
+                f'<div class="stat-card">'
+                f'<span class="stat-card-value">${lo:,}</span>'
+                f'<span class="stat-card-label">Min Award</span></div>',
                 unsafe_allow_html=True,
             )
         with c4:
             st.markdown(
-                f'<div class="stat-block"><span class="stat-val">${hi:,}</span>'
-                f'<span class="stat-lbl">Max Award</span></div>',
+                f'<div class="stat-card stat-card-tertiary">'
+                f'<span class="stat-card-value">${hi:,}</span>'
+                f'<span class="stat-card-label">Max Award</span></div>',
                 unsafe_allow_html=True,
             )
 
 
 # =============================================================================
-# SIDEBAR — NAVIGATION
+# SIDEBAR — MD3 NAVIGATION DRAWER
 # =============================================================================
 
 with st.sidebar:
@@ -628,31 +788,30 @@ with st.sidebar:
 
     st.markdown(
         f"""
-        <div style="padding:1rem 0.75rem 0.75rem;border-bottom:1px solid #21262d;margin-bottom:0.5rem;">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:0.6rem;
-                      letter-spacing:0.22em;text-transform:uppercase;color:#484f58;
+        <div style="padding:1.25rem 1rem 1rem;border-bottom:1px solid var(--md-outline-variant);margin-bottom:0.75rem;">
+          <div style="font-size:0.6875rem;font-weight:500;letter-spacing:0.08em;
+                      text-transform:uppercase;color:var(--md-primary);
                       margin-bottom:0.25rem;">Ontario</div>
-          <div style="font-size:1rem;font-weight:700;color:#e6edf3;letter-spacing:-0.01em;
-                      line-height:1.2;">Damages<br>Compendium</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:0.6rem;
-                      color:#484f58;margin-top:0.35rem;">v{APP_VERSION} · {n_cases_total:,} cases</div>
+          <div style="font-size:1.125rem;font-weight:700;color:var(--md-on-surface);
+                      letter-spacing:-0.01em;line-height:1.3;">Damages
+              Compendium</div>
+          <div style="font-size:0.75rem;color:var(--md-on-surface-variant);
+                      margin-top:0.5rem;">v{APP_VERSION} &middot; {n_cases_total:,} cases</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     st.markdown(
-        '<span style="font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;'
-        'color:#484f58;padding:0 0.25rem;display:block;margin-bottom:0.25rem;">Views</span>',
+        '<span style="font-size:0.6875rem;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;'
+        'color:var(--md-on-surface-variant);padding:0 1rem;display:block;margin-bottom:0.25rem;">Navigation</span>',
         unsafe_allow_html=True,
     )
 
     for vid in VIEWS:
         meta   = VIEW_META[vid]
         active = st.session_state.current_view == vid
-        prefix = "▶" if active else "  "
-        label  = f"{prefix}  {meta['icon']}  {meta['label']}"
-        # Wrap in a div we can target with CSS for the active state
+        label  = f"{meta['label']}"
         if active:
             st.markdown('<div class="nav-active">', unsafe_allow_html=True)
         if st.button(label, key=f"nav_{vid}"):
@@ -662,12 +821,12 @@ with st.sidebar:
             st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown(
-        '<div style="border-top:1px solid #21262d;margin:0.75rem 0 0.5rem;"></div>',
+        '<div style="border-top:1px solid var(--md-outline-variant);margin:1rem 0.75rem 0.75rem;"></div>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<span style="font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;'
-        'color:#484f58;padding:0 0.25rem;display:block;margin-bottom:0.25rem;">Settings</span>',
+        '<span style="font-size:0.6875rem;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;'
+        'color:var(--md-on-surface-variant);padding:0 1rem;display:block;margin-bottom:0.25rem;">Settings</span>',
         unsafe_allow_html=True,
     )
 
@@ -675,7 +834,7 @@ with st.sidebar:
         "Include outliers",
         value=True,
         key="include_outliers_global",
-        help="When unchecked, awards outside 1.5×IQR are excluded from analytics and AI search.",
+        help="When unchecked, awards outside 1.5x IQR are excluded from analytics and AI search.",
     )
 
     with st.expander("CPI Data", expanded=False):
@@ -686,7 +845,7 @@ with st.sidebar:
         for yr_k in sorted(cpi_raw.keys()):
             buf.write(f"{yr_k},{cpi_raw[yr_k]:.2f}\n")
         st.download_button(
-            "↓ Download CPI CSV",
+            "Download CPI CSV",
             buf.getvalue(),
             "cpi_data.csv",
             "text/csv",
@@ -708,9 +867,9 @@ with st.sidebar:
                 st.error(str(_e))
 
     st.markdown(
-        '<div style="border-top:1px solid #21262d;margin-top:0.75rem;padding:0.75rem 0.5rem 0;">'
-        '<span style="font-size:0.62rem;color:#484f58;line-height:1.6;display:block;">'
-        "Reference only. Always verify case details<br>and consult primary sources."
+        '<div style="border-top:1px solid var(--md-outline-variant);margin-top:1rem;padding:1rem;">'
+        '<span style="font-size:0.75rem;color:var(--md-on-surface-variant);line-height:1.6;display:block;">'
+        "Reference only. Always verify case details and consult primary sources."
         "</span></div>",
         unsafe_allow_html=True,
     )
@@ -722,22 +881,19 @@ with st.sidebar:
 
 def render_compendium() -> None:
     """Browsable compendium with ToC, fuzzy search, boolean search."""
-    st.markdown('<div class="view-label">View 01</div>', unsafe_allow_html=True)
-    st.markdown('<div class="view-heading">Compendium Browser</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="view-sub">'
-        "Browse all cases · Fuzzy and boolean search · Navigate by category or decade"
-        "</div>",
-        unsafe_allow_html=True,
+    render_page_header(
+        "01",
+        "Compendium Browser",
+        "Browse all cases with fuzzy and boolean search. Navigate by category or decade.",
     )
 
-    # ── Search controls ───────────────────────────────────────────
+    # Search controls
     sc1, sc2, sc3 = st.columns([6, 2, 2])
     with sc1:
         new_q = st.text_input(
-            "search",
+            "Search",
             value=st.session_state.comp_search,
-            placeholder="Search cases, injuries, comments, citations…",
+            placeholder="Search cases, injuries, comments, citations...",
             label_visibility="collapsed",
             key="comp_q_input",
         )
@@ -748,10 +904,10 @@ def render_compendium() -> None:
     with sc2:
         mode_idx = 0 if st.session_state.comp_search_mode == "fuzzy" else 1
         new_mode = st.selectbox(
-            "mode",
+            "Mode",
             ["fuzzy", "boolean"],
             index=mode_idx,
-            format_func=lambda x: "≈  Fuzzy" if x == "fuzzy" else "±  Boolean",
+            format_func=lambda x: "Fuzzy Search" if x == "fuzzy" else "Boolean Search",
             label_visibility="collapsed",
             key="comp_mode_sel",
         )
@@ -762,15 +918,15 @@ def render_compendium() -> None:
     with sc3:
         sort_opts = ["year_desc", "year_asc", "award_desc", "award_asc", "name_asc"]
         sort_labels = {
-            "year_desc": "Year ↓",
-            "year_asc":  "Year ↑",
-            "award_desc": "Award ↓",
-            "award_asc":  "Award ↑",
-            "name_asc":   "Name A–Z",
+            "year_desc":  "Year (Newest)",
+            "year_asc":   "Year (Oldest)",
+            "award_desc": "Award (Highest)",
+            "award_asc":  "Award (Lowest)",
+            "name_asc":   "Name (A-Z)",
         }
         cur_sort_idx = sort_opts.index(st.session_state.comp_sort) if st.session_state.comp_sort in sort_opts else 0
         new_sort = st.selectbox(
-            "sort",
+            "Sort",
             sort_opts,
             index=cur_sort_idx,
             format_func=lambda x: sort_labels[x],
@@ -782,24 +938,23 @@ def render_compendium() -> None:
             st.session_state.comp_page = 0
 
     if new_mode == "boolean" and st.session_state.comp_search:
-        st.caption("Boolean operators: `AND` · `OR` · `NOT` · `\"exact phrase\"`")
+        st.caption("Boolean operators: `AND`  `OR`  `NOT`  `\"exact phrase\"`")
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("")
 
-    # ── Layout: ToC | Cases ───────────────────────────────────────
+    # Layout: ToC | Cases
     toc_col, main_col = st.columns([1, 4], gap="medium")
 
-    # Build ToC data
     toc_cats  = build_toc_categories(cases)
     toc_years = build_toc_years(cases)
 
     with toc_col:
         st.markdown(
-            '<span class="toc-section-label">Group by</span>',
+            '<span class="toc-label">Group by</span>',
             unsafe_allow_html=True,
         )
         new_grp = st.radio(
-            "group",
+            "Group",
             ["category", "year"],
             index=0 if st.session_state.toc_group_by == "category" else 1,
             format_func=lambda x: "Category" if x == "category" else "Decade",
@@ -813,16 +968,15 @@ def render_compendium() -> None:
             st.session_state.comp_page = 0
 
         st.markdown(
-            '<span class="toc-section-label">'
+            '<span class="toc-label">'
             + ("Categories" if new_grp == "category" else "Decades")
             + "</span>",
             unsafe_allow_html=True,
         )
 
-        # "All" button
         all_active = st.session_state.toc_selection is None
-        all_lbl = ("▶  All  " if all_active else "   All  ") + f"[{n_cases_total:,}]"
-        if st.button(all_lbl, key="toc_all", use_container_width=True):
+        all_lbl = f"All ({n_cases_total:,})"
+        if st.button(all_lbl, key="toc_all", use_container_width=True, type="primary" if all_active else "secondary"):
             st.session_state.toc_selection = None
             st.session_state.comp_page = 0
             st.rerun()
@@ -830,8 +984,8 @@ def render_compendium() -> None:
         groups = toc_cats if new_grp == "category" else toc_years
         for grp_label, grp_count in groups.items():
             is_active = st.session_state.toc_selection == grp_label
-            btn_lbl = ("▶  " if is_active else "   ") + grp_label + f"  [{grp_count}]"
-            if st.button(btn_lbl, key=f"toc_{grp_label}", use_container_width=True):
+            btn_lbl = f"{grp_label} ({grp_count})"
+            if st.button(btn_lbl, key=f"toc_{grp_label}", use_container_width=True, type="primary" if is_active else "secondary"):
                 if is_active:
                     st.session_state.toc_selection = None
                 else:
@@ -839,9 +993,8 @@ def render_compendium() -> None:
                 st.session_state.comp_page = 0
                 st.rerun()
 
-    # ── Main case list ────────────────────────────────────────────
+    # Main case list
     with main_col:
-        # Apply filters
         filter_key = (
             st.session_state.comp_search,
             st.session_state.comp_search_mode,
@@ -862,15 +1015,14 @@ def render_compendium() -> None:
             st.session_state.comp_sort,
         )
 
-        # Stats bar
         award_vals = [extract_damages_value(c) for c in filtered]
         award_vals = [a for a in award_vals if a]
         render_stat_bar(award_vals, len(filtered))
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("")
 
         if not filtered:
-            st.info("No cases match the current filters. Try broadening your search or clearing the ToC selection.")
+            st.info("No cases match the current filters. Try broadening your search or clearing the category selection.")
             return
 
         # Pagination
@@ -884,7 +1036,7 @@ def render_compendium() -> None:
 
         # Table header
         st.markdown(
-            '<div class="table-header-row">'
+            '<div class="data-table-header">'
             "<span>Case Name</span>"
             "<span>Year</span>"
             "<span>Court</span>"
@@ -898,47 +1050,44 @@ def render_compendium() -> None:
         for case in page_cases:
             cid   = case.get("id", "")
             name  = case.get("case_name", "Unknown")
-            year  = str(case.get("year", "—"))
-            court = case.get("court", "—")
+            year  = str(case.get("year", "--"))
+            court = case.get("court", "--")
             cats  = get_case_categories(case)
-            cat   = cats[0] if cats else "—"
+            cat   = cats[0] if cats else "--"
             award = extract_damages_value(case)
-            award_str = f"${award:,.0f}" if award else "—"
+            award_str = f"${award:,.0f}" if award else "--"
             selected  = st.session_state.comp_selected_case_id == cid
-            sel_class = " selected" if selected else ""
+            sel_class = " row-selected" if selected else ""
 
-            # Row HTML (visual only — click handled by button below)
             st.markdown(
-                f'<div class="case-row-grid{sel_class}">'
-                f'<span class="cn">{name}</span>'
-                f'<span class="cy">{year}</span>'
-                f'<span class="cc">{court}</span>'
-                f'<span class="ccat">{cat}</span>'
-                f'<span class="caw">{award_str}</span>'
+                f'<div class="data-table-row{sel_class}">'
+                f'<span class="col-name">{name}</span>'
+                f'<span class="col-year">{year}</span>'
+                f'<span class="col-court">{court}</span>'
+                f'<span class="col-cat">{cat}</span>'
+                f'<span class="col-award">{award_str}</span>'
                 f"</div>",
                 unsafe_allow_html=True,
             )
 
-            # Thin button row below the HTML row (expand/collapse)
-            btn_label = "▲ Close" if selected else "▼ View"
+            btn_label = "Close" if selected else "View Details"
             if st.button(btn_label, key=f"open_{cid}", help=f"Toggle detail for {name}"):
                 st.session_state.comp_selected_case_id = None if selected else cid
                 st.rerun()
 
-            # Inline detail panel
             if selected:
                 with st.container():
-                    st.markdown('<div class="detail-panel">', unsafe_allow_html=True)
+                    st.markdown('<div class="detail-surface">', unsafe_allow_html=True)
                     h1, h2 = st.columns([3, 1])
                     with h1:
                         st.markdown(f"#### {name}")
-                        meta_parts = [p for p in [year, court, case.get("citation", "")] if p and p != "—"]
-                        st.caption("  ·  ".join(meta_parts))
+                        meta_parts = [p for p in [year, court, case.get("citation", "")] if p and p != "--"]
+                        st.caption("  &middot;  ".join(meta_parts))
                     with h2:
                         if award:
                             st.markdown(
-                                f'<span class="detail-award">${award:,.0f}</span>'
-                                f'<span class="detail-meta-label">Non-Pecuniary Award</span>',
+                                f'<span class="detail-award-display">${award:,.0f}</span>'
+                                f'<span class="detail-label">Non-Pecuniary Award</span>',
                                 unsafe_allow_html=True,
                             )
                     st.markdown("---")
@@ -947,24 +1096,25 @@ def render_compendium() -> None:
 
         # Pagination controls
         if total_pages > 1:
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("")
             pg1, pg2, pg3 = st.columns([1, 3, 1])
             with pg1:
-                if page > 0 and st.button("← Prev", key="pg_prev"):
+                if page > 0 and st.button("Previous", key="pg_prev"):
                     st.session_state.comp_page -= 1
                     st.rerun()
             with pg2:
                 range_start = start + 1
                 range_end = min(start + PAGE_SIZE, len(filtered))
                 st.markdown(
-                    f'<div style="text-align:center;font-size:0.78rem;color:#6b7280;padding-top:0.4rem;">'
-                    f"Showing {range_start}–{range_end} of {len(filtered):,} · "
-                    f"Page {page+1} of {total_pages}"
+                    f'<div style="text-align:center;font-size:0.8125rem;'
+                    f'color:var(--md-on-surface-variant);padding-top:0.5rem;">'
+                    f"Showing {range_start}&ndash;{range_end} of {len(filtered):,}"
+                    f" &middot; Page {page+1} of {total_pages}"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
             with pg3:
-                if page < total_pages - 1 and st.button("Next →", key="pg_next"):
+                if page < total_pages - 1 and st.button("Next", key="pg_next"):
                     st.session_state.comp_page += 1
                     st.rerun()
 
@@ -975,21 +1125,17 @@ def render_compendium() -> None:
 
 def render_ai_search() -> None:
     """Semantic AI search with expert report upload and PDF export."""
-    st.markdown('<div class="view-label">View 02</div>', unsafe_allow_html=True)
-    st.markdown('<div class="view-heading">AI Search</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="view-sub">'
-        "Hybrid semantic search — injury embeddings · BM25 keywords · metadata matching"
-        "</div>",
-        unsafe_allow_html=True,
+    render_page_header(
+        "02",
+        "AI Search",
+        "Hybrid semantic search combining injury embeddings, BM25 keywords, and metadata matching.",
     )
 
-    # ── Two-panel layout: controls | results ──────────────────────
     ctrl_col, res_col = st.columns([1, 3], gap="large")
 
     with ctrl_col:
         # Expert report upload
-        with st.expander("Upload Expert Report  (optional)", expanded=False):
+        with st.expander("Upload Expert Report", expanded=False):
             uploaded_file = st.file_uploader(
                 "PDF report",
                 type=["pdf"],
@@ -1003,20 +1149,20 @@ def render_ai_search() -> None:
                 help="Requires OPENAI_API_KEY or ANTHROPIC_API_KEY in environment.",
             )
             if uploaded_file and st.button("Analyze Report", key="ai_analyze_btn", type="secondary"):
-                with st.spinner("Analyzing report…"):
+                with st.spinner("Analyzing report..."):
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                         tmp.write(uploaded_file.getvalue())
                         tmp_path = tmp.name
                     try:
                         analysis = analyze_expert_report(tmp_path, use_llm=use_llm)
                         st.session_state.analysis_data = analysis
-                        st.success("Report analyzed — injury description updated below.")
+                        st.success("Report analyzed. Injury description updated below.")
                         detected = analysis.get("injured_regions", [])
                         if detected:
                             st.write("**Detected regions:**")
                             for rid in detected:
                                 if rid in region_map:
-                                    st.write(f"  · {region_map[rid]['label']}")
+                                    st.write(f"- {region_map[rid]['label']}")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Analysis failed: {e}")
@@ -1054,7 +1200,7 @@ def render_ai_search() -> None:
             st.session_state.analysis_data = None
             st.rerun()
 
-        st.markdown("**Demographics**  *(optional)*")
+        st.markdown("**Demographics** *(optional)*")
         gender = st.radio(
             "Gender",
             ["Not Specified", "Male", "Female"],
@@ -1074,8 +1220,8 @@ def render_ai_search() -> None:
             label_visibility="collapsed",
             key="ai_weight_preset",
             help=(
-                "Balanced: general-purpose · Medical: specific diagnoses · "
-                "Symptom/Impact: functional limitations · Custom: set weights manually"
+                "Balanced: general-purpose. Medical: specific diagnoses. "
+                "Symptom/Impact: functional limitations. Custom: set weights manually."
             ),
         )
         preset_map = {
@@ -1103,12 +1249,12 @@ def render_ai_search() -> None:
                     inj_w / total, kw_w / total, sem_w / total, meta_w / total
                 )
             st.caption(
-                f"Injury {inj_w:.0%} · Keyword {kw_w:.0%} · "
-                f"Semantic {sem_w:.0%} · Meta {meta_w:.0%}"
+                f"Injury {inj_w:.0%} / Keyword {kw_w:.0%} / "
+                f"Semantic {sem_w:.0%} / Meta {meta_w:.0%}"
             )
 
         # Injury category filter
-        st.markdown("**Category Filter**  *(optional — narrows search to selected regions)*")
+        st.markdown("**Category Filter** *(optional)*")
         compendium_regions = None
         try:
             with open("compendium_regions.json") as _f:
@@ -1124,7 +1270,7 @@ def render_ai_search() -> None:
                         if st.checkbox(subcat, key=f"ai_cat_{cat_id}_{subcat}"):
                             selected_regions.append(subcat)
         else:
-            st.caption("compendium_regions.json not found — category filter unavailable")
+            st.caption("Category filter unavailable (compendium_regions.json not found)")
 
         show_fla = st.checkbox(
             "Show Family Law Act claims in results",
@@ -1132,7 +1278,7 @@ def render_ai_search() -> None:
             key="ai_show_fla",
         )
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("")
         search_btn = st.button(
             "Find Comparable Cases",
             type="primary",
@@ -1140,13 +1286,13 @@ def render_ai_search() -> None:
             key="ai_search_btn",
         )
 
-    # ── Results panel ─────────────────────────────────────────────
+    # Results panel
     with res_col:
         if search_btn:
             if not injury_text.strip():
                 st.warning("Please enter an injury description.")
             else:
-                with st.spinner("Searching comparable cases…"):
+                with st.spinner("Searching comparable cases..."):
                     search_n = num_results * 3 if not include_outliers else num_results
                     try:
                         results = search_cases(
@@ -1199,18 +1345,16 @@ def render_ai_search() -> None:
                 kept_ids = {c.get("id") for c in filter_outliers([c for c, _, _ in results])}
                 results = [(c, e, s) for c, e, s in results if c.get("id") in kept_ids]
 
-            # Stats bar
             dv = [extract_damages_value(c) for c, _, _ in results]
             dv = [v for v in dv if v]
             render_stat_bar(dv, len(results))
 
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("")
 
             if not results:
                 st.info("All results have been dismissed. Run a new search to start over.")
                 return
 
-            # Tabs: Charts | Cases
             tab_charts, tab_cases = st.tabs(["Charts", "Cases"])
 
             with tab_charts:
@@ -1227,7 +1371,7 @@ def render_ai_search() -> None:
                     if infl_fig:
                         st.plotly_chart(infl_fig, use_container_width=True)
                         st.caption(
-                            f"Award timeline — all values adjusted to {DEFAULT_REFERENCE_YEAR} dollars (CPI)"
+                            f"Award timeline, all values adjusted to {DEFAULT_REFERENCE_YEAR} dollars (CPI)"
                         )
                 else:
                     st.info("No award data available for charting.")
@@ -1246,8 +1390,8 @@ def render_ai_search() -> None:
 
                     with st.expander(
                         f"{idx}.  {case.get('case_name','Unknown')}{pid_sfx}"
-                        f"   ·   {award_str}"
-                        f"   ·   Match {score*100:.0f}%",
+                        f"   |   {award_str}"
+                        f"   |   Match {score*100:.0f}%",
                         expanded=(idx <= EXPANDED_RESULTS_COUNT),
                     ):
                         dm_col, sc_col = st.columns([4, 1])
@@ -1261,7 +1405,7 @@ def render_ai_search() -> None:
                                 ]
                                 if p
                             ]
-                            st.caption("  ·  ".join(meta_parts))
+                            st.caption("  &middot;  ".join(meta_parts))
                             if award:
                                 st.markdown(f"**Non-Pecuniary:** ${award:,.0f}")
                             st.divider()
@@ -1293,7 +1437,7 @@ def render_ai_search() -> None:
                 )
             with ex2:
                 if st.button("Generate PDF Report", type="secondary", key="ai_pdf_btn"):
-                    with st.spinner("Generating PDF…"):
+                    with st.spinner("Generating PDF..."):
                         try:
                             sd  = st.session_state.search_results
                             all_dv = [
@@ -1338,9 +1482,16 @@ def render_ai_search() -> None:
                             st.error(f"PDF generation failed: {e}")
                             st.info("Ensure reportlab is installed: pip install reportlab")
         else:
-            st.info(
-                "Enter an injury description in the left panel and click "
-                "**Find Comparable Cases** to begin."
+            st.markdown(
+                '<div class="md-card-outlined" style="text-align:center;padding:3rem 2rem;">'
+                '<div style="font-size:1rem;color:var(--md-on-surface-variant);margin-bottom:0.5rem;">'
+                'Enter an injury description and click <strong>Find Comparable Cases</strong> to begin.'
+                '</div>'
+                '<div style="font-size:0.8125rem;color:var(--md-on-surface-variant);">'
+                'Optionally upload an expert report to auto-populate injuries.'
+                '</div>'
+                '</div>',
+                unsafe_allow_html=True,
             )
 
 
@@ -1349,13 +1500,10 @@ def render_ai_search() -> None:
 # =============================================================================
 
 def render_judges() -> None:
-    st.markdown('<div class="view-label">View 03</div>', unsafe_allow_html=True)
-    st.markdown('<div class="view-heading">Judge Analytics</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="view-sub">'
-        "Award statistics, timelines, and comparisons by presiding judge"
-        "</div>",
-        unsafe_allow_html=True,
+    render_page_header(
+        "03",
+        "Judge Analytics",
+        "Award statistics, timelines, and comparisons by presiding judge.",
     )
     display_judge_analytics_page(cases, include_outliers)
 
@@ -1365,13 +1513,10 @@ def render_judges() -> None:
 # =============================================================================
 
 def render_categories() -> None:
-    st.markdown('<div class="view-label">View 04</div>', unsafe_allow_html=True)
-    st.markdown('<div class="view-heading">Category Analytics</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="view-sub">'
-        "Award statistics by injury category, anatomical region, and FLA relationship"
-        "</div>",
-        unsafe_allow_html=True,
+    render_page_header(
+        "04",
+        "Category Analytics",
+        "Award statistics by injury category, anatomical region, and FLA relationship.",
     )
     display_category_analytics_page(cases, include_outliers)
 
@@ -1381,13 +1526,10 @@ def render_categories() -> None:
 # =============================================================================
 
 def render_fla() -> None:
-    st.markdown('<div class="view-label">View 05</div>', unsafe_allow_html=True)
-    st.markdown('<div class="view-heading">FLA Claims</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="view-sub">'
-        "Family Law Act claims — fatal injuries, dependency awards, spousal and child claims"
-        "</div>",
-        unsafe_allow_html=True,
+    render_page_header(
+        "05",
+        "FLA Claims",
+        "Family Law Act claims analysis: fatal injuries, dependency awards, spousal and child claims.",
     )
     display_fla_analytics_page(cases, include_outliers)
 
@@ -1409,6 +1551,5 @@ elif _view == "categories":
 elif _view == "fla":
     render_fla()
 else:
-    # Fallback — shouldn't happen
     st.session_state.current_view = "compendium"
     st.rerun()

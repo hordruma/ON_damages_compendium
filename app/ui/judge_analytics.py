@@ -1,8 +1,8 @@
 """
 Judge-specific analytics and visualizations.
 
-This module provides analytics tools for examining individual judge's
-award patterns, including temporal trends, damage ranges, and case distributions.
+Provides analytics tools for examining individual judge's award patterns,
+including temporal trends, damage ranges, and case distributions.
 """
 
 import streamlit as st
@@ -12,35 +12,25 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
 from collections import Counter
-import re
 
-# Import inflation adjustment
 try:
     from inflation_adjuster import adjust_for_inflation, DEFAULT_REFERENCE_YEAR
 except ImportError:
-    # Fallback if module not available
     DEFAULT_REFERENCE_YEAR = 2024
     def adjust_for_inflation(amount, from_year, to_year):
         return None
 
-# Import outlier filtering
 from app.core.search import filter_outliers
+
+# MD3 color palette for charts
+MD3_COLORS = [
+    "#1a73e8", "#e8710a", "#1e8e3e", "#d93025",
+    "#9334e6", "#f538a0", "#12b5cb", "#e37400",
+]
 
 
 def get_all_judges(cases: List[Dict[str, Any]]) -> List[str]:
-    """
-    Extract all unique judge names from cases.
-
-    Judge names are normalized by the LLM during parsing to last name only,
-    with hyphenated surnames preserved (e.g., "Harrison-Young").
-    Case normalization is applied to handle inconsistencies (e.g., "DOHERTY" vs "Doherty").
-
-    Args:
-        cases: List of case dictionaries
-
-    Returns:
-        Sorted list of unique judge names
-    """
+    """Extract all unique judge names from cases."""
     judges = set()
     for case in cases:
         extended_data = case.get('extended_data', {})
@@ -48,113 +38,66 @@ def get_all_judges(cases: List[Dict[str, Any]]) -> List[str]:
         if case_judges:
             for judge in case_judges:
                 if judge and judge.strip():
-                    # Normalize to title case for consistency
                     normalized_judge = judge.strip().title()
                     judges.add(normalized_judge)
-
     return sorted(list(judges))
 
 
 def get_judge_cases(cases: List[Dict[str, Any]], judge_name: str, deduplicate: bool = True) -> List[Dict[str, Any]]:
-    """
-    Filter cases decided by a specific judge.
-
-    Judge names are already normalized by the LLM during parsing.
-    Case-insensitive matching is used to handle data inconsistencies.
-    By default, deduplicates cases that appear multiple times for different injury regions.
-
-    Args:
-        cases: List of all cases
-        judge_name: Name of the judge to filter by
-        deduplicate: Whether to remove duplicate cases (same case_name + year)
-
-    Returns:
-        List of cases decided by this judge
-    """
+    """Filter cases decided by a specific judge."""
     judge_cases = []
-    # Normalize the search name for case-insensitive comparison
     normalized_search_name = judge_name.strip().title()
 
     for case in cases:
         extended_data = case.get('extended_data', {})
         case_judges = extended_data.get('judges', [])
         if case_judges:
-            # Check if any case judge matches the search name (case-insensitive)
             for case_judge in case_judges:
                 if case_judge and case_judge.strip().title() == normalized_search_name:
                     judge_cases.append(case)
-                    break  # Don't add the same case multiple times
+                    break
 
-    # Deduplicate by case_name + year if requested
-    # Note: We use case_name + year (not case ID) because the same legal case
-    # appears multiple times with different IDs for different injury regions
     if deduplicate:
         seen = set()
         unique_cases = []
         for case in judge_cases:
-            # Create unique identifier from case_name and year
             case_name = case.get('case_name', '')
             year = case.get('year', '')
             identifier = f"{case_name}|{year}"
-
             if identifier not in seen:
                 seen.add(identifier)
                 unique_cases.append(case)
-
         return unique_cases
 
     return judge_cases
 
 
 def calculate_judge_statistics(judge_cases: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Calculate comprehensive statistics for a judge's cases.
-
-    Args:
-        judge_cases: List of cases decided by the judge
-
-    Returns:
-        Dictionary containing various statistics
-    """
+    """Calculate comprehensive statistics for a judge's cases."""
     total_cases = len(judge_cases)
 
-    # Extract damages values (both original and inflation-adjusted)
     damages_values = []
     adjusted_damages_values = []
     for case in judge_cases:
         damage = case.get('damages')
         year = case.get('year')
-
         if damage and damage > 0:
             damages_values.append(damage)
-
-            # Calculate inflation-adjusted value
             if year:
                 adjusted = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
                 adjusted_damages_values.append(adjusted if adjusted else damage)
             else:
                 adjusted_damages_values.append(damage)
 
-    # Year distribution
-    years = []
-    for case in judge_cases:
-        year = case.get('year')
-        if year:
-            years.append(year)
+    years = [case.get('year') for case in judge_cases if case.get('year')]
 
-    # Region distribution (normalize to uppercase for consistency)
     regions = []
     for case in judge_cases:
         region = case.get('region')
         if region:
             regions.append(region.strip().upper() if isinstance(region, str) else region)
 
-    # Court distribution
-    courts = []
-    for case in judge_cases:
-        court = case.get('court')
-        if court:
-            courts.append(court)
+    courts = [case.get('court') for case in judge_cases if case.get('court')]
 
     stats = {
         'total_cases': total_cases,
@@ -195,17 +138,7 @@ def calculate_judge_statistics(judge_cases: List[Dict[str, Any]]) -> Dict[str, A
 
 
 def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[go.Figure]:
-    """
-    Create a timeline scatter plot showing award amounts over years with inflation adjustment.
-    Includes region and court information in tooltips.
-
-    Args:
-        judge_cases: List of cases decided by the judge
-
-    Returns:
-        Plotly figure or None if insufficient data
-    """
-    # Prepare data
+    """Create a timeline scatter plot showing award amounts over years."""
     data_points = []
     for case in judge_cases:
         year = case.get('year')
@@ -216,9 +149,7 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         court = case.get('court', 'N/A')
 
         if year and damage and damage > 0:
-            # Calculate inflation-adjusted value
             adjusted_damage = adjust_for_inflation(damage, year, DEFAULT_REFERENCE_YEAR)
-
             data_points.append({
                 'year': year,
                 'damages': damage,
@@ -233,16 +164,13 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
 
     df = pd.DataFrame(data_points)
 
-    # Calculate yearly statistics (using adjusted values)
     yearly_stats = df.groupby('year').agg({
         'adjusted_damages': ['mean', 'median', 'count']
     }).reset_index()
     yearly_stats.columns = ['year', 'mean', 'median', 'count']
 
-    # Create figure
     fig = go.Figure()
 
-    # Add scatter plot for individual cases (adjusted values)
     hover_text = []
     for _, row in df.iterrows():
         inflation_pct = ((row['adjusted_damages'] / row['damages']) - 1) * 100 if row['damages'] > 0 else 0
@@ -258,13 +186,10 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         x=df['year'],
         y=df['adjusted_damages'],
         mode='markers',
-        name=f'Individual Awards',
+        name='Individual Awards',
         marker=dict(
             size=10,
-            color=df['adjusted_damages'],
-            colorscale='Viridis',
-            showscale=True,
-            colorbar=dict(title=f"Award ({DEFAULT_REFERENCE_YEAR}$)"),
+            color=MD3_COLORS[0],
             line=dict(width=1, color='white'),
             opacity=0.7
         ),
@@ -272,21 +197,23 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         hovertemplate='%{text}<br>Year: %{x}<extra></extra>'
     ))
 
-    # Add median trend line (adjusted values) - shows volume via count in tooltip
     fig.add_trace(go.Scatter(
         x=yearly_stats['year'],
         y=yearly_stats['median'],
         mode='lines+markers',
-        name=f'Yearly Median',
-        line=dict(color='red', width=3, dash='dot'),
-        marker=dict(size=12, symbol='diamond', line=dict(width=2, color='darkred')),
+        name='Yearly Median',
+        line=dict(color=MD3_COLORS[3], width=2, dash='dot'),
+        marker=dict(size=8, symbol='diamond', line=dict(width=1, color=MD3_COLORS[3])),
         text=[f"Median: ${val:,.0f}<br>Cases that year: {int(count)}"
               for val, count in zip(yearly_stats['median'], yearly_stats['count'])],
         hovertemplate='Year: %{x}<br>%{text}<extra></extra>'
     ))
 
     fig.update_layout(
-        title=f'Awards Over Time (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
+        title=dict(
+            text=f'Awards Over Time (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
+            font=dict(size=16),
+        ),
         xaxis_title='Year',
         yaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
         hovermode='closest',
@@ -294,15 +221,15 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=-0.2,
+            y=-0.18,
             xanchor="center",
             x=0.5,
-            bgcolor="rgba(255, 255, 255, 0.8)",
-            bordercolor="lightgray",
-            borderwidth=1
         ),
-        height=600,
-        template='plotly_white'
+        height=500,
+        template='plotly_white',
+        font=dict(family="Google Sans, Roboto, sans-serif"),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
     )
 
     fig.update_yaxes(tickformat='$,.0f')
@@ -311,128 +238,89 @@ def create_awards_timeline_chart(judge_cases: List[Dict[str, Any]]) -> Optional[
 
 
 def _display_individual_judge_details(judge_name: str, judge_cases: List[Dict[str, Any]], stats: Dict[str, Any]) -> None:
-    """
-    Display detailed analytics for an individual judge.
-    Helper function used in both single and comparison views.
-
-    Args:
-        judge_name: Name of the judge
-        judge_cases: List of cases for this judge
-        stats: Pre-calculated statistics dictionary
-    """
+    """Display detailed analytics for an individual judge."""
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric("Total Cases", stats['total_cases'])
-
     with col2:
         st.metric("Cases with Awards", stats['cases_with_damages'])
-
     with col3:
         if stats['years']['min'] and stats['years']['max']:
-            year_range = f"{stats['years']['min']}-{stats['years']['max']}"
-            st.metric("Year Range", year_range)
+            st.metric("Year Range", f"{stats['years']['min']}-{stats['years']['max']}")
         else:
             st.metric("Year Range", "N/A")
-
     with col4:
         st.metric("Body Regions", stats['regions']['unique_count'])
 
-    # Damages statistics
     if stats['cases_with_damages'] > 0:
-        st.markdown(f"**💰 Award Statistics (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})**")
+        st.markdown(f"**Award Statistics (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})**")
 
         col1, col2, col3 = st.columns(3)
-
         with col1:
             st.metric(f"Median ({DEFAULT_REFERENCE_YEAR}$)", f"${stats['adjusted_damages']['median']:,.0f}")
-
         with col2:
             st.metric(f"Mean ({DEFAULT_REFERENCE_YEAR}$)", f"${stats['adjusted_damages']['mean']:,.0f}")
-
         with col3:
             st.metric("Std. Deviation", f"${stats['adjusted_damages']['std']:,.0f}")
 
-    # Timeline scatter plot
-    st.markdown("**📈 Awards Over Time**")
+    st.markdown("**Awards Over Time**")
     timeline_fig = create_awards_timeline_chart(judge_cases)
     if timeline_fig:
         st.plotly_chart(timeline_fig, use_container_width=True)
 
 
 def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: bool = True) -> None:
-    """
-    Main function to display the judge analytics page.
+    """Main function to display the judge analytics page."""
 
-    Args:
-        cases: List of all cases
-        include_outliers: Whether to include statistical outliers in calculations (default True)
-    """
-    st.header("👨‍⚖️ Judge Analytics")
-    st.markdown("Explore award patterns and statistics for individual judges")
-
-    # Helper function to get judge cases with optional outlier filtering
     def get_filtered_judge_cases(judge_name: str) -> List[Dict[str, Any]]:
-        """Get cases for a judge, optionally filtering outliers."""
         judge_cases = get_judge_cases(cases, judge_name)
         if not include_outliers and judge_cases:
             judge_cases = filter_outliers(judge_cases)
         return judge_cases
 
-    # Get all judges
     all_judges = get_all_judges(cases)
 
     if not all_judges:
-        st.warning("⚠️ No judge information found in the dataset. Please ensure your data includes judge names.")
-        st.info("💡 Regenerate embeddings from the AI-parsed data to include judge information.")
+        st.warning("No judge information found in the dataset.")
+        st.info("Regenerate embeddings from the AI-parsed data to include judge information.")
         return
 
-    st.info(f"📊 Dataset contains {len(all_judges)} unique judges")
+    st.caption(f"{len(all_judges)} unique judges in dataset")
 
-    # Calculate case counts for each judge
     judge_case_counts = {}
     for judge_name in all_judges:
         judge_cases = get_filtered_judge_cases(judge_name)
         judge_case_counts[judge_name] = len(judge_cases)
 
-    # Sort judges by case count (descending)
     judges_by_count = sorted(judge_case_counts.items(), key=lambda x: x[1], reverse=True)
-
-    # Create judge options with case counts (sorted by count)
     judge_options = [f"{judge_name} ({count} cases)" for judge_name, count in judges_by_count]
 
-    # Pre-select top 10 judges by case count (or fewer if less than 10 total)
     max_preselect = 10
     default_selections = judge_options[:min(max_preselect, len(judge_options))]
 
-    # Judge selector - now with multi-select
     selected_judge_options = st.multiselect(
-        "Select Judge(s) to Compare:",
+        "Select judges to compare",
         options=judge_options,
         default=default_selections,
-        help=f"Choose judges to view and compare their award statistics and patterns. Top {max_preselect} judges by case count are pre-selected.",
+        help=f"Top {max_preselect} judges by case count are pre-selected.",
         key="judge_selector"
     )
 
-    # Extract judge names from selections (remove the case count suffix)
     selected_judges = []
     for option in selected_judge_options:
-        # Extract judge name by removing the " (X cases)" suffix
         judge_name = option.rsplit(' (', 1)[0]
         selected_judges.append(judge_name)
 
     if not selected_judges:
-        st.info("👆 Select one or more judges above to view their analytics")
+        st.info("Select one or more judges above to view their analytics.")
         return
 
-    # Check if we're comparing multiple judges
     is_comparison = len(selected_judges) > 1
 
     if is_comparison:
-        # Display comparison view for multiple judges
         st.subheader(f"Comparing {len(selected_judges)} Judges")
 
-        # Create comparison table
         comparison_data = []
         for judge_name in selected_judges:
             judge_cases = get_filtered_judge_cases(judge_name)
@@ -457,15 +345,13 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
 
             st.divider()
 
-            # Combined timeline scatter plot for all selected judges
-            st.subheader("📈 Awards Over Time - Judge Comparison")
+            st.subheader("Awards Over Time — Judge Comparison")
 
             fig_timeline = go.Figure()
 
-            for judge_name in selected_judges:
+            for i, judge_name in enumerate(selected_judges):
                 judge_cases = get_filtered_judge_cases(judge_name)
                 if judge_cases:
-                    # Prepare data
                     data_points = []
                     for case in judge_cases:
                         year = case.get('year')
@@ -489,7 +375,6 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
                     if data_points:
                         df = pd.DataFrame(data_points)
 
-                        # Add scatter plot for this judge
                         hover_text = [f"<b>{row['case_name']}</b><br>"
                                       f"Judge: {row['judge']}<br>"
                                       f"Region: {row['region']}<br>"
@@ -502,32 +387,42 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
                             y=df['adjusted_damages'],
                             mode='markers',
                             name=judge_name,
-                            marker=dict(size=10, line=dict(width=1, color='white'), opacity=0.7),
+                            marker=dict(
+                                size=10,
+                                color=MD3_COLORS[i % len(MD3_COLORS)],
+                                line=dict(width=1, color='white'),
+                                opacity=0.7
+                            ),
                             text=hover_text,
                             hovertemplate='%{text}<br>Year: %{x}<extra></extra>'
                         ))
 
             if fig_timeline.data:
                 fig_timeline.update_layout(
-                    title=f'Awards Timeline Comparison (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
+                    title=dict(
+                        text=f'Awards Timeline Comparison (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})',
+                        font=dict(size=16),
+                    ),
                     xaxis_title='Year',
                     yaxis_title=f'Award Amount ({DEFAULT_REFERENCE_YEAR} $)',
                     hovermode='closest',
                     showlegend=True,
                     height=500,
-                    template='plotly_white'
+                    template='plotly_white',
+                    font=dict(family="Google Sans, Roboto, sans-serif"),
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
                 )
                 fig_timeline.update_yaxes(tickformat='$,.0f')
                 st.plotly_chart(fig_timeline, use_container_width=True)
             else:
-                st.info("Insufficient data with both year and damages information to display timeline")
+                st.info("Insufficient data to display timeline.")
 
-        # Individual judge details in expanders
         st.divider()
-        st.subheader("📋 Individual Judge Details")
+        st.subheader("Individual Judge Details")
 
         for judge_name in selected_judges:
-            with st.expander(f"View details for {judge_name}", expanded=False):
+            with st.expander(f"{judge_name}", expanded=False):
                 judge_cases = get_filtered_judge_cases(judge_name)
                 if judge_cases:
                     stats = calculate_judge_statistics(judge_cases)
@@ -537,62 +432,49 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
 
         return
 
-    # Single judge view (original behavior)
+    # Single judge view
     selected_judge = selected_judges[0]
-
-    # Get cases for this judge
     judge_cases = get_filtered_judge_cases(selected_judge)
 
     if not judge_cases:
         st.warning(f"No cases found for {selected_judge}")
         return
 
-    # Calculate statistics
     stats = calculate_judge_statistics(judge_cases)
 
-    # Display overview metrics
     st.subheader(f"Overview: {selected_judge}")
 
     col1, col2, col3, col4 = st.columns(4)
-
     with col1:
         st.metric("Total Cases", stats['total_cases'])
-
     with col2:
         st.metric("Cases with Awards", stats['cases_with_damages'])
-
     with col3:
         if stats['years']['min'] and stats['years']['max']:
-            year_range = f"{stats['years']['min']}-{stats['years']['max']}"
-            st.metric("Year Range", year_range)
+            st.metric("Year Range", f"{stats['years']['min']}-{stats['years']['max']}")
         else:
             st.metric("Year Range", "N/A")
-
     with col4:
         st.metric("Body Regions", stats['regions']['unique_count'])
 
     st.divider()
 
-    # Damages statistics (inflation-adjusted)
     if stats['cases_with_damages'] > 0:
-        st.subheader(f"💰 Award Statistics (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})")
+        st.subheader(f"Award Statistics (Inflation-Adjusted to {DEFAULT_REFERENCE_YEAR})")
 
         col1, col2, col3 = st.columns(3)
-
         with col1:
             st.metric(
                 f"Median Award ({DEFAULT_REFERENCE_YEAR}$)",
                 f"${stats['adjusted_damages']['median']:,.0f}",
                 help=f"Middle value of all awards, adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
             )
-
         with col2:
             st.metric(
                 f"Mean Award ({DEFAULT_REFERENCE_YEAR}$)",
                 f"${stats['adjusted_damages']['mean']:,.0f}",
                 help=f"Average of all awards, adjusted to {DEFAULT_REFERENCE_YEAR} dollars"
             )
-
         with col3:
             st.metric(
                 "Std. Deviation",
@@ -601,42 +483,36 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
             )
 
         col1, col2 = st.columns(2)
-
         with col1:
             st.metric("Minimum Award", f"${stats['adjusted_damages']['min']:,.0f}")
-
         with col2:
             st.metric("Maximum Award", f"${stats['adjusted_damages']['max']:,.0f}")
 
-        st.caption(f"💡 All awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using Canadian CPI")
+        st.caption(f"All awards adjusted to {DEFAULT_REFERENCE_YEAR} dollars using Canadian CPI")
 
         st.divider()
 
-    # Timeline scatter plot (includes volume info in median trend tooltips)
-    st.subheader("📈 Awards Over Time")
-    st.caption("💡 Hover over points to see case details including region and court. The red median trend line shows case volume per year in its tooltip.")
+    st.subheader("Awards Over Time")
+    st.caption("Hover over points for case details including region and court. The median trend line shows case volume per year.")
     timeline_fig = create_awards_timeline_chart(judge_cases)
 
     if timeline_fig:
         st.plotly_chart(timeline_fig, use_container_width=True)
     else:
-        st.info("Insufficient data with both year and damages information to display timeline")
+        st.info("Insufficient data to display timeline.")
 
     st.divider()
 
-    # Court distribution
     if stats['courts']['distribution']:
-        st.subheader("🏛️ Court Distribution")
+        st.subheader("Court Distribution")
         court_dist = stats['courts']['distribution']
         court_df = pd.DataFrame(
             list(court_dist.items()),
             columns=['Court', 'Cases']
         ).sort_values('Cases', ascending=False)
+        st.dataframe(court_df, use_container_width=True, hide_index=True)
 
-        st.dataframe(court_df, width='stretch', hide_index=True)
-
-    # Detailed case list
-    with st.expander(f"📋 View All {len(judge_cases)} Cases"):
+    with st.expander(f"View All {len(judge_cases)} Cases"):
         case_list = []
         for case in judge_cases:
             region_raw = case.get('region', 'Unknown')
@@ -648,6 +524,5 @@ def display_judge_analytics_page(cases: List[Dict[str, Any]], include_outliers: 
                 'Court': case.get('court', 'N/A'),
                 'Award': f"${case.get('damages', 0):,.0f}" if case.get('damages') else 'N/A'
             })
-
         cases_df = pd.DataFrame(case_list)
-        st.dataframe(cases_df, width='stretch', hide_index=True)
+        st.dataframe(cases_df, use_container_width=True, hide_index=True)

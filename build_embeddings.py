@@ -88,7 +88,14 @@ def main():
     print("=" * 70)
 
     # STEP 1: Load source data
-    source_file = "damages_table_based.json"
+    # Try new parser output first, fall back to old LLM-parsed file
+    for source_file in ["damages_parsed.json", "damages_table_based.json"]:
+        if Path(source_file).exists():
+            break
+    else:
+        print("ERROR: No source data found. Run damages_parser_csv.py or damages_parser_table.py first.")
+        return
+
     print(f"\n📂 Step 1: Loading source data from {source_file}...")
 
     with open(source_file, 'r', encoding='utf-8') as f:
