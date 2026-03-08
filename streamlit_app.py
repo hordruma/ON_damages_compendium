@@ -40,7 +40,7 @@ from inflation_adjuster import (
 # VERSION & CACHE
 # =============================================================================
 
-APP_VERSION = "4.0.0"
+APP_VERSION = "4.1.0"
 
 if "app_version" not in st.session_state or st.session_state.app_version != APP_VERSION:
     st.cache_resource.clear()
