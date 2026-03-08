@@ -3386,7 +3386,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "grandfather",
+          "relationship": "grandparent",
           "amount": 1500.0,
           "description": "Grandfather: $1,500.00",
           "is_fla_award": true
@@ -5061,13 +5061,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 65000.0,
           "description": "Mother: $65,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 50000.0,
           "description": "Father: $50,000.00",
           "is_fla_award": true
@@ -12623,7 +12623,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 140800.0,
           "description": "Family Law Act: Mother-  $140,800.00",
           "is_fla_award": true
@@ -14322,7 +14322,14 @@
       "judges": [
         "Brockenshire"
       ],
-      "family_law_act_claims": [],
+      "family_law_act_claims": [
+        {
+          "relationship": "child",
+          "amount": 15000.0,
+          "description": "Son/Daughter: $15,000.00",
+          "is_fla_award": true
+        }
+      ],
       "is_provisional": false
     },
     "summary_text": "Injuries: Damages calculated but not awarded, Ongoing headaches, pain, and medical expenses, Son electrocuted; father had very close affectionate relationship with the deceased; lived together and participated in many recreational activities together; Deceased made significant contributions to household chores and activities | Categories: General, Son/Daughter | Comments: Son electrocuted; father had very close affectionate relationship with the deceased; lived together and participated in many recreational activities together; Deceased made significant contributions to household chores and activities.",
@@ -37954,7 +37961,14 @@
       "judges": [
         "Hockin"
       ],
-      "family_law_act_claims": [],
+      "family_law_act_claims": [
+        {
+          "relationship": "sibling",
+          "amount": 145000.0,
+          "description": "Brother/Sister: $145,000.00",
+          "is_fla_award": true
+        }
+      ],
       "is_provisional": false
     },
     "summary_text": "Injuries: (4) The damages for loss of care, guidance and companionship under the Family Law Act was not $130,000.00  Family Law Act s. 61(2)(e), Mary Rodrigues $6,008.33 excessive as to reflect an error in principle, (4) The damages for loss of care, guidance and companionship under the Family Law Act was not excessive as to reflect an error in principle, C.A. G.R. Strathy CJ.O., J.C. MacPherson and M.H. Tulloch JJ.A. $238,500.00  Past income loss: $70,000.00  Family Law Act s. 61(3)(a): $130,000.00  Ethan (age 3) Family Law Act s. 61(2)(e), Alexander: $16,000.00  Family Law Act s. 61(2)(e), Mary Rodrigues: $11,000.00  Maximilion (age 4) Family Law Act s. 61(2)(e), Alexander: $16,000.00  Michael (husband) Family Law Act s. 61(2)(e), Mary Rodrigues: $11,000.00  Family Law Act s. 61(2)(e), Alexander: $130,000.00  Family Law Act s. 61(2)(e), Mary Rodrigues Awas struck by defendant who went through a red light, C.A. G.R. Strathy CJ.O., J.C. MacPherson and M.H. Tulloch JJ.A. Family Law Act s. 61(2)(e), Mary Rodrigues: $11,000.00  Maximilion (age 4) Family Law Act s. 61(2)(e), Alexander: $16,000.00  Michael (husband) Family Law Act s. 61(2)(e), Mary Rodrigues: $11,000.00  Family Law Act s. 61(2)(e), Alexander: $130,000.00  Family Law Act s. 61(2)(e), Mary Rodrigues $6,008.33 Ainjuries, and a loss of guidance, care and compionship from their mother and deceased son and brother, C.A. G.R. Strathy CJ.O., J.C. MacPherson and M.H. Tulloch JJ.A. Family Law Act s. 61(3)(a): $130,000.00  Ethan (age 3) Family Law Act s. 61(2)(e), Alexander: $16,000.00  Family Law Act s. 61(2)(e), Mary Rodrigues: $11,000.00  Maximilion (age 4) Family Law Act s. 61(2)(e), Alexander: $16,000.00  Michael (husband) Family Law Act s. 61(2)(e), Mary Rodrigues: $11,000.00  Family Law Act s. 61(2)(e), Alexander: $130,000.00  Family Law Act s. 61(2)(e), Mary Rodrigues $6,008.33 Ainjured the plaintiff and her two sons and killed the youngest son, In addition, she suffered mental and emotional distress as a result of the death of her son that would last her entire life, Legal Costs $12,415.00 pain in left knee, restricted range of movement as well as the pain has resulted in lack of sleep, general fatigue and impacted the plaintiff’s family life and personality, She was left with ongoing back pain that limited all areas of her life, The other plaintiffs (husband and two sons) suffered minor injuries, and a loss of guidance, Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance) September 20, 2019 [2019] O.J. No, The other plaintiffs (husband and two sons) suffered minor injuries, and a loss of guidance, care and compionship from their mother and deceased son and brother | Categories: Ankle, Back, Brother/Sister, General, Neck, Pain and Suffering – Minor Cases, Son/Daughter, Spine Below Neck, Traumatic Neurosis | Comments: Plaintiff (Mary) was driving car with her husband seated next to her and three sons belted in the back seat.  The car was struck by defendant who went through a red light.  The violent collision injured the plaintiff and her two sons and killed the youngest son.  The plaintiff suffered soft tissue injuries to her neck, left leg and lower back, headaches, pain in her back and her leg, fractures to her lumber spine.  She was left with ongoing back pain that limited all areas of her life.  In addition, she suffered mental and emotional distress as a result of the death of her son that would last her entire life.  The other plaintiffs (husband and two sons) suffered minor September 20, 2019 [2019] O.J. No. 4711 Ont. C.A. G.R. Strathy CJ.O., J.C. MacPherson and M.H. Tulloch JJ.A. Family Law Act s. 61(2)(e), Mary Rodrigues: $11,000.00  Maximilion (age 4) Family Law Act s. 61(2)(e), Alexander: $16,000.00  Michael (husband) Family Law Act s. 61(2)(e), Mary Rodrigues: $11,000.00  Family Law Act s. 61(2)(e), Alexander: $130,000.00  Family Law Act s. 61(2)(e), Mary Rodrigues $6,008.33 Ainjuries, and a loss of guidance, care and compionship from their mother and deceased son and brother. ll five grounds of appeal dismissed. (1) Trial judge’s comments about the “threshold” regulation did not demonstrate bias. (2) Trial judge did not err in permitting an expert to rely on evidence from Statistics Canada. (3) Trial judge did not err in considering evidence given by a registered psychologist. (4) The damages for loss of care, guidance and companionship under the Family Law Act was not excessive as to reflect an error in principle. (5) Trial judge’s costs awards were proportionate. Legal Costs $12,415.00 pain in left knee, restricted range of movement as well as the pain has resulted in lack of sleep, general fatigue and impacted the plaintiff’s family life and personality.",
@@ -45494,7 +45508,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "grandchildren",
+          "relationship": "grandchild",
           "amount": 10000.0,
           "description": "Grandchildren: $10,000.00",
           "is_fla_award": true
@@ -48822,15 +48836,9 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 18000.0,
           "description": "Mother: $18,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "father",
-          "amount": 18000.0,
-          "description": "Father: $18,000.00",
           "is_fla_award": true
         },
         {
@@ -50517,7 +50525,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 216000.0,
           "description": "Mother: $216,000.00",
           "is_fla_award": true
@@ -51341,7 +51349,7 @@
       "judges": [],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 65000.0,
           "description": "Father: $65,000.00",
           "is_fla_award": true
@@ -55605,21 +55613,15 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 75000.0,
           "description": "Family Law Act: Father - $75,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 60000.0,
           "description": "Family Law Act: Father -  $60,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "mother",
-          "amount": 75000.0,
-          "description": "Family Law Act: Mother - $75,000.00",
           "is_fla_award": true
         }
       ],
@@ -58981,13 +58983,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 100000.0,
           "description": "Family Law Act: Father - $100,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 175000.0,
           "description": "Family Law Act: Mother - $175,000.00",
           "is_fla_award": true
@@ -59830,7 +59832,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 35000.0,
           "description": "Family Law Act claim: Mother - $35,000.00",
           "is_fla_award": true
@@ -61517,15 +61519,9 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 60000.0,
           "description": "Father: $60,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "mother",
-          "amount": 60000.0,
-          "description": "Mother: $60,000.00",
           "is_fla_award": true
         }
       ],
@@ -65728,7 +65724,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 80000.0,
           "description": "Father: $80,000.00",
           "is_fla_award": true
@@ -81518,13 +81514,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 20000.0,
           "description": "mother: $20,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 17.0,
           "description": "father: $17.00",
           "is_fla_award": true
@@ -85715,7 +85711,7 @@
       "judges": [],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 10000.0,
           "description": "Family Law Act:  Mother - $10,000",
           "is_fla_award": true
@@ -91568,13 +91564,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 60000.0,
           "description": "Family Law Act: Mother - $60,000",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 30000.0,
           "description": "Father: $30,000.00",
           "is_fla_award": true
@@ -129052,7 +129048,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 7500.0,
           "description": "Mother: $7,500.00",
           "is_fla_award": true
@@ -161282,7 +161278,20 @@
       ],
       "comments": "SHusband and wife riding on tandem bicycle; lost control of bicycle and Town found liable for accident; husband died as a result of his injuries; wife suffered fractured  pelvis and pain continues ee fatal injuries for damage awards for death of husband.",
       "judges": [],
-      "family_law_act_claims": [],
+      "family_law_act_claims": [
+        {
+          "relationship": "spouse",
+          "amount": 85000.0,
+          "description": "Husband and Father: $85,000.00",
+          "is_fla_award": true
+        },
+        {
+          "relationship": "parent",
+          "amount": 85000.0,
+          "description": "Husband and Father: $85,000.00",
+          "is_fla_award": true
+        }
+      ],
       "is_provisional": false
     },
     "summary_text": "Injuries: SHusband and wife riding on tandem bicycle; lost control of bicycle and Town found liable for accident; husband died as a result of his injuries; wife suffered fractured  pelvis and pain continues ee fatal injuries for damage awards for death of husband | Categories: Back, General, Husband and Father | Comments: SHusband and wife riding on tandem bicycle; lost control of bicycle and Town found liable for accident; husband died as a result of his injuries; wife suffered fractured  pelvis and pain continues ee fatal injuries for damage awards for death of husband.",
@@ -162973,12 +162982,6 @@
           "relationship": "grandparent",
           "amount": 2500.0,
           "description": "Family Law Act Grandmother- $2,500.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "grandmother",
-          "amount": 2500.0,
-          "description": "Grandmother: $2,500.00",
           "is_fla_award": true
         }
       ],
@@ -167094,7 +167097,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "grandchildren",
+          "relationship": "grandchild",
           "amount": 3000.0,
           "description": "Grandchildren: $3,000.00",
           "is_fla_award": true
@@ -170435,7 +170438,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "grandchildren",
+          "relationship": "grandchild",
           "amount": 5000.0,
           "description": "Grandchildren: $5,000.00",
           "is_fla_award": true
@@ -192182,13 +192185,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 4500.0,
           "description": "Family Law Act Claim Father - $4,500.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 10000.0,
           "description": "Family Law Act Claim: Mother - $10,000.00",
           "is_fla_award": true
@@ -204678,15 +204681,9 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 15000.0,
           "description": "Mother: $15,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "father",
-          "amount": 15000.0,
-          "description": "Father: $15,000.00",
           "is_fla_award": true
         }
       ],
@@ -205537,7 +205534,7 @@
           "is_fla_award": true
         },
         {
-          "relationship": "grandson",
+          "relationship": "grandchild",
           "amount": 2500.0,
           "description": "Grandson: $2,500.00",
           "is_fla_award": true
@@ -214638,19 +214635,19 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 7500.0,
           "description": "Family Law Act Claim:  Mother - $7,500",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 20000.0,
           "description": "mother: $20,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 1000.0,
           "description": "Father: $1,000.00",
           "is_fla_award": true
@@ -223759,15 +223756,9 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 60000.0,
           "description": "Father: $60,000.00",
-          "is_fla_award": true
-        },
-        {
-          "relationship": "mother",
-          "amount": 60000.0,
-          "description": "Mother: $60,000.00",
           "is_fla_award": true
         },
         {
@@ -243737,7 +243728,32 @@
       ],
       "comments": "Fatal MVA. Award to the deceased’s mother for loss of care, Appeal allowed in part. H.S. LaForme JJ.A. SFather ister Past Wage Loss: $22,000.00  Future Wage Loss: $6,000.00 per year for 12 years  Loss of care, guidance and companionship: $200,000.00 (Reduced to  $125,000.00 on appeal)  Father – Loss of care, guidance and companionship: $50,000.00  Sister – Loss of care, guidance and companionship: $25,000.00  Funeral Expenses: $1,457.96 guidance and companionship was reduced on appeal from $200,000.00 to $125,000.00.",
       "judges": [],
-      "family_law_act_claims": [],
+      "family_law_act_claims": [
+        {
+          "relationship": "sibling",
+          "amount": 22000.0,
+          "description": "loss of care, Appeal allowed in part. H.S. LaForme JJ.A. SFather ister Past Wage Loss: $22,000.00",
+          "is_fla_award": true
+        },
+        {
+          "relationship": "sibling",
+          "amount": 200000.0,
+          "description": "Loss of care, guidance and companionship: $200,000.00",
+          "is_fla_award": true
+        },
+        {
+          "relationship": "sibling",
+          "amount": 50000.0,
+          "description": "Loss of care, guidance and companionship: $50,000.00",
+          "is_fla_award": true
+        },
+        {
+          "relationship": "sibling",
+          "amount": 25000.0,
+          "description": "Loss of care, guidance and companionship: $25,000.00",
+          "is_fla_award": true
+        }
+      ],
       "is_provisional": false
     },
     "summary_text": "Injuries: Award to the deceased’s mother for loss of care, Appeal allowed in part, Award to the deceased’s mother for loss of care, guidance and companionship was reduced on appeal from $200,000.00 to $125,000.00, H.S. LaForme JJ.A. SFather ister Past Wage Loss: $22,000.00  Future Wage Loss: $6,000.00 per year for 12 years  Loss of care, guidance and companionship: $200,000.00 (Reduced to  $125,000.00 on appeal)  Father – Loss of care, guidance and companionship: $50,000.00  Sister – Loss of care, guidance and companionship: $25,000.00  Funeral Expenses: $1,457.96 guidance and companionship was reduced on appeal from $200,000.00 to $125,000.00, Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance) Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance) | Categories: Brother/Sister, General, Son/Daughter | Comments: Fatal MVA. Award to the deceased’s mother for loss of care, Appeal allowed in part. H.S. LaForme JJ.A. SFather ister Past Wage Loss: $22,000.00  Future Wage Loss: $6,000.00 per year for 12 years  Loss of care, guidance and companionship: $200,000.00 (Reduced to  $125,000.00 on appeal)  Father – Loss of care, guidance and companionship: $50,000.00  Sister – Loss of care, guidance and companionship: $25,000.00  Funeral Expenses: $1,457.96 guidance and companionship was reduced on appeal from $200,000.00 to $125,000.00.",
@@ -244572,7 +244588,14 @@
       "judges": [
         "Lofchik"
       ],
-      "family_law_act_claims": [],
+      "family_law_act_claims": [
+        {
+          "relationship": "child",
+          "amount": 90000.0,
+          "description": "Son/Daughter: $90,000.00",
+          "is_fla_award": true
+        }
+      ],
       "is_provisional": false
     },
     "summary_text": "Injuries: Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance) $125,000.00  Aggravated damages: $75,000.00  Damages under the Succession Law Reform Act: $200,000.00, also sufferd severe psychological damage from this event | Categories: General, Son/Daughter, Traumatic Neurosis | Comments: While exercising access rights, the plantiff’s estranged spouse stabbed their eight-year old child to death, forced his way into the platinff’s home, terrorized her at knifepoint and was then shot to death by police in order to save the plaintiff’s life.  Plaintiff brought actions agains the defendant’s estate for assault, forcible confinement, trespass and attempted murder.  The plaintiff also sufferd severe psychological damage from this event. Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance) $125,000.00  Aggravated damages: $75,000.00  Damages under the Succession Law Reform Act: $200,000.00",
@@ -247103,7 +247126,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 80000.0,
           "description": "Father: $80,000.00",
           "is_fla_award": true
@@ -248764,7 +248787,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "grandparents",
+          "relationship": "grandparent",
           "amount": 695000.0,
           "description": "Grandparents: $695,000.00",
           "is_fla_award": true
@@ -249598,13 +249621,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 25000.0,
           "description": "Family Law Act Father -$25,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 50000.0,
           "description": "Family Law Act Mother- $50,000.00",
           "is_fla_award": true
@@ -336966,7 +336989,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 15000.0,
           "description": "Family Law Act Claim:  Mother - $15,000.00",
           "is_fla_award": true
@@ -344525,13 +344548,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 30000.0,
           "description": "Mother: $30,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 12000.0,
           "description": "Father: $12,000.00",
           "is_fla_award": true
@@ -357030,13 +357053,13 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 1500.0,
           "description": "Mother: $1,500.00",
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 500.0,
           "description": "Father: $500.00",
           "is_fla_award": true
@@ -377880,7 +377903,14 @@
       ],
       "comments": "Soft tissue injuries to neck and back. Failure to follow medical advice. Lifestyle not helpful to recovery.",
       "judges": [],
-      "family_law_act_claims": [],
+      "family_law_act_claims": [
+        {
+          "relationship": "grandchild",
+          "amount": 25000.0,
+          "description": "Grandchild: $25,000.00",
+          "is_fla_award": true
+        }
+      ],
       "is_provisional": false
     },
     "summary_text": "Injuries: Soft tissue injuries to neck and back | Categories: Grandchild, Son/Daughter, Spine Below Neck | Comments: Soft tissue injuries to neck and back. Failure to follow medical advice. Lifestyle not helpful to recovery.",
@@ -386942,7 +386972,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 10500.0,
           "description": "Father: $10,500.00",
           "is_fla_award": true
@@ -390260,13 +390290,13 @@
           "is_fla_award": true
         },
         {
-          "relationship": "father",
+          "relationship": "parent",
           "amount": 35000.0,
           "description": "father: $35,000.00",
           "is_fla_award": true
         },
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 10000.0,
           "description": "mother: $10,000.00",
           "is_fla_award": true
@@ -391919,7 +391949,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 3500.0,
           "description": "Mother: $3,500.00",
           "is_fla_award": true
@@ -393634,7 +393664,20 @@
       ],
       "comments": "SDr. Olayiwola Kassim removed the deceased Mary Fleury’s appendix in 2011 during which time he should have discovered Ms. Fleury had cancer, specifically etastatic adenocarcinoma of the appendix. Cancer was diagnosed 4 years later and Ms. Fleury died in 2016.   pouse could not work for a period due to depression. Spouse had to Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance) Damien Reid (Grandchild) $50,000.00  Other Damages Past Lost of Earnings: George McAmmond $287,018.00   Past Lost of Financial Support:  George McAmmond  $33,153.00  Gavin Bradford $4,912.00   Damien Reid $4,912.00  Future Loss of Financial Support: George McAmmond $190,028.00  Gavin Bradford $10,006.00  Damien Reid $6,067.00  Past & Future Loss of Household Services $517,087.00 assume burden of caring for the deceased’s grandchildren which they had previously taken in. Ms. Fleury “for all intents and purposes” acted as the grandchildren’s mother. Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance)",
       "judges": [],
-      "family_law_act_claims": [],
+      "family_law_act_claims": [
+        {
+          "relationship": "spouse",
+          "amount": 120000.0,
+          "description": "Wife & Mother: $120,000.00",
+          "is_fla_award": true
+        },
+        {
+          "relationship": "parent",
+          "amount": 120000.0,
+          "description": "Wife & Mother: $120,000.00",
+          "is_fla_award": true
+        }
+      ],
       "is_provisional": false
     },
     "summary_text": "Injuries: $100,000.00   Gavin Bradford (Grandchild with special needs)  $65,000.00  Damien Reid (Grandchild) $50,000.00  Other Damages Past Lost of Earnings: George McAmmond $287,018.00   Past Lost of Financial Support:  George McAmmond  $33,153.00  Gavin Bradford $4,912.00   Damien Reid $4,912.00  Future Loss of Financial Support: George McAmmond $190,028.00  Gavin Bradford $10,006.00 S   Cancer was diagnosed 4 years later and Ms, Damien Reid $6,067.00  Past & Future Loss of Household Services $517,087.00, Fleury had cancer, specifically etastatic adenocarcinoma of the George McAmmond (Spouse)  $100,000.00   Gavin Bradford (Grandchild with special needs)  $65,000.00  Damien Reid (Grandchild) $50,000.00  Other Damages Past Lost of Earnings: George McAmmond $287,018.00   Past Lost of Financial Support:  George McAmmond  $33,153.00  Gavin Bradford $4,912.00   Damien Reid $4,912.00  Future Loss of Financial Support: George McAmmond $190,028.00 S   appendix, Future Loss of Financial Support: George McAmmond $190,028.00  Gavin Bradford $10,006.00  Damien Reid $6,067.00  Past & Future Loss of Household Services $517,087.00, Gavin Bradford $10,006.00  Damien Reid $6,067.00  Past & Future Loss of Household Services $517,087.00, Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance), Olayiwola Kassim removed the deceased Mary Fleury’s appendix in 2011 during which time he should have discovered Ms, Spouse had to Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance) Damien Reid (Grandchild) $50,000.00  Other Damages Past Lost of Earnings: George McAmmond $287,018.00   Past Lost of Financial Support:  George McAmmond  $33,153.00  Gavin Bradford $4,912.00   Damien Reid $4,912.00  Future Loss of Financial Support: George McAmmond $190,028.00  Gavin Bradford $10,006.00  Damien Reid $6,067.00  Past & Future Loss of Household Services $517,087.00 assume burden of caring for the deceased’s grandchildren which they had previously taken in, pouse could not work for a period due to depression | Categories: Back, General, Traumatic Neurosis, Wife & Mother | Comments: SDr. Olayiwola Kassim removed the deceased Mary Fleury’s appendix in 2011 during which time he should have discovered Ms. Fleury had cancer, specifically etastatic adenocarcinoma of the appendix. Cancer was diagnosed 4 years later and Ms. Fleury died in 2016.   pouse could not work for a period due to depression. Spouse had to Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance) Damien Reid (Grandchild) $50,000.00  Other Damages Past Lost of Earnings: George McAmmond $287,018.00   Past Lost of Financial Support:  George McAmmond  $33,153.00  Gavin Bradford $4,912.00   Damien Reid $4,912.00  Future Loss of Financial Support: George McAmmond $190,028.00  Gavin Bradford $10,006.00  Damien Reid $6,067.00  Past & Future Loss of Household Services $517,087.00 assume burden of caring for the deceased’s grandchildren which they had previously taken in. Ms. Fleury “for all intents and purposes” acted as the grandchildren’s mother. Loss of Guidance, Care and Companionship (This is not an exhaustive table in itself - please refer to the appropriate tables above for more assistance)",
@@ -399443,7 +399486,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 5000.0,
           "description": "Mother: $5,000.00",
           "is_fla_award": true
@@ -420941,7 +420984,14 @@
       "judges": [
         "Belobaba"
       ],
-      "family_law_act_claims": [],
+      "family_law_act_claims": [
+        {
+          "relationship": "sibling",
+          "amount": 200000.0,
+          "description": "Loss of care, guidance, and companionship: $200,000.00",
+          "is_fla_award": true
+        }
+      ],
       "is_provisional": false
     },
     "summary_text": "Injuries: 2021 ONSC 337 (Liability Decision) W                      N                        H       ife (S)  Son (R) iece (P) usband P            P            P                            2 (S.M.):  Father  Husband  3 (A.G.):  Aunt 4 (J.D.):  Wife P  P  L  P  P  L  P  PLoss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 2 (S.M.):  Punitive damages: $33,333,333.34 oss of care, guidance, and companionship: $400,000.00 ain and Suffering: $2,000,000.00 3 (A.G.):  Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 4 (J.D.):  Punitive damages: $16,666,666.67 B     rother P  5 (J.D.):  Brother L  P  C  P  PLoss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 5 (J.D.): Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 osts:  $94,947.28, B     rother P     Wife   5 (J.D.):  Brother L  P  P  L  P  CPunitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 5 (J.D.): Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 osts:  $94,947.28, H                      B     usband  rother P          P     4 (J.D.):  Wife   5 (J.D.):  Brother P  L  P  P  L  P  CPain and Suffering: $1,000,000.00 4 (J.D.):  Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 5 (J.D.): Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 osts:  $94,947.28, N                      H                      B     iece (P) usband  rother P          P          P                   3 (A.G.):  Aunt 4 (J.D.):  Wife   5 (J.D.):  Brother P  P  L  P  P  L  P  P  LLoss of care, guidance, and companionship: $400,000.00 ain and Suffering: $2,000,000.00 3 (A.G.):  Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 4 (J.D.):  Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 5 (J.D.): Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 P  Cain and Suffering: $1,000,000.00 osts:  $94,947.28, Surviving family members and estate representatives seeking damages against the Defendant for the loss of their relatives who died on flight PS 752 when it was shot down by Iranian missiles | Categories: Brother/Sister, Husband, Son/Daughter, Wife | Comments: Surviving family members and estate representatives seeking damages against the Defendant for the loss of their relatives who died on flight PS 752 when it was shot down by Iranian missiles. 2021 ONSC 337 (Liability Decision) W                      N                        H       ife (S)  Son (R) iece (P) usband P            P            P                            2 (S.M.):  Father  Husband  3 (A.G.):  Aunt 4 (J.D.):  Wife P  P  L  P  P  L  P  PLoss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 2 (S.M.):  Punitive damages: $33,333,333.34 oss of care, guidance, and companionship: $400,000.00 ain and Suffering: $2,000,000.00 3 (A.G.):  Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 4 (J.D.):  Punitive damages: $16,666,666.67 B     rother P  5 (J.D.):  Brother L  P  C  P  PLoss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 5 (J.D.): Punitive damages: $16,666,666.67 oss of care, guidance, and companionship: $200,000.00 ain and Suffering: $1,000,000.00 osts:  $94,947.28",
@@ -427527,7 +427577,14 @@
       ],
       "comments": "The Plaintiffs’ daughter became trapped in her apartment during a fire. She later died in hospital with Harvison Young M. Jamal JJ.A. M  F  M  M  FLoss of care, guidance and companionship: $250,000.00  ental distress: $250,000.00 uture care: $174,800.00 other:  Loss of care, guidance and companionship: $250,000.00  ental distress: $250,000.00 uture care: $151,200.00 O  Aher parents by her side. The Plaintiffs were awarded damages for LOCA, mental distress and future care. NCA commented that award for LOCA was hight but did not shock the court.  ppeal of Jury award dismissed.",
       "judges": [],
-      "family_law_act_claims": [],
+      "family_law_act_claims": [
+        {
+          "relationship": "child",
+          "amount": 250000.0,
+          "description": "Loss of care, guidance and companionship: $250,000.00",
+          "is_fla_award": true
+        }
+      ],
       "is_provisional": false
     },
     "summary_text": "Injuries: She later died in hospital with Harvison Young M. Jamal JJ.A. M  F  M  M  FLoss of care, guidance and companionship: $250,000.00  ental distress: $250,000.00 uture care: $174,800.00 other:  Loss of care, guidance and companionship: $250,000.00  ental distress: $250,000.00 uture care: $151,200.00 O  Aher parents by her side, The Plaintiffs were awarded damages for LOCA, mental distress and future care | Categories: Son/Daughter | Comments: The Plaintiffs’ daughter became trapped in her apartment during a fire. She later died in hospital with Harvison Young M. Jamal JJ.A. M  F  M  M  FLoss of care, guidance and companionship: $250,000.00  ental distress: $250,000.00 uture care: $174,800.00 other:  Loss of care, guidance and companionship: $250,000.00  ental distress: $250,000.00 uture care: $151,200.00 O  Aher parents by her side. The Plaintiffs were awarded damages for LOCA, mental distress and future care. NCA commented that award for LOCA was hight but did not shock the court.  ppeal of Jury award dismissed.",
@@ -439157,7 +439214,7 @@
       ],
       "family_law_act_claims": [
         {
-          "relationship": "mother",
+          "relationship": "parent",
           "amount": 45000.0,
           "description": "Mother: $45,000.00",
           "is_fla_award": true

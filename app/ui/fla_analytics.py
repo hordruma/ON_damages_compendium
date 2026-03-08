@@ -115,6 +115,11 @@ def create_fla_distribution_chart(fla_awards: List[float]) -> Optional[go.Figure
     return fig
 
 
+def _format_relationship_label(rel: str) -> str:
+    """Format a relationship enum value for display (e.g., 'grandchild' -> 'Grandchild')."""
+    return rel.replace("_", " ").title() if rel else "Unknown"
+
+
 def create_fla_relationship_chart(fla_awards_data: List[Dict[str, Any]]) -> Optional[go.Figure]:
     """Create a chart showing FLA awards by relationship type."""
     if not fla_awards_data:
@@ -126,6 +131,8 @@ def create_fla_relationship_chart(fla_awards_data: List[Dict[str, Any]]) -> Opti
 
     sorted_relationships = sorted(relationship_counts.items(), key=lambda x: x[1], reverse=True)
     relationships, counts = zip(*sorted_relationships)
+    # Format labels for display
+    relationships = [_format_relationship_label(r) for r in relationships]
 
     fig = go.Figure(data=[
         go.Bar(
@@ -270,6 +277,13 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]], include_outliers: bo
         st.divider()
 
     if all_fla_awards:
+        st.subheader("Claims by Relationship")
+        rel_fig = create_fla_relationship_chart(all_fla_awards)
+        if rel_fig:
+            st.plotly_chart(rel_fig, use_container_width=True)
+
+        st.divider()
+
         st.subheader("FLA Awards Over Time")
 
         unique_relationships = sorted(set(award['relationship'] for award in all_fla_awards))
@@ -278,6 +292,7 @@ def display_fla_analytics_page(cases: List[Dict[str, Any]], include_outliers: bo
             "Filter by relationship type",
             options=unique_relationships,
             default=unique_relationships,
+            format_func=_format_relationship_label,
             help="Select relationship types to display in the timeline."
         )
 

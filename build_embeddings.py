@@ -18,6 +18,7 @@ import numpy as np
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from data_transformer import convert_to_dashboard_format
+from fix_fla_data import fix_fla_data
 from tqdm import tqdm
 
 
@@ -144,6 +145,19 @@ def main():
     injury_cases = [c for c in dashboard_cases
                     if c.get('extended_data', {}).get('injuries')]
     print(f"   ✓ Dashboard has {len(injury_cases)} cases with injuries")
+
+    # STEP 3b: Fix FLA data quality issues
+    print(f"\n🔧 Step 3b: Fixing FLA data quality issues...")
+    dashboard_cases, fla_stats = fix_fla_data(dashboard_cases, verbose=True)
+
+    # Re-verify FLA after fixes
+    fla_dashboard = [c for c in dashboard_cases
+                     if c.get('extended_data', {}).get('family_law_act_claims')]
+    fla_dashboard_count = sum(
+        len(c.get('extended_data', {}).get('family_law_act_claims', []))
+        for c in fla_dashboard
+    )
+    print(f"   ✓ After fixes: {len(fla_dashboard)} cases with {fla_dashboard_count} FLA claims")
 
     # STEP 4: Save dashboard JSON
     output_path = Path("data/damages_with_embeddings.json")

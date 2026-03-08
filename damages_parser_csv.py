@@ -100,11 +100,12 @@ _LEGAL_STATUS_FRAGMENTS = re.compile(
 _FLA_PATTERNS = [
     (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*(?:Wife|Spouse\s*\(F\))\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'spouse'),
     (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*Husband\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'spouse'),
-    (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*(?:Son|Daughter|Child(?:ren)?)\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'child'),
-    (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*(?:Father|Dad)\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'father'),
-    (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*(?:Mother|Mom)\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'mother'),
+    (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*(?:Son|Daughter)\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'child'),
+    (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*Child(?:ren)?\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'child'),
+    (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*(?:Father|Mother|Dad|Mom|Parent)\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'parent'),
     (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*(?:Brother|Sister|Sibling)\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'sibling'),
-    (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*(?:Grand(?:parent|father|mother|child))\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'grandparent'),
+    (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*Grandchild(?:ren)?\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'grandchild'),
+    (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*Grand(?:parent|father|mother)\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'grandparent'),
     (re.compile(r'(?:Family\s+Law\s+Act|FLA)\s*(?:Claim)?[:\s]*(?:Parent)\s*[-:]\s*\$?([\d,]+(?:\.\d{2})?)', re.IGNORECASE), 'parent'),
 ]
 
@@ -256,12 +257,14 @@ def _extract_fla_claims(text: str) -> List[Dict[str, Any]]:
                     rel_norm = 'spouse'
                 elif rel in ('son', 'daughter', 'child', 'children'):
                     rel_norm = 'child'
-                elif rel in ('father', 'dad'):
-                    rel_norm = 'father'
-                elif rel in ('mother', 'mom'):
-                    rel_norm = 'mother'
+                elif rel in ('father', 'dad', 'mother', 'mom', 'parent'):
+                    rel_norm = 'parent'
                 elif rel in ('brother', 'sister', 'sibling'):
                     rel_norm = 'sibling'
+                elif rel in ('grandchild', 'grandchildren', 'grandson', 'granddaughter'):
+                    rel_norm = 'grandchild'
+                elif rel in ('grandparent', 'grandfather', 'grandmother'):
+                    rel_norm = 'grandparent'
                 else:
                     rel_norm = rel
 
